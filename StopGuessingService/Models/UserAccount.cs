@@ -42,7 +42,6 @@ namespace StopGuessing.Models
 
         /// <summary>
         /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
-        /// Make sure the function has been added. -- FIXME -- explainhow
         /// </summary>
         [DataMember]
         public string PasswordHashPhase1FunctionName { get; set; }
