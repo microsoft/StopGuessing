@@ -22,7 +22,7 @@ namespace xUnit_Tests
         public PasswordPopularityTracker MyPasswordTracker;
         public static FixedSizeLruCache<string, LoginAttempt> MyCacheOfRecentLoginAttempts;
         public Dictionary<string, Task<LoginAttempt>> MyLoginAttemptsInProgress;
-        public LoginAttemptController MyLoginAttemptController;
+        //public LoginAttemptController MyLoginAttemptController;
         public UserAccountController MyUserAccountController;
         public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
@@ -41,7 +41,8 @@ namespace xUnit_Tests
                 // 15 per month
                 new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
             };
-            
+
+           LoginAttemptController MyLoginAttemptController;
 
         MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
@@ -119,7 +120,7 @@ namespace xUnit_Tests
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };
 
-            return await MyLoginAttemptController.PutAsync(attempt.ToUniqueKey(), attempt, password, cancellationToken);
+            return await MyLoginAttemptClient.PutLoginAttemptAsync(password,  attempt, cancellationToken);
         }
 
 
@@ -150,14 +151,10 @@ namespace xUnit_Tests
 
             LoginAttempt attempt = await AuthenticateAsync(Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
 
-            attempt = await MyLoginAttemptController.PutAsync(attempt.ToUniqueKey(), attempt, "wrong");
-
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, attempt.Outcome);
 
             // Try the same wrong password again.  outcome should be CredentialsInvalidRepeatedIncorrectPassword
             LoginAttempt secondAttempt = await AuthenticateAsync(Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
-
-            secondAttempt = await MyLoginAttemptController.PutAsync(secondAttempt.ToUniqueKey(), secondAttempt, "wrong");
 
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword, secondAttempt.Outcome);            
         }
