@@ -6,7 +6,6 @@ using Microsoft.AspNet.Mvc;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using StopGuessing.EncryptionPrimitives;
 using Microsoft.Framework.OptionsModel;
@@ -29,7 +28,8 @@ namespace StopGuessing.Controllers
         private readonly SelfLoadingCache<System.Net.IPAddress, IpHistory> _ipHistoryCache;
 
         public LoginAttemptController(
-            IOptions<BlockingAlgorithmOptions> optionsAccessor, IStableStore stableStore, 
+            IOptions<BlockingAlgorithmOptions> optionsAccessor, 
+            IStableStore stableStore, 
             PasswordPopularityTracker passwordPopularityTracker, FixedSizeLruCache<string, LoginAttempt> cacheOfRecentLoginAttempts,
             Dictionary<string, Task<LoginAttempt>> loginAttemptsInProgress, 
             SelfLoadingCache<System.Net.IPAddress, IpHistory> ipHistoryCache)
@@ -89,9 +89,10 @@ namespace StopGuessing.Controllers
             });
         }
 
-        // PUT api/LoginAttempt/ip-address-datetime
+        // PUT api/LoginAttempt/clientsIpHistory-address-datetime
         [HttpPut("{id:string}")]
-        public async Task<LoginAttempt> PutAsync(string id, [FromBody]LoginAttempt loginAttempt, [FromBody]string passwordProvidedByClient,
+        public async Task<LoginAttempt> PutAsync(string id, [FromBody]LoginAttempt loginAttempt,
+            [FromBody]string passwordProvidedByClient = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             if (loginAttempt.AddressOfServerThatInitiallyReceivedLoginAttempt == null)
@@ -104,7 +105,7 @@ namespace StopGuessing.Controllers
             // To ensure idempotency, make sure that this put has not already been performed or is not already
             // in progress by a concurrent thread.
 
-            string key = loginAttempt.ToUniqueKey();
+            string key = loginAttempt.UniqueKey;
             if (id != key)
             {
                 throw new Exception("The id assigned to the login does not match it's unique key.");
@@ -141,7 +142,7 @@ namespace StopGuessing.Controllers
                 // The outcome is already set so we simply write to the cache and stable store.
                 lock (_cacheOfRecentLoginAttempts)
                 {
-                    _cacheOfRecentLoginAttempts[loginAttempt.ToUniqueKey()] = loginAttempt;
+                    _cacheOfRecentLoginAttempts[loginAttempt.UniqueKey] = loginAttempt;
                 }
                 await _stableStore.WriteLoginAttemptAsync(loginAttempt, cancellationToken);
                 return loginAttempt;
@@ -159,78 +160,87 @@ namespace StopGuessing.Controllers
 
 
 
-        protected void UpdateOutcomeUsingTypoAnalysis(LoginAttempt loginAttempt, string correctPassword, ECDiffieHellmanCng ecPrivateAccountLogKey)
-        {
-            if (loginAttempt.Outcome != AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
-                return;
-            if (loginAttempt.EncryptedIncorrectPassword == null)
-                return;
-            try
-            {
-                string incorrectPasswordFromThisAttempt = loginAttempt.DecryptAndGetIncorrectPassword(ecPrivateAccountLogKey);
-
-                bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromThisAttempt, correctPassword) <= 2;
-                loginAttempt.Outcome = likelyTypo ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
-                                     : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
-            }
-            catch (Exception)
-            {
-                // An exception is likely due to an incorrect key (perhaps outdated).
-                // Since we simply can't do anything with a record we can't Decrypt, we carry on
-                // as if nothing ever happened.  No.  Really.  Nothing to see here.
-            }
-
-        }
-
-        protected ECDiffieHellmanCng DecryptEcPrivateAccountLogKey(
-            byte[] ecPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
-            byte[] phase1HashOfCorrectPassword)
-        {
-            byte[] ecPrivateAccountLogKeyAsBytes = Encryption.DecryptAescbc(
-                                ecPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
-                                phase1HashOfCorrectPassword.Take(16).ToArray(),
-                                checkAndRemoveHmac: true);
-            return new ECDiffieHellmanCng(CngKey.Import(ecPrivateAccountLogKeyAsBytes, CngKeyBlobFormat.EccPrivateBlob));
-        }
-
-
-        protected async Task UpdateOutcomesUsingTypoAnalysisAsync(
-            LoginAttempt loginAttempt,
-            byte[] ecPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
+        /// <summary>
+        /// This analysis will examine the client IP's previous failed attempts to login to this account
+        /// to determine if any failed attempts were due to typos.  
+        /// </summary>
+        /// <param name="clientsIpHistory">Records of this client's previous attempts to examine.</param>
+        /// <param name="account">The account that the client is currently trying to login to.</param>
+        /// <param name="correctPassword">The correct password for this account.  (We can only know it because
+        /// the client must have provided the correct one this attempt.)</param>
+        /// <param name="phase1HashOfCorrectPassword">The phase1 hash of that correct password (which we could
+        /// recalculate from the information in the previous parameters, but doing so would be expensive.)</param>
+        /// <returns></returns>
+        protected void UpdateOutcomesUsingTypoAnalysis(
+            IpHistory clientsIpHistory,
+            UserAccount account,
             string correctPassword,
             byte[] phase1HashOfCorrectPassword)
         {
-
-            // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
             ECDiffieHellmanCng ecPrivateAccountLogKey = null;
 
-            IpHistory ip = await _ipHistoryCache.GetAsync(loginAttempt.AddressOfClientInitiatingRequest);
-            if (ip != null)
+            if (clientsIpHistory == null)
+                return;
+
+            foreach (LoginAttempt previousAttempt in clientsIpHistory.RecentLoginFailures.MostRecentToOldest)
             {
-                foreach (LoginAttempt previousAttempt in ip.RecentLoginFailures.MostRecentToOldest)
+                // We only want to examine invalid password outcomes for the same account (the one which we know the password for)
+                // as these are the only ones we can recognize to be typos.
+                if (previousAttempt.Account != account.UsernameOrAccountId ||
+                    previousAttempt.Outcome != AuthenticationOutcome.CredentialsInvalidIncorrectPassword ||
+                    string.IsNullOrEmpty(previousAttempt.EncryptedIncorrectPassword))
+                    continue;
+
+                // If we haven't yet decrypted the EC key, which we will in turn use to decrypt the password
+                // provided in this login attempt, do it now.  (We don't do it in advance as we don't want to
+                // do the work unless we find at least one record to analyze.)
+                if (ecPrivateAccountLogKey == null)
                 {
-                    if (previousAttempt.Account == loginAttempt.Account &&
-                        previousAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
+                    // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                    try
                     {
-                        if (ecPrivateAccountLogKey == null)
-                        {
-                            try {
-                                ecPrivateAccountLogKey = DecryptEcPrivateAccountLogKey(ecPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
-                            }
-                            catch (Exception)
-                            {
-                                // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.
-                                // FUTURE -- genrate a new EC key in this situation?
-                                return;
-                            }
-                        }
-                        UpdateOutcomeUsingTypoAnalysis(previousAttempt, correctPassword, ecPrivateAccountLogKey);
+                        ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
+                            account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
                     }
+                    catch (Exception)
+                    {
+                        // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
+                        return;
+                    }
+                }
+
+                // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
+                try
+                {
+                    // Attempt to decrypt the password.
+                    string incorrectPasswordFromPreviousAttempt = previousAttempt.DecryptAndGetIncorrectPassword(ecPrivateAccountLogKey);
+
+                    // Use an edit distance calculation to determine if it was a likely typo
+                    bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <= _options.MaxEditDistanceConsideredATypo;
+
+                    // Update the outcome based on this information.
+                    previousAttempt.Outcome = likelyTypo ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
+                                         : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
+
+                    // Ensure that the new outcome makes it into the stable store
+                    Task.Run(() => _stableStore.WriteLoginAttemptAsync(previousAttempt, default(CancellationToken)));
+                }
+                catch (Exception)
+                {
+                    // An exception is likely due to an incorrect key (perhaps outdated).
+                    // Since we simply can't do anything with a record we can't Decrypt, we carry on
+                    // as if nothing ever happened.  No.  Really.  Nothing to see here.
                 }
             }
         }
 
-        public double PopularityPenaltyMultiplier(double popularityLevel)
+        /// <summary>
+        /// Multiply the penalty to be applied to a failed login attempt based on the popularity of the password that was guessed.
+        /// </summary>
+        /// <param name="popularityLevel">The popularity of the password as a fraction (e.g. 0.0001 means 1 in 10,000 incorrect
+        /// passwords were this password.)</param>
+        /// <returns></returns>
+        private double PopularityPenaltyMultiplier(double popularityLevel)
         {
             double penalty = 1d;
             foreach (PenaltyForReachingAPopularityThreshold penaltyForReachingAPopularityThreshold in _options.PenaltyForReachingEachPopularityThreshold)
@@ -383,8 +393,8 @@ namespace StopGuessing.Controllers
                             // (during a prior call to ShouldBlock)                        
                             !success.HasReceivedCreditForUseToReduceBlockingScore)
                         {
-                            // FUTURE Stuart asked on 2015-09-23 -- should we parallelize to get rid of the latency?
-                            // Current thinking is not worth complexity, since requests for credits should rarely (if ever) occur more than
+                            // FUTURE -- We may wnat to parallelize to get rid of the latency.  However, it may well not be worth
+                            // worth the added complexity, since requests for credits should rarely (if ever) occur more than
                             // once per login
 
                             // Reduce credit from the account for the login so that the account cannot be used to generate
@@ -434,125 +444,169 @@ namespace StopGuessing.Controllers
         /// Otherwise, it returns a different AuthenticationOutcome.
         /// The client should not be made aware of any information beyond whether the login was allowed or not.</returns>
         protected async Task<LoginAttempt> ExecutePutAsync(LoginAttempt loginAttempt, string passwordProvidedByClient, CancellationToken cancellationToken)
-        {
-            // Check only uses recent cache.
+        {   
+            // We'll need to know more about the IP making this attempt, so let's get the historical information
+            // we've been keeping about it.
+            Task<IpHistory> ipHistoryGetTask = _ipHistoryCache.GetAsync(loginAttempt.AddressOfClientInitiatingRequest, cancellationToken);
+
+            // Get a copy of the UserAccount record for the account that the client wants to authenticate as.
             UserAccount account = await _userAccountClient.GetAsync(loginAttempt.Account, cancellationToken);
+
             if (account == null)
             {
+                // This appears to be an attempt to login to a non-existent account, and so all we need to do is
+                // mark it as such.  However, since it's possible that users will forget their account names and
+                // repeatedly attempt to login to a nonexistent account, we'll want to track whether we've seen
+                // this clientsIpHistory/account/password tripple before and note in the outcome if it's a repeat so that.
+                // the IP need not be penalized for issuign a query that isn't getting it any information it
+                // didn't already have.
                 loginAttempt.Outcome = _passwordPopularityTracker.HasFailedIpAccountPasswordTripleBeenSeenBefore(
-                    loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.Account, passwordProvidedByClient) ? 
-                    AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
+                    loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.Account, passwordProvidedByClient)
+                    ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
+                    : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
             }
             else
             {
+                //
+                // This is an attempt to login to a valid (existent) account.
+                //
 
-                if (loginAttempt.CookieProvidedByBrowser != null)
-                {
-                    // Replace the plaintext cookie with it's SHA256 hash in Base64 format
-                    loginAttempt.CookieProvidedByBrowser =
-                        Convert.ToBase64String(
-                            SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(loginAttempt.CookieProvidedByBrowser)));
-                    loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount =
-                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(loginAttempt.CookieProvidedByBrowser);
-                }
-
+                // Determine whether the client provided a cookie that indicate that it has previously logged
+                // into this account successfully---a very strong indicator that it is a client used by the
+                // legitimate user and not an unknown client performing a guessing attack.
+                loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount =
+                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(
+                            loginAttempt.Sha256HashOfCookieProvidedByBrowserBase64Encoded);
+                
                 // Test to see if the password is correct by calculating the Phase2Hash and comparing it with the Phase2 hash
                 // in this record
-                byte[] phase1HashOfProvidedPassword = ExpensiveHashFunctionFactory.Get(account.PasswordHashPhase1FunctionName)(
-                    passwordProvidedByClient, account.SaltUniqueToThisAccount);
-                byte[] phase2HashOfProvidedPassword = SHA256.Create().ComputeHash((phase1HashOfProvidedPassword));
+                //
+                // First, the expensive (phase1) hash which is used to encrypt the EC public key for this account
+                // (which we use to store the encryptions of incorrect passwords)
+                byte[] phase1HashOfProvidedPassword = ExpensiveHashFunctionFactory.Get(
+                    account.PasswordHashPhase1FunctionName)(
+                        passwordProvidedByClient, account.SaltUniqueToThisAccount);
+                // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
+                // hash of the phase1 hash.
+                string phase2HashOfProvidedPassword = Convert.ToBase64String(SHA256.Create().ComputeHash((phase1HashOfProvidedPassword)));
 
-                bool isSubmittedPasswordCorrect = phase2HashOfProvidedPassword.SequenceEqual(account.PasswordHashPhase2);
+                // To determine if the password is correct, compare the phase2 has we just generated (phase2HashOfProvidedPassword)
+                // with the one generated from the correct password when the user chose their password (account.PasswordHashPhase2).  
+                bool isSubmittedPasswordCorrect = phase2HashOfProvidedPassword == account.PasswordHashPhase2;
 
                 if (isSubmittedPasswordCorrect)
                 {
+                    // The password is corerct.
+                    // While we'll tenatively set the outcome to CredentialsValid, the decision isn't yet final.
+                    // Down below we will call UpdateOutcomeIfIpShouldBeBlockedAsync.  If we believe the login was from
+                    // a malicous IP that just made a lucky guess, it may be revised to CrendtialsValidButBlocked.
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValid;
                 }
                 else
                 {
+                    //
+                    // The password was invalid.  There's lots of work to do to facilitate future analysis
+                    // about why this LoginAttempt failed.
+
+                    // So that we can analyze this failed attempt in the future, we'll store the (phase 2) hash of the 
+                    // incorrect password along with the password itself, encrypted with the EcPublicAccountLogKey.
+                    // (The decryption key to get the incorrect password plaintext back is encrypted with the
+                    //  correct password, so you can't get to the plaintext of the incorrect password if you
+                    //  don't already know the correct password.)
+                    loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
+                    loginAttempt.EncryptAndWriteIncorrectPassword(passwordProvidedByClient,
+                        account.EcPublicAccountLogKey);
+
+                    // Next, if it's possible to declare more about this outcome than simply that the 
+                    // user provided the incorrect password, let's do so.
+                    // Since users who are unsure of their passwords may enter the same username/password twice, but attackers
+                    // don't learn anything from doing so, we'll want to account for these repeats differently (and penalize them less).
+                    // We actually have two data structures for catching this: A large sketch of clientsIpHistory/account/password triples and a
+                    // tiny LRU cache of recent failed passwords for this account.  We'll check both.
+
+                    // The triple sketch will automatically record that we saw this triple when we check to see if we've seen it before.
                     bool repeatFailureIdentifiedBySketch =
                         _passwordPopularityTracker.HasFailedIpAccountPasswordTripleBeenSeenBefore(
-                            loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.Account, passwordProvidedByClient);
+                            loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.Account,
+                            passwordProvidedByClient);
+
                     bool repeatFailureIdentifiedByAccountHashes =
-                        account.Phase2HashesOfRecentlyIncorrectPasswords.Contains(phase2HashOfProvidedPassword);
-                    if (!repeatFailureIdentifiedByAccountHashes)
-                    {
-                        // ReSharper disable once UnusedVariable
-                        Task dontwaitformetocomplete = 
-                            _userAccountClient.AddHashOfRecentIncorrectPasswordAsync(loginAttempt.Account, phase2HashOfProvidedPassword, cancellationToken);
-                    }
-                    loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes || repeatFailureIdentifiedBySketch) ?
-                        AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword :
-                        AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
+                        account.PasswordVerificationFailures.Count(failedAttempt =>
+                            failedAttempt.Phase2HashOfIncorrectPassword == phase2HashOfProvidedPassword) > 0;
 
-                    loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
-                    loginAttempt.EncryptAndWriteIncorrectPassword(passwordProvidedByClient, account.EcPublicAccountLogKey);
+                    loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes || repeatFailureIdentifiedBySketch)
+                        ? AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword
+                        : AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
                 }
-
-                //
-                // If the password is correct, 
-                // Record information about successes, failures.                
+                
+                // If the password is correct, we can decrypt the EcPrivateAccountKey and perform analysis to provide
+                // enlightenment into past failures that may help us to evaluate whether they were malicious.  Specifically,
+                // we may be able to detrmine if past failures were due to typos.
                 if (isSubmittedPasswordCorrect)
                 {
-                    // WriteAccountAsync the outcomes for this IP address
-                    await UpdateOutcomesUsingTypoAnalysisAsync(
-                        loginAttempt, account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, passwordProvidedByClient, phase1HashOfProvidedPassword);
+                    // Determine if any of the outcomes for login attempts from the client IP for this request were the result of typos,
+                    // as this might impact our decision about whether or not to block this client IP in response to its past behaviors.
+                    UpdateOutcomesUsingTypoAnalysis(await ipHistoryGetTask,
+                        account, passwordProvidedByClient, phase1HashOfProvidedPassword);
 
-                    // WriteAccountAsync outcomes for any other typos related to this account
+                    // In the background, update any outcomes for logins to this account from other IPs, so that if those
+                    // IPs attempt to login to any account in the future we can gain insight as to whether those past logins
+                    // were typos or non-typos.
                     _userAccountClient.UpdateOutcomesUsingTypoAnalysisInBackground(account.UsernameOrAccountId,
-                        passwordProvidedByClient, phase1HashOfProvidedPassword, loginAttempt.AddressOfClientInitiatingRequest);
+                        passwordProvidedByClient, phase1HashOfProvidedPassword,
+                        loginAttempt.AddressOfClientInitiatingRequest);
                 }
 
-                // Get the popularity of the current guess with respect to previous failed passwords
+                // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
+                // as we are most concerned about frequently-guessed passwords.
                 Proportion popularity = _passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(
-                            passwordProvidedByClient, isSubmittedPasswordCorrect);
+                    passwordProvidedByClient, isSubmittedPasswordCorrect);
+                // When there's little data, we want to make sure the popularity is not overstated because           
+                // (e.g., if we've only seen 10 account failures since we started watching, it would not be
+                //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
                 loginAttempt.PasswordsPopularityAmongFailedGuesses =
                     popularity.MinDenominator(_options.MinDenominatorForPasswordPopularity).AsDouble;
 
+                // Preform an analysis of the IPs past beavhior to determine if the IP has been performing so many failed guesses
+                // that we disallow logins even if it got the right password.  We call this even when the submitted password is
+                // correct lest we create a timing indicator (slower responses for correct passwords) that attackers could use
+                // to guess passwords even if we'd blocked their IPs.
+                IpHistory ip = await ipHistoryGetTask;
+               await UpdateOutcomeIfIpShouldBeBlockedAsync(loginAttempt, ip);
 
-                // Call the machine learning code here to revoke success status if
-                // we believe this was a brute-forcer who got lucky.
-                IpHistory ip = await _ipHistoryCache.GetAsync(loginAttempt.AddressOfClientInitiatingRequest, cancellationToken);
-                await UpdateOutcomeIfIpShouldBeBlockedAsync(loginAttempt, ip);
+                // Add this LoginAttempt to our history of all login attempts for this IP address.
                 ip.RecordLoginAttempt(loginAttempt);
 
-                if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid &&
-                    loginAttempt.CookieProvidedByBrowser != null)
-                {
-                    // Track browser cookies that have been used in successful logins
-                    _userAccountClient.AddDeviceCookieFromSuccessfulLoginInBackground(account.UsernameOrAccountId, loginAttempt.CookieProvidedByBrowser);
-                }
-
-                if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
-                {
-                    // Note -- we currently only add the invalid passwords because the only reason the user account
-                    // tracks these failures is to do a typo analysis. 
-
-                    // Record account-specific failure information
-                    _userAccountClient.AddLoginAttemptFailureInBackground(account.UsernameOrAccountId, loginAttempt);
-                }
-
+                // Update the account record to incorporate what we've learned as a result of processing this login attempt.
+                // If this is a success and there's a cookie, it will update the set of cookies that have successfully logged in
+                // to include this one.
+                // If it's a failure, it will add this to the list of failures that we may be able to learn about later when
+                // we know what the correct password is and can determine if it was a typo.
+                _userAccountClient.UpdateForNewLoginAttemptInBackground(account.UsernameOrAccountId, loginAttempt,
+                    cancellationToken);
             }
-
+        
             // WriteAccountAsync the login attempt to stable store
             // ReSharper disable once UnusedVariable -- unused variable being used to signify use of background task
             Task dontwaitforme =_stableStore.WriteLoginAttemptAsync(loginAttempt, cancellationToken);
 
+            // Mark this task as completed by removing it from the Dictionary of tasks storing loginAttemptsInProgress
+            // and by putting the login attempt into our cache of recent login attempts.
             lock (_cacheOfRecentLoginAttempts)
             {
-                string key = loginAttempt.ToUniqueKey();
+                string key = loginAttempt.UniqueKey;
                 _cacheOfRecentLoginAttempts.Add(key, loginAttempt);
                 _loginAttemptsInProgress.Remove(key);
             }
 
+            // Write the login attempt to stable store for future long-term auditing and analysis.
             await _stableStore.WriteLoginAttemptAsync(loginAttempt, cancellationToken);
 
+            // We return the processed login attempt so that the caller can determine its outcome and,
+            // in the event that the caller wants to keep a copy of the record, ensure that it has the
+            // most up-to-date copy.
             return loginAttempt;
         }
 
-        public void Update()
-        {
-
-        }
     }
 }

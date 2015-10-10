@@ -22,9 +22,16 @@ namespace StopGuessing.Clients
         {
             _userAccountController = userAccountController;
         }
-    
 
-    public async Task<bool> TryGetCreditAsync(string accountId, float amountToGet = 1f)
+
+        /// <summary>
+        /// Calls UserAccountController.TryGetCreditAsync()
+        /// </summary>
+        /// <param name="accountId"></param>
+        /// <param name="amountToGet"></param>
+        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        /// <returns></returns>
+        public async Task<bool> TryGetCreditAsync(string accountId, float amountToGet = 1f, CancellationToken cancellationToken = default(CancellationToken))
         {
             RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
 
@@ -38,10 +45,17 @@ namespace StopGuessing.Clients
                     "/api/UserAccount/" + Uri.EscapeUriString(accountId) + "/TryGetCredit", new Object[]
                     {
                         new KeyValuePair<string, float>("amountToGet", 1f)
-                    });
+                    }, cancellationToken);
             }
         }
 
+        /// <summary>
+        /// Calls UserAccountController.GetAsync(), via a REST GET request or directly (if the UserAccount is managed locally),
+        /// to fetch a UserAccount records by its accountId.
+        /// </summary>
+        /// <param name="accountId">The unique ID of the account to fetch.</param>
+        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        /// <returns>The account record that was retrieved.</returns>
         public async Task<UserAccount> GetAsync(string accountId, CancellationToken cancellationToken = default(CancellationToken))
         {
             RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
@@ -56,8 +70,41 @@ namespace StopGuessing.Clients
             }
         }
 
+        /// <summary>
+        /// Calls UserAccountController.PutAsync, via a REST PUT request or directly (if the UserAccount is managed locally),
+        /// to store UserAccount to stable store and to the local cache of whichever machines are in charge of maintaining
+        /// a copy in memory.
+        /// </summary>
+        /// <param name="account">The account to store.</param>
+        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        /// <returns>The account record as stored.</returns>
+        public async Task<UserAccount> PutAsync(UserAccount account, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            RemoteHost host = _responsibleHosts.FindMemberResponsible(account.UsernameOrAccountId);
+            if (host.IsLocalHost)
+            {
+                return await _userAccountController.PutAsync(account.UsernameOrAccountId, account, cancellationToken);
+            }
+            else
+            {
+                return await RestClientHelper.PutAsync<UserAccount>(host.Uri,
+                    "/api/UserAccount/" + Uri.EscapeUriString(account.UsernameOrAccountId), new Object[]
+                    {
+                        new KeyValuePair<string, UserAccount>("account", account),
+                    }, cancellationToken);
+            }
+        }
 
-       
+        /// <summary>
+        /// Calls UserAccountController.UpdateOutcomesUsingTypoAnalysis, via a REST POST request or directly
+        /// (if the UserAccount is managed locally).  This 
+        /// </summary>
+        /// <param name="accountId"></param>
+        /// <param name="correctPassword"></param>
+        /// <param name="phase1HashOfCorrectPassword"></param>
+        /// <param name="ipAddressToExcludeFromAnalysis"></param>
+        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        /// <returns></returns>
         public async Task UpdateOutcomesUsingTypoAnalysisAsync(string accountId, string correctPassword,
             byte[] phase1HashOfCorrectPassword, System.Net.IPAddress ipAddressToExcludeFromAnalysis,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -90,77 +137,30 @@ namespace StopGuessing.Clients
         }
 
 
-        public async Task AddDeviceCookieFromSuccessfulLoginAsync(string accountId, string cookie, CancellationToken cancellationToken)
+        public async Task UpdateForNewLoginAttemptAsync(string accountId, LoginAttempt attempt,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
             if (host.IsLocalHost)
             {
-                await _userAccountController.AddDeviceCookieFromSuccessfulLoginAsync(accountId, cookie, cancellationToken);
+                await _userAccountController.UpdateForNewLoginAttemptAsync(accountId, attempt, cancellationToken);
             }
             else
             {
                 await RestClientHelper.PostAsync(host.Uri,
                     "/api/UserAccount/" + Uri.EscapeUriString(accountId), new Object[]
                     {
-                        new KeyValuePair<string, string>("cookie", cookie)
+                        new KeyValuePair<string, LoginAttempt>("attempt", attempt)
                     }, cancellationToken);
             }
         }
 
-        public void AddDeviceCookieFromSuccessfulLoginInBackground(string accountId, string cookie)
+        public void UpdateForNewLoginAttemptInBackground(string accountId, LoginAttempt attempt,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             // ReSharper disable once UnusedVariable -- used to indicate background task
-            Task dontwaitforme = AddDeviceCookieFromSuccessfulLoginAsync(accountId, cookie, default(CancellationToken));
+            Task dontwaitforme = UpdateForNewLoginAttemptAsync(accountId, attempt, cancellationToken);
         }
-
-        public async Task AddLoginAttemptFailureAsync(string accountId, LoginAttempt failedLoginAttempt, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
-            if (host.IsLocalHost)
-            {
-                await _userAccountController.AddLoginAttemptFailureAsync(accountId, failedLoginAttempt, cancellationToken);
-            }
-            else
-            {
-                await RestClientHelper.PostAsync(host.Uri,
-                    "/api/UserAccount/" + Uri.EscapeUriString(accountId), new Object[]
-                    {
-                        new KeyValuePair<string, LoginAttempt>("failedLoginAttempt", failedLoginAttempt)
-                    }, cancellationToken);
-            }
-        }
-
-        public void AddLoginAttemptFailureInBackground(string accountId, LoginAttempt failedLoginAttempt)
-        {
-            // ReSharper disable once UnusedVariable -- used to indicate background task
-            Task dontwaitforme = AddLoginAttemptFailureAsync(accountId, failedLoginAttempt);
-        }
-
-
-        public async Task AddHashOfRecentIncorrectPasswordAsync(string accountId, byte[] phase2HashOfProvidedPassword, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
-            if (host.IsLocalHost)
-            {
-                await _userAccountController.AddHashOfRecentIncorrectPasswordAsync(accountId, phase2HashOfProvidedPassword, cancellationToken);
-            }
-            else
-            {
-                await RestClientHelper.PostAsync(host.Uri,
-                    "/api/UserAccount/" + Uri.EscapeUriString(accountId), new Object[]
-                    {
-                        new KeyValuePair<string, byte[]>("phase2HashOfProvidedPassword", phase2HashOfProvidedPassword)
-                    }, cancellationToken);
-            }
-        }
-    
-
-        public void AddHashOfRecentIncorrectPasswordInBackground(string accountId, byte[] phase2HashOfProvidedPassword)
-        {
-            // ReSharper disable once UnusedVariable -- Used to indicate background task
-            Task dontwaitforme = AddHashOfRecentIncorrectPasswordAsync(accountId, phase2HashOfProvidedPassword);
-        }
-
 
     }
 }

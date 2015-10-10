@@ -23,20 +23,26 @@ namespace StopGuessing.Clients
             _localLoginAttemptController = loginAttemptController;
         }
 
-
-        public async Task<LoginAttempt> PutLoginAttemptAsync(string passwordProvidedByClient, LoginAttempt loginAttempt, CancellationToken cancellationToken = default(CancellationToken))
+        /// <summary>
+        /// Add a new login attempt via a REST PUT.  If the 
+        /// </summary>
+        /// <param name="passwordProvidedByClient"></param>
+        /// <param name="loginAttempt"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt, string passwordProvidedByClient = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             RemoteHost hostResponsibleForClientIp =
                 _responsibleHosts.FindMemberResponsible(loginAttempt.AddressOfClientInitiatingRequest.ToString());
 
             if (hostResponsibleForClientIp.IsLocalHost)
             {
-                return await _localLoginAttemptController.PutAsync(loginAttempt.ToUniqueKey(), loginAttempt, passwordProvidedByClient, cancellationToken);
+                return await _localLoginAttemptController.PutAsync(loginAttempt.UniqueKey, loginAttempt, passwordProvidedByClient, cancellationToken);
             }
             else
             {
                 return await RestClientHelper.PutAsync<LoginAttempt>(hostResponsibleForClientIp.Uri,
-                    "/api/LoginAttempt/" + Uri.EscapeUriString(loginAttempt.ToUniqueKey()), new Object[]
+                    "/api/LoginAttempt/" + Uri.EscapeUriString(loginAttempt.UniqueKey), new Object[]
                     {
                         new KeyValuePair<string, string>("passwordProvidedByClient", passwordProvidedByClient),
                         new KeyValuePair<string, LoginAttempt>("loginAttempt", loginAttempt)
@@ -44,23 +50,31 @@ namespace StopGuessing.Clients
             }
         }
 
+        /// <summary>
+        // For each IP that has records which can now be separated from likely typo to not a typo, 
+        // update that IP's LoginAttempt records for this account.
+        /// </summary>
+        /// <param name="loginAttemptsWithUpdatedOutcomes"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task UpdateLoginAttemptOutcomesAsync(List<LoginAttempt> loginAttemptsWithUpdatedOutcomes,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            // For each IP that has records which can now be separated from likely typo to not a typo, 
-            // update that IP's login records for this account.  If the IP is the same IP as the client
-            // of this request, we'll want to wait for the update before proceeeding, since it may
-            // effect the rest of our calculations about whether to allow this request to proceed.
+            // Group LoginAttempts by the host that is responsible for that is responsbile for storing and maintaining
+            // these records.  (We partition based on the client IP in the LoginAttempt) 
             foreach (IGrouping<RemoteHost, LoginAttempt> loginsForIp in
                 loginAttemptsWithUpdatedOutcomes.ToLookup(attempt => _responsibleHosts.FindMemberResponsible(attempt.AddressOfClientInitiatingRequest.ToString())) )
             {
                 RemoteHost hostResponsible = loginsForIp.Key;
+                // If the host is this host, we can call the local controller
                 if (hostResponsible.IsLocalHost)
                 {
                     await _localLoginAttemptController.UpdateLoginAttemptOutcomesAsync(loginAttemptsWithUpdatedOutcomes, cancellationToken);
                 }
                 else
                 {
+                    // Kick off a remote request for this record in the background.
+                    // FUTURE -- should get timeout and re-try if IP is not availble.
                     // ReSharper disable once UnusedVariable
                     Task dontwaitforme = RestClientHelper.PostAsync(hostResponsible.Uri, "/api/LoginAttempt",
                         new Object[]
@@ -68,8 +82,6 @@ namespace StopGuessing.Clients
                             new KeyValuePair<string, IEnumerable<LoginAttempt>>("loginAttemptsWithUpdatedOutcomes",
                                 loginAttemptsWithUpdatedOutcomes)
                         }, cancellationToken);
-                    // Kick off an asynchronous task to update the records for this IP so that the
-                    // typo/nontypo status is updated.
                 }
             }
         }

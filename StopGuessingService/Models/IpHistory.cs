@@ -79,7 +79,7 @@ namespace StopGuessing.Models
             Dictionary<string, LoginAttempt> keyToAttempt = new Dictionary<string, LoginAttempt>();
             foreach (LoginAttempt attempt in loginAttempts)
             {
-                keyToAttempt[attempt.ToUniqueKey()] = attempt;
+                keyToAttempt[attempt.UniqueKey] = attempt;
             }
 
             lock(RecentLoginFailures)
@@ -87,7 +87,7 @@ namespace StopGuessing.Models
                 int numberOfOutcomesChanged = 0;
                 foreach (LoginAttempt attempt in RecentLoginFailures.MostRecentToOldest)
                 {
-                    string uniqueKey = attempt.ToUniqueKey();
+                    string uniqueKey = attempt.UniqueKey;
                     if (keyToAttempt.ContainsKey(uniqueKey))
                     {
                         attempt.Outcome = keyToAttempt[uniqueKey].Outcome;

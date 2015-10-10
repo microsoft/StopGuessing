@@ -108,6 +108,38 @@ namespace StopGuessing.EncryptionPrimitives
 
 
         /// <summary>
+        /// Encrypt an EC private key with a symmetric key.
+        /// </summary>
+        /// <param name="ecPrivateKey">The EC private key to encrypt</param>
+        /// <param name="symmetricKey">The symmetric key with which to encrypt the EC key.  Must be at least
+        /// 16 bytes.  Any additional bytes will be ignored.</param>
+        /// <returns></returns>
+        public static byte[] EncryptEcPrivateKeyWithAesCbc(ECDiffieHellmanCng ecPrivateKey, byte[] symmetricKey)
+        {
+            byte[] ecAccountLogKeyAsBytes = ecPrivateKey.Key.Export(CngKeyBlobFormat.EccPrivateBlob);
+            return EncryptAesCbc(ecAccountLogKeyAsBytes, symmetricKey.Take(16).ToArray(), addHmac: true);
+        }
+
+        /// <summary>
+        /// Decrypt an EC private key that has been stored encrypted with AES CBC using a private key
+        /// </summary>
+        /// <param name="ecPrivateKeyEncryptedWithAesCbc">The EC private key encrypted with AES CBC.</param>
+        /// <param name="symmetricKey">The symmetric key with which to encrypt the EC key.  Must be at least
+        /// 16 bytes.  Any additional bytes will be ignored.</param>
+        /// <returns></returns>
+        public static ECDiffieHellmanCng DecryptAesCbcEncryptedEcPrivateKey(
+            byte[] ecPrivateKeyEncryptedWithAesCbc,
+            byte[] symmetricKey)
+        {
+            byte[] ecPrivateAccountLogKeyAsBytes = DecryptAescbc(
+                                ecPrivateKeyEncryptedWithAesCbc,
+                                symmetricKey.Take(16).ToArray(),
+                                checkAndRemoveHmac: true);
+            return new ECDiffieHellmanCng(CngKey.Import(ecPrivateAccountLogKeyAsBytes, CngKeyBlobFormat.EccPrivateBlob));
+        }
+
+
+        /// <summary>
         /// Generate key from hashed password. We will need to use stronger hash later.
         /// </summary>
         /// <param name="password">The password to hash.</param>

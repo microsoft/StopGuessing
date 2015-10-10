@@ -73,7 +73,7 @@ namespace xUnit_Tests
             {
                 lock (LoginAttempts)
                 {
-                    LoginAttempts[attempt.ToUniqueKey()] = attempt;
+                    LoginAttempts[attempt.UniqueKey] = attempt;
                 }
             }, cancelToken);
         }

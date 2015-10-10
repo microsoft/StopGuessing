@@ -62,7 +62,6 @@ namespace xUnit_Tests
 
             MyUserAccountClient = new UserAccountClient(MyResponsibleHosts);
             MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts);
-            MyUserAccountController = new UserAccountController(_stableStore, MyUserAccountCache, creditLimits);
 
             List<ConfigureOptions<BlockingAlgorithmOptions>> config =
                 new List<ConfigureOptions<BlockingAlgorithmOptions>>
@@ -70,6 +69,7 @@ namespace xUnit_Tests
                     new ConfigureOptions<BlockingAlgorithmOptions>(bao => { })
                 };
             OptionsManager<BlockingAlgorithmOptions> blockingOptions = new OptionsManager<BlockingAlgorithmOptions>(config);
+            MyUserAccountController = new UserAccountController(blockingOptions, _stableStore, MyUserAccountCache, creditLimits);
             MyLoginAttemptController = 
                 new LoginAttemptController(blockingOptions, _stableStore, MyPasswordTracker,
                 MyCacheOfRecentLoginAttempts, MyLoginAttemptsInProgress, MyIpHistoryCache);
@@ -120,7 +120,7 @@ namespace xUnit_Tests
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };
 
-            return await MyLoginAttemptClient.PutLoginAttemptAsync(password,  attempt, cancellationToken);
+            return await MyLoginAttemptClient.PutAsync(attempt, password, cancellationToken);
         }
 
 

@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Security.Cryptography;
+using Newtonsoft.Json;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 
@@ -34,8 +35,8 @@ namespace StopGuessing.Models
         public byte[] SaltUniqueToThisAccount { get; set; }
 
         /// <summary>
-        /// An EC public encryption key used to store log about password failures, which can can only be decrypted when the user 
-        /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private key.
+        /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
+        /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private symmetricKey.
         /// </summary>
         [DataMember]
         public ECDiffieHellmanPublicKey EcPublicAccountLogKey { get; set; }
@@ -47,18 +48,18 @@ namespace StopGuessing.Models
         public string PasswordHashPhase1FunctionName { get; set; }
 
         /// <summary>
-        /// The EC private key encrypted with phase 1 (expensive) hash of the password
+        /// The EC private symmetricKey encrypted with phase 1 (expensive) hash of the password
         /// </summary>        
         [DataMember]
-        public byte[] EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 { get; set; }
+        public byte[] EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 { get; private set; }
 
         /// <summary>
         /// The Phase2 password hash is the result of hasing the password (and salt) first with the expensive hash function to create a Phase1 hash,
         /// then hasing that Phase1 hash (this time without the salt) using SHA256 so as to make it unnecessary to store the
-        /// phase1 hash in this record.  Doing so allows the Phase1 hash to be used as a symmetric encryption key for the log. 
+        /// phase1 hash in this record.  Doing so allows the Phase1 hash to be used as a symmetric encryption symmetricKey for the log. 
         /// </summary>
         [DataMember]
-        public byte[] PasswordHashPhase2 { get; set; }
+        public string PasswordHashPhase2 { get; set; }
 
         /// <summary>
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
@@ -75,56 +76,81 @@ namespace StopGuessing.Models
         public Sequence<LoginAttempt> PasswordVerificationFailures { get; set; }
 
         /// <summary>
-        /// The phase 2 hashes of the last few incorrect passwords, which we can use to check
-        /// to see if the same client is trying to login over and over again with an incorrect
-        /// password (perhaps the old password or a misconfigured password).
-        /// </summary>
-        [DataMember]
-        public Sequence<byte[]> Phase2HashesOfRecentlyIncorrectPasswords { get; set;  }
-
-        /// <summary>
         /// A sequence of credits consumed in order to use successful logins from this account
         /// to counter evidence that that logged into this account is malicious.
         /// </summary>
         [DataMember]
         public Sequence<ConsumedCredit> ConsumedCredits { get; set; }
 
+        [IgnoreDataMember]
+        [JsonIgnore]
+        public string Password { set { SetPassword(value); } }
 
+
+        /// <summary>
+        /// Derive the EC private account log key from the phase 1 hash of the correct password.
+        /// </summary>
+        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
+        /// <returns></returns>
+        protected ECDiffieHellmanCng DecryptPrivateAccountLogKey(byte[] phase1HashOfCorrectPassword)
+        {
+            return Encryption.DecryptAesCbcEncryptedEcPrivateKey(EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
+        }
+
+        /// <summary>
+        /// Set the EC account log key
+        /// </summary>
+        /// <param name="ecAccountLogKey"></param>
+        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
+        /// <returns></returns>
+        protected void SetAccountLogKey(ECDiffieHellmanCng ecAccountLogKey, byte[] phase1HashOfCorrectPassword)
+        {
+            EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = Encryption.EncryptEcPrivateKeyWithAesCbc(ecAccountLogKey,
+                phase1HashOfCorrectPassword);
+            EcPublicAccountLogKey = ecAccountLogKey.PublicKey;
+        }
+
+
+        public byte[] ComputePhase1Hash(string password)
+        {
+            return ExpensiveHashFunctionFactory.Get(PasswordHashPhase1FunctionName)(password, SaltUniqueToThisAccount);
+        }
+
+
+        public static string ComputerPhase2HashFromPhase1Hash(byte[] phase1Hash)
+        {
+            return Convert.ToBase64String(SHA256.Create().ComputeHash(phase1Hash));
+        }
 
 
         /// <summary>
         /// Sets the password of a user.
         /// <b>Important</b>: this does not authenticate the user but assumes the user has already been authenticated.
-        /// The <paramref name="oldPassword"/> field is used only to optionally recover the EC key, not to authenticate the user.
+        /// The <paramref name="oldPassword"/> field is used only to optionally recover the EC symmetricKey, not to authenticate the user.
         /// </summary>
         /// <param name="newPassword">The new password to set.</param>
-        /// <param name="oldPassword">If this optional field is provided and correct, the old password will allow us to re-use the old log decryption key.
+        /// <param name="oldPassword">If this optional field is provided and correct, the old password will allow us to re-use the old log decryption symmetricKey.
         /// <b>Providing this parameter will not cause this function to authenticate the user first.  The caller must do so beforehand.</b></param>
         /// <param name="nameOfExpensiveHashFunctionToUse"></param>
-        public void SetPassword(string newPassword, string oldPassword = null,
-            string nameOfExpensiveHashFunctionToUse = null)
+        public void SetPassword(string newPassword, string oldPassword = null, string nameOfExpensiveHashFunctionToUse = null)
         {
             ECDiffieHellmanCng ecAccountLogKey = null;
-            byte[] oldPasswordHash1;
+            byte[] oldPasswordHashPhase1;
 
 
             if (oldPassword != null &&
-                SHA256.Create().ComputeHash((oldPasswordHash1 = ExpensiveHashFunctionFactory.Get(PasswordHashPhase1FunctionName)(
-                                oldPassword, SaltUniqueToThisAccount)))
-                    .SequenceEqual(PasswordHashPhase2))
+                ComputerPhase2HashFromPhase1Hash(oldPasswordHashPhase1 = ComputePhase1Hash(oldPassword)) == PasswordHashPhase2)
             {
-                // If we have a valid old password, Decrypt it so we can keep using it
+                // If we have a valid old password, Decrypt the private log decryption symmetricKey so we can re-encrypt it
+                // with the new password and continue to use it on future logins. 
                 try
                 {
-                    byte[] privateLogDecryptionKey =
-                        Encryption.DecryptAescbc(EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, oldPasswordHash1,
-                            checkAndRemoveHmac: true);
-                    ecAccountLogKey =
-                        new ECDiffieHellmanCng(CngKey.Import(privateLogDecryptionKey, CngKeyBlobFormat.EccPrivateBlob));
+                    ecAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
+                            oldPasswordHashPhase1);
                 }
                 catch (Exception)
                 {
-                    // Ignore crypto failures.  They just mean we were unsuccessful in decrypting the key and should create a new one.
+                    // Ignore crypto failures.  They just mean we were unsuccessful in decrypting the symmetricKey and should create a new one.
                 }
             }
             if (ecAccountLogKey == null)
@@ -143,20 +169,16 @@ namespace StopGuessing.Models
                 PasswordHashPhase1FunctionName = nameOfExpensiveHashFunctionToUse;
             }
             // Calculate the Phase1 hash, which is a computationally-heavy hash of the password
-            // We will use this for encrypting the EC account log key.
-            byte[] newPasswordHash1 = ExpensiveHashFunctionFactory.Get(PasswordHashPhase1FunctionName)(
-                newPassword, SaltUniqueToThisAccount);
+            // We will use this for encrypting the EC account log symmetricKey.
+            byte[] newPasswordHashPhase1 = ComputePhase1Hash(newPassword);
 
             // Calculate the Phase2 hash by hasing the phase 1 hash with SHA256.
-            // We can store this without revealing the phase 1 hash used to encrypt the EC account log key.
+            // We can store this without revealing the phase 1 hash used to encrypt the EC account log symmetricKey.
             // We can use it to verify whether a provided password is correct
-            PasswordHashPhase2 = SHA256.Create().ComputeHash(newPasswordHash1);
+            PasswordHashPhase2 = ComputerPhase2HashFromPhase1Hash(newPasswordHashPhase1);
 
-            // Store the EC Account log key encrypted with the phase 1 hash.
-            byte[] ecAccountLogKeyAsBytes = ecAccountLogKey.Key.Export(CngKeyBlobFormat.EccPrivateBlob);
-            EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 =
-                Encryption.EncryptAesCbc(ecAccountLogKeyAsBytes, newPasswordHash1.Take(16).ToArray(), addHmac: true);
-            EcPublicAccountLogKey = ecAccountLogKey.PublicKey;
+            // Store the EC Account log symmetricKey encrypted with the phase 1 hash.
+            SetAccountLogKey(ecAccountLogKey, newPasswordHashPhase1);
         }
     }
 }

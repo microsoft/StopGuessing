@@ -53,13 +53,13 @@ namespace StopGuessing.DataStructures
             }
         }
 
-        public static async Task<TReturnType> PostAsync<TReturnType>(Uri baseAddress, string pathAndQuery, Object parameters)
+        public static async Task<TReturnType> PostAsync<TReturnType>(Uri baseAddress, string pathAndQuery, Object parameters, CancellationToken cancellationToken = default(CancellationToken))
         {
             using (HttpClient client = new HttpClient())
             {
                 ConfigureClient(client, baseAddress);
                 HttpResponseMessage restApiResult = await
-                    client.PostAsync(pathAndQuery, new StringContent(JsonConvert.SerializeObject(parameters)));
+                    client.PostAsync(pathAndQuery, new StringContent(JsonConvert.SerializeObject(parameters)), cancellationToken);
                 return JsonConvert.DeserializeObject<TReturnType>(await restApiResult.EnsureSuccessStatusCode().Content.ReadAsStringAsync());
             }
         }

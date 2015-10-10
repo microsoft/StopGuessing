@@ -14,6 +14,7 @@ namespace StopGuessing.Models
 
     public class BlockingAlgorithmOptions
     {
+        public float MaxEditDistanceConsideredATypo { get; set; } = 2f;
         public double PenaltyForInvalidAccount { get; set; } = 10d;
         public double PenaltyForInvalidPasswordPerLoginTypo { get; set; } = .25d;
         public double PenaltyForInvalidPasswordPerLoginRarePassword { get; set; } = 1d;
