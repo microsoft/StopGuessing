@@ -23,6 +23,8 @@ namespace StopGuessing.Clients
             _localLoginAttemptController = loginAttemptController;
         }
 
+
+
         /// <summary>
         /// Add a new login attempt via a REST PUT.  If the 
         /// </summary>
@@ -69,21 +71,32 @@ namespace StopGuessing.Clients
                 // If the host is this host, we can call the local controller
                 if (hostResponsible.IsLocalHost)
                 {
-                    await _localLoginAttemptController.UpdateLoginAttemptOutcomesAsync(loginAttemptsWithUpdatedOutcomes, cancellationToken);
+                    await
+                        _localLoginAttemptController.UpdateLoginAttemptOutcomesAsync(loginAttemptsWithUpdatedOutcomes,
+                            cancellationToken);
                 }
                 else
                 {
                     // Kick off a remote request for this record in the background.
                     // FUTURE -- should get timeout and re-try if IP is not availble.
-                    // ReSharper disable once UnusedVariable
-                    Task dontwaitforme = RestClientHelper.PostAsync(hostResponsible.Uri, "/api/LoginAttempt",
-                        new Object[]
-                        {
-                            new KeyValuePair<string, IEnumerable<LoginAttempt>>("loginAttemptsWithUpdatedOutcomes",
-                                loginAttemptsWithUpdatedOutcomes)
-                        }, cancellationToken);
+                    Task donotwaitforthisbackgroundtask =
+                        Task.Run(() =>
+                            RestClientHelper.PostAsync(hostResponsible.Uri, "/api/LoginAttempt",
+                                new Object[]
+                                {
+                                    new KeyValuePair<string, IEnumerable<LoginAttempt>>(
+                                        "loginAttemptsWithUpdatedOutcomes",
+                                        loginAttemptsWithUpdatedOutcomes)
+                                }, cancellationToken), cancellationToken);
                 }
             }
         }
+
+        public void UpdateLoginAttemptOutcomesInBackground(List<LoginAttempt> loginAttemptsWithUpdatedOutcomes,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            Task.Run( () => UpdateLoginAttemptOutcomesAsync(loginAttemptsWithUpdatedOutcomes, cancellationToken), cancellationToken);
+        }
+
     }
 }

@@ -1,14 +1,12 @@
 ﻿using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Security.Cryptography;
-using Newtonsoft.Json;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
-
     [DataContract]
     public class UserAccount
     {
@@ -29,7 +27,9 @@ namespace StopGuessing.Models
         public string UsernameOrAccountId { get; set; }
 
         /// <summary>
-        /// The salt used to hash the password
+        /// The salt is a random unique sequence of bytes that is included when the password is hashed (phase 1 of hashing)
+        /// to ensure that attackers who might obtain the set of account hashes cannot hash a password once and then compare
+        /// the hash against every account.
         /// </summary>
         [DataMember]
         public byte[] SaltUniqueToThisAccount { get; set; }
@@ -82,35 +82,22 @@ namespace StopGuessing.Models
         [DataMember]
         public Sequence<ConsumedCredit> ConsumedCredits { get; set; }
 
-        [IgnoreDataMember]
-        [JsonIgnore]
-        public string Password { set { SetPassword(value); } }
+        ///// <summary>
+        ///// A member used exclusively to set the password.  This is primarily a convenience member for testing.
+        ///// If the old password is available, it is better to use the SetPassword() method and provide the old passowrd
+        ///// so that information encrypted with the old password can be recovered.
+        ///// </summary>
+        //[IgnoreDataMember]
+        //[JsonIgnore]
+        //public string Password { set { SetPassword(value); } }
 
 
         /// <summary>
-        /// Derive the EC private account log key from the phase 1 hash of the correct password.
+        /// Computes the phase1 (expensive) hash of a password using the algorithm specified for
+        /// this account and the unique salt for this account.
         /// </summary>
-        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
-        /// <returns></returns>
-        protected ECDiffieHellmanCng DecryptPrivateAccountLogKey(byte[] phase1HashOfCorrectPassword)
-        {
-            return Encryption.DecryptAesCbcEncryptedEcPrivateKey(EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
-        }
-
-        /// <summary>
-        /// Set the EC account log key
-        /// </summary>
-        /// <param name="ecAccountLogKey"></param>
-        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
-        /// <returns></returns>
-        protected void SetAccountLogKey(ECDiffieHellmanCng ecAccountLogKey, byte[] phase1HashOfCorrectPassword)
-        {
-            EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = Encryption.EncryptEcPrivateKeyWithAesCbc(ecAccountLogKey,
-                phase1HashOfCorrectPassword);
-            EcPublicAccountLogKey = ecAccountLogKey.PublicKey;
-        }
-
-
+        /// <param name="password">The password to hash.</param>
+        /// <returns>The hash of the password with the specified algorithm using this account's unique salt.</returns>
         public byte[] ComputePhase1Hash(string password)
         {
             return ExpensiveHashFunctionFactory.Get(PasswordHashPhase1FunctionName)(password, SaltUniqueToThisAccount);
@@ -120,6 +107,80 @@ namespace StopGuessing.Models
         public static string ComputerPhase2HashFromPhase1Hash(byte[] phase1Hash)
         {
             return Convert.ToBase64String(SHA256.Create().ComputeHash(phase1Hash));
+        }
+
+        /// <summary>
+        /// This analysis will examine LoginAttempts that failed due to an incorrect password
+        /// and, where it can be determined if the failure was due to a typo or not,
+        /// update the outcomes to reflect whether it was or was not a typo.
+        /// </summary>
+        /// <param name="correctPassword">The correct password for this account.  (We can only know it because
+        /// the client must have provided the correct one this attempt.)</param>
+        /// <param name="phase1HashOfCorrectPassword">The phase1 hash of that correct password---which we could
+        /// recalculate from the information in the previous parameters, but doing so would be expensive.</param>
+        /// <param name="maxEditDistanceConsideredATypo">The maximum edit distance between the correct and incorrect password
+        /// that is considered a typo (inclusive).</param>
+        /// <param name="attemptsToAnalyze">The set of LoginAttempts to analyze.</param>
+        /// <returns>Returns the set of LoginAttempt records that were modified so that the updates
+        /// to their outcomes can be written to stable store or other actions taken.</returns>
+        public List<LoginAttempt> UpdateLoginAttemptOutcomeUsingTypoAnalysis(
+            string correctPassword,
+            byte[] phase1HashOfCorrectPassword,
+            float maxEditDistanceConsideredATypo,
+            IEnumerable<LoginAttempt> attemptsToAnalyze)
+        {
+            List<LoginAttempt> changedAttempts = new List<LoginAttempt>();
+
+            ECDiffieHellmanCng ecPrivateAccountLogKey = null;
+
+            foreach (LoginAttempt attempt in attemptsToAnalyze)
+            {
+
+                // If we haven't yet decrypted the EC key, which we will in turn use to decrypt the password
+                // provided in this login attempt, do it now.  (We don't do it in advance as we don't want to
+                // do the work unless we find at least one record to analyze.)
+                if (ecPrivateAccountLogKey == null)
+                {
+                    // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                    try
+                    {
+                        ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
+                            EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
+                    }
+                    catch (Exception)
+                    {
+                        // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
+                        return changedAttempts;
+                    }
+                }
+
+                // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
+                try
+                {
+                    // Attempt to decrypt the password.
+                    string incorrectPasswordFromPreviousAttempt =
+                        attempt.DecryptAndGetIncorrectPassword(ecPrivateAccountLogKey);
+
+                    // Use an edit distance calculation to determine if it was a likely typo
+                    bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
+                                      maxEditDistanceConsideredATypo;
+
+                    // Update the outcome based on this information.
+                    attempt.Outcome = likelyTypo
+                        ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
+                        : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
+
+                    // Add this to the list of changed attempts
+                    changedAttempts.Add(attempt);
+                }
+                catch (Exception)
+                {
+                    // An exception is likely due to an incorrect key (perhaps outdated).
+                    // Since we simply can't do anything with a record we can't Decrypt, we carry on
+                    // as if nothing ever happened.  No.  Really.  Nothing to see here.
+                }
+            }
+            return changedAttempts;
         }
 
 
@@ -155,7 +216,7 @@ namespace StopGuessing.Models
             }
             if (ecAccountLogKey == null)
             {
-                // We were unable to use an old EC Account Log Key,
+                // We were unable to use an old EC UsernameOrAccountId Log Key,
                 // so we'll create a new one
                 ecAccountLogKey =
                     new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null,
@@ -177,8 +238,34 @@ namespace StopGuessing.Models
             // We can use it to verify whether a provided password is correct
             PasswordHashPhase2 = ComputerPhase2HashFromPhase1Hash(newPasswordHashPhase1);
 
-            // Store the EC Account log symmetricKey encrypted with the phase 1 hash.
+            // Store the EC UsernameOrAccountId log symmetricKey encrypted with the phase 1 hash.
             SetAccountLogKey(ecAccountLogKey, newPasswordHashPhase1);
         }
+
+
+
+        /// <summary>
+        /// Derive the EC private account log key from the phase 1 hash of the correct password.
+        /// </summary>
+        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
+        /// <returns></returns>
+        protected ECDiffieHellmanCng DecryptPrivateAccountLogKey(byte[] phase1HashOfCorrectPassword)
+        {
+            return Encryption.DecryptAesCbcEncryptedEcPrivateKey(EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
+        }
+
+        /// <summary>
+        /// Set the EC account log key
+        /// </summary>
+        /// <param name="ecAccountLogKey"></param>
+        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
+        /// <returns></returns>
+        protected void SetAccountLogKey(ECDiffieHellmanCng ecAccountLogKey, byte[] phase1HashOfCorrectPassword)
+        {
+            EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = Encryption.EncryptEcPrivateKeyWithAesCbc(ecAccountLogKey,
+                phase1HashOfCorrectPassword);
+            EcPublicAccountLogKey = ecAccountLogKey.PublicKey;
+        }
+
     }
 }

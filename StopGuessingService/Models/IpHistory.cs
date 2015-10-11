@@ -4,7 +4,11 @@ using StopGuessing.DataStructures;
 
 namespace StopGuessing.Models
 {
-
+    /// <summary>
+    /// This class keeps track of recent login successes and failures for a given client IP so that
+    /// we can try to determine if this client should be blocked due to likely-password-guessing
+    /// behaviors.
+    /// </summary>
     public class IpHistory
     {
         public IPAddress Address;
@@ -48,7 +52,7 @@ namespace StopGuessing.Models
                 {
                     for (int i = 0; i < RecentLoginSuccessesAtMostOnePerAccount.Count; i++)
                     {
-                        if (attempt.Account.Equals(RecentLoginSuccessesAtMostOnePerAccount[i].Account))
+                        if (attempt.UsernameOrAccountId == RecentLoginSuccessesAtMostOnePerAccount[i].UsernameOrAccountId)
                         {
                             // We found a prior success from the same account.  Remove it.
                             RecentLoginSuccessesAtMostOnePerAccount.RemoveAt(i);
@@ -70,12 +74,15 @@ namespace StopGuessing.Models
 
 
         /// <summary>
-        /// 
+        /// Update LoginAttempts cached for this IP with new outcomes
         /// </summary>
-        /// <param name="loginAttempts"></param>
+        /// <param name="loginAttempts">Copies of the login attempts that have changed</param>
         /// <returns></returns>
         public int UpdateLoginAttemptsWithNewOutcomes(IEnumerable<LoginAttempt> loginAttempts)
         {
+            // Fot the attempts provided in the paramters, create a dictionary mapping the attempt keys to
+            // the attempt so that we can look them up quickly when going through the recent failures
+            // for this IP.
             Dictionary<string, LoginAttempt> keyToAttempt = new Dictionary<string, LoginAttempt>();
             foreach (LoginAttempt attempt in loginAttempts)
             {
@@ -84,6 +91,9 @@ namespace StopGuessing.Models
 
             lock(RecentLoginFailures)
             {
+                // Now walk through the failures for this IP and, if any match the keys for the
+                // accounts in the loginAttempts parameter, change the outcome to match the 
+                // one provided.
                 int numberOfOutcomesChanged = 0;
                 foreach (LoginAttempt attempt in RecentLoginFailures.MostRecentToOldest)
                 {

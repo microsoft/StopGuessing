@@ -14,36 +14,93 @@ namespace StopGuessing.Models
     [DataContract]
     public class LoginAttempt
     {
+        /// <summary>
+        /// A unique ID that identifies the account that the client was attempting to login to.
+        /// </summary>
         [DataMember]
-        public string Account { get; set; }
+        public string UsernameOrAccountId { get; set; }
 
+        /// <summary>
+        /// The IP address of the client that was attempting to login to.  This is
+        /// </summary>
         [DataMember]
         public System.Net.IPAddress AddressOfClientInitiatingRequest { get; set; }
 
+        /// <summary>
+        /// The IP address of the server handling this request.  This is used to create a unique
+        /// ID for each request without requiring coordination between servers to ensure they are
+        /// generating numbers that other servers are not generating.
+        /// </summary>
         [DataMember]
         public System.Net.IPAddress AddressOfServerThatInitiallyReceivedLoginAttempt { get; set; }
 
+        /// <summary>
+        /// When a login attempt is sent with an incorrect password, that incorrect password is encrypted
+        /// with the UserAccount's EcPublicAccountLogKey.  That private key to decrypt is encrypted
+        /// wiith the phase1 hash of the user's correct password.  If the correct password is provided in the future,
+        /// we can go back and audit the incorrect password to see if it was within a short edit distance
+        /// of the correct password--which would indicate it was likely a (benign) typo and not a random guess. 
+        /// </summary>
         [DataMember]
         public string EncryptedIncorrectPassword { get; set; }
 
+        /// <summary>
+        /// The phase2 hash of the incorrect password, which is available for future analysis.  We can use
+        /// this to determine if a client is sending an incorrect password that was recently attempted for this
+        /// account.  This allows us to detect a common-benign behavior: an automated client that is trying the same
+        /// incorrect password over and over again.  (Trying a password that you already know to be incorrect again
+        /// provides no information to attackers, so they can't exploit the fact that we don't punish attempts to
+        /// guess the same wrong password beyond the first attempt.)
+        /// </summary>
         [DataMember]
         public string Phase2HashOfIncorrectPassword { get; set; }
 
+        /// <summary>
+        /// The time of the attempt.
+        /// </summary>
         [DataMember]
         public DateTimeOffset TimeOfAttempt { get; set; }
 
+        /// <summary>
+        /// The API/protocol over which the attempt was sent.  Can be used to differentiate attempts via web browsers
+        /// (which support cookies, javascript, CAPTCHAS, and other goodness) from less flexible clients. 
+        /// </summary>
         [DataMember]
         public string Api { get; set; }
 
+        /// <summary>
+        /// The hash of a client-identifying cookie provided by the client/browser.  To allow
+        /// flexibility in the hash function and save the user of this class from having to choose
+        /// a hash function, the hash is automatically performed by using the setter
+        /// CookieProvidedByBrowser.
+        /// </summary>
         [DataMember]
-        public string Sha256HashOfCookieProvidedByBrowserBase64Encoded { get; set; }
+        public string HashOfCookieProvidedByBrowser { get; private set; }
 
+        /// <summary>
+        /// Will be set to true if, when the login attempt is being processed, it is determined
+        /// that the client that initiated the login attempt provided a cookie that was also provided
+        /// during a previous successful login attempt.
+        /// This indicates a relationship between the legitiamte accountholder and the client (browser)
+        /// that helps us allay suspicion that this login attempt is part of a massive untargetted
+        /// guessing attack.
+        /// This will be set by the analysis and need not be set by the creator of the LoginAttempt record.
+        /// </summary>
         [DataMember]
         public bool DeviceCookieHadPriorSuccessfulLoginForThisAccount { get; set; }
 
+        /// <summary>
+        /// The outcome of the LoginAttempt, which default to Undetermined and will be set during analysis.
+        /// This value does need not be set by the creator of the LoginAttempt record.
+        /// </summary>
         [DataMember]
         public AuthenticationOutcome Outcome { get; set; } = AuthenticationOutcome.Undetermined;
 
+        /// <summary>
+        /// The popularity of the password provided among the set of past failed guesses observed
+        /// by the system.  
+        /// This will be set by the analysis and need not be set by the creator of the LoginAttempt record.
+        /// </summary>
         [DataMember]
         public double PasswordsPopularityAmongFailedGuesses { get; set; }
 
@@ -58,25 +115,35 @@ namespace StopGuessing.Models
         [DataMember]
         public bool HasReceivedCreditForUseToReduceBlockingScore { get; set; }
 
+        /// <summary>
+        /// A setter used to provide a client-specific cookie.  This cookie should be random value
+        /// from a large space assigned to the client the first time it connects and provided on that
+        /// and every future login attempt.  If the client does not support cookies (e.g., POP)
+        /// then this can be left blankc. 
+        /// </summary>
         [IgnoreDataMember]
         [JsonIgnore]
         public string CookieProvidedByBrowser { set { SetCookieProvidedByBrowser(value); } }
 
+        /// <summary>
+        /// A getter that provides a key that should uniquely identify this login attempt.
+        /// </summary>
         [IgnoreDataMember]
         [JsonIgnore]
         public string UniqueKey => ToUniqueKey();
+
 
         private void SetCookieProvidedByBrowser(string plaintextCookie)
         {
             if (string.IsNullOrEmpty(plaintextCookie))
                 return;
-            Sha256HashOfCookieProvidedByBrowserBase64Encoded =
+            HashOfCookieProvidedByBrowser =
                     Convert.ToBase64String(SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(plaintextCookie)));
         }
 
         private string ToUniqueKey()
         {
-            return UrlEncoder.Default.UrlEncode(Account) + "&" + AddressOfServerThatInitiallyReceivedLoginAttempt + "&" + TimeOfAttempt.UtcTicks.ToString();
+            return UrlEncoder.Default.UrlEncode(UsernameOrAccountId) + "&" + AddressOfServerThatInitiallyReceivedLoginAttempt + "&" + TimeOfAttempt.UtcTicks.ToString();
         }
 
         /// <summary>

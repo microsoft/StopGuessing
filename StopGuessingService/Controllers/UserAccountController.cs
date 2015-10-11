@@ -43,6 +43,14 @@ namespace StopGuessing.Controllers
             throw new NotImplementedException("Cannot enumerate all accounts");
         }
 
+        /// <summary>
+        /// Get a user account record by looking up it's unique username/account ID.
+        /// 
+        /// This method may look in the cache first and only go to stable store if it doesn't find it.
+        /// </summary>
+        /// <param name="id">The unique identifier of the record to UserAccount fetch</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns>The account record or null if there is no such account.</returns>
         // GET api/UserAccount/stuart
         [HttpGet("{id:string}")]
         public async Task<UserAccount> GetAsync(string id, CancellationToken cancellationToken = default(CancellationToken))
@@ -50,7 +58,15 @@ namespace StopGuessing.Controllers
             return await _userAccountCache.GetAsync(id, cancellationToken);
         }
 
-
+        /// <summary>
+        /// PUT an account record into stable store (and any in-memory caching)
+        /// </summary>
+        /// <param name="id">The uniuqe username/accoount id of the account,
+        ///  which should be equal to account.UsernameOrAccountId,
+        ///  but is provided in the URL for RESTfullness</param>
+        /// <param name="account">The account record to store</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         // PUT api/UserAccount/stuart
         [HttpPut("{id:string}")]
         public async Task<UserAccount> PutAsync(string id, [FromBody] UserAccount account, CancellationToken cancellationToken = default(CancellationToken))
@@ -77,7 +93,8 @@ namespace StopGuessing.Controllers
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
         [HttpPost("{id:string}")]
-        public async Task<int> UpdateOutcomesUsingTypoAnalysisAsync(string id,
+        public async Task<int> UpdateOutcomesUsingTypoAnalysisAsync(
+            string id,
             [FromBody] string correctPassword,
             [FromBody] byte[] phase1HashOfCorrectPassword,
             [FromBody] System.Net.IPAddress ipAddressToExcludeFromAnalysis,
@@ -85,76 +102,25 @@ namespace StopGuessing.Controllers
         {
             UserAccount account = await GetAsync(id, cancellationToken);
 
-            List<LoginAttempt> attemptsToUpdate = new List<LoginAttempt>();
-
-            // Decrypt any account log entries for analysis
-
-            // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
-            ECDiffieHellmanCng ecPrivateAccountLogKey = null;
-
-            // Identify which login failures due to incorrect passwords were the result of likely typos
-            // and which were not, organizing them by (1) IP and then (2) the time of the event
-            foreach (LoginAttempt previousFailedLoginAttempt in account.PasswordVerificationFailures)
-            {
-                if (previousFailedLoginAttempt.Outcome != AuthenticationOutcome.CredentialsInvalidIncorrectPassword ||
-                    previousFailedLoginAttempt.EncryptedIncorrectPassword == null ||
-                    previousFailedLoginAttempt.AddressOfClientInitiatingRequest.Equals(ipAddressToExcludeFromAnalysis))
-                    continue;
-
-                // If we haven't yet decrypted the EC key, which we will in turn use to decrypt the password
-                // provided in this login attempt, do it now.  (We don't do it in advance as we don't want to
-                // do the work unless we find at least one record to analyze.)
-                if (ecPrivateAccountLogKey == null)
-                {
-                    // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
-                    try
-                    {
-                        ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
-                            account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
-                    }
-                    catch (Exception)
-                    {
-                        // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
-                        return 0;
-                    }
-                }
-
-                try
-                {
-                    // Decrypt the previous incorrect password
-                    string passwordProvidedInPreviousLoginFailure =
-                        previousFailedLoginAttempt.DecryptAndGetIncorrectPassword(ecPrivateAccountLogKey);
-
-                    // If the edit distance between the previous incorrect password and the correct password
-                    // is below a threshold (MaxEditDistanceConsideredATypo), consider it a typo
-                    bool likelyTypo =
-                        EditDistance.Calculate(passwordProvidedInPreviousLoginFailure, correctPassword) <=
-                        _options.MaxEditDistanceConsideredATypo;
-
-                    // Update the previous attempt with information about whether it was a likely typo or not.
-                    previousFailedLoginAttempt.Outcome = likelyTypo
-                        ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
-                        : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
-
-                    // We'll track the set of LoginAttempts that have been modified so that we can update them.
-                    attemptsToUpdate.Add(previousFailedLoginAttempt);
-                }
-                catch (Exception)
-                {
-                    // An exception is likely due to an incorrect key (perhaps outdated).
-                    // Since we simply can't do anything with a record we can't Decrypt, we carry on
-                    // as if nothing ever happened.  No.  Really.  Nothing to see here.
-                }
-            }
+            List<LoginAttempt> attemptsToUpdate = account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(
+                correctPassword,
+                phase1HashOfCorrectPassword,
+                _options.MaxEditDistanceConsideredATypo,
+                account.PasswordVerificationFailures.Where(attempt =>
+                    attempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
+                    (!string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword)) &&
+                    (!attempt.AddressOfClientInitiatingRequest.Equals(ipAddressToExcludeFromAnalysis))
+                    )
+                );
 
             if (attemptsToUpdate.Count > 0)
             {
+                // Update this UserAccount in stable store.
+                WriteAccountInBackground(account, cancellationToken);
+
                 // Update the primary copies of the LoginAttempt records with outcomes we've modified using
                 // our typo analysis. 
-                await _loginAttemptClient.UpdateLoginAttemptOutcomesAsync(attemptsToUpdate, cancellationToken);
-
-                // Update his UserAccount in stable store.
-                await WriteAccountAsync(account, cancellationToken);
+                _loginAttemptClient.UpdateLoginAttemptOutcomesInBackground(attemptsToUpdate, cancellationToken);
             }
 
             return attemptsToUpdate.Count;
@@ -172,7 +138,6 @@ namespace StopGuessing.Controllers
         /// <param name="id">The username or account id that uniquely identifies the account to update.</param>
         /// <param name="attempt">The attempt to incorporate into the account's records</param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        /// <returns></returns>
         [HttpPost("{id:string}")]
         public async Task UpdateForNewLoginAttemptAsync(string id, [FromBody] LoginAttempt attempt,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -183,11 +148,11 @@ namespace StopGuessing.Controllers
                 case AuthenticationOutcome.CredentialsValid:
                     // If the login attempt was successful (Outcome==CrednetialsValid) then we will want to
                     // track the cookie used by the client as we're more likely to trust this client in the future.
-                    if (!string.IsNullOrEmpty(attempt.Sha256HashOfCookieProvidedByBrowserBase64Encoded))
+                    if (!string.IsNullOrEmpty(attempt.HashOfCookieProvidedByBrowser))
                     {
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
-                            attempt.Sha256HashOfCookieProvidedByBrowserBase64Encoded);
-                        WriteAccountInBackground(account);
+                            attempt.HashOfCookieProvidedByBrowser);
+                        WriteAccountInBackground(account, cancellationToken);
                     }
                     break;
                 case AuthenticationOutcome.CredentialsValidButBlocked:
@@ -195,7 +160,7 @@ namespace StopGuessing.Controllers
                 default:
                     // Add this login attempt to the length-limited sequence of failed login attempts.
                     account.PasswordVerificationFailures.Add(attempt);
-                    WriteAccountInBackground(account);
+                    WriteAccountInBackground(account, cancellationToken);
                     break;
             }
         }
@@ -280,10 +245,11 @@ namespace StopGuessing.Controllers
         /// Combines update the local account cache with a background write to stable store.
         /// </summary>
         /// <param name="account">The account to write to cache/stable store.</param>
-        protected void WriteAccountInBackground(UserAccount account)
+        /// <param name="cancellationToken"></param>
+        protected void WriteAccountInBackground(UserAccount account, CancellationToken cancellationToken)
         {
             // ReSharper disable once UnusedVariable -- unused variable used to signify background task
-            Task dontwaitforme = WriteAccountAsync(account, default(CancellationToken));
+            Task.Run(() => WriteAccountAsync(account, default(CancellationToken)), cancellationToken);
         }
 
 
@@ -318,24 +284,24 @@ namespace StopGuessing.Controllers
             int saltLength = DefaultSaltLength)
         {
 
+            if (saltUniqueToThisAccount == null)
+            {
+                saltUniqueToThisAccount = new byte[DefaultSaltLength];
+                RandomNumberGenerator.Create().GetBytes(saltUniqueToThisAccount);
+            }
+
             UserAccount newAccount = new UserAccount
             {
                 UsernameOrAccountId = usernameOrAccountId,
-                SaltUniqueToThisAccount = saltUniqueToThisAccount,                
+                SaltUniqueToThisAccount = saltUniqueToThisAccount,
                 HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount =
                     new CapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
                 PasswordVerificationFailures =
                     new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
-                ConsumedCredits = new Sequence<UserAccount.ConsumedCredit>((int)CreditLimits.Last().Limit)
+                ConsumedCredits = new Sequence<UserAccount.ConsumedCredit>((int) CreditLimits.Last().Limit),
+                PasswordHashPhase1FunctionName = phase1HashFunctionName,
+                //Password = password
             };
-
-            if (newAccount.SaltUniqueToThisAccount == null)
-            {
-                newAccount.SaltUniqueToThisAccount = new byte[DefaultSaltLength];
-                RandomNumberGenerator.Create().GetBytes(newAccount.SaltUniqueToThisAccount);
-            }
-
-            newAccount.PasswordHashPhase1FunctionName = phase1HashFunctionName;
 
             if (password != null)
             {

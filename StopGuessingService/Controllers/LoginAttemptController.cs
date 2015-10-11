@@ -30,7 +30,8 @@ namespace StopGuessing.Controllers
         public LoginAttemptController(
             IOptions<BlockingAlgorithmOptions> optionsAccessor, 
             IStableStore stableStore, 
-            PasswordPopularityTracker passwordPopularityTracker, FixedSizeLruCache<string, LoginAttempt> cacheOfRecentLoginAttempts,
+            PasswordPopularityTracker passwordPopularityTracker,
+            FixedSizeLruCache<string, LoginAttempt> cacheOfRecentLoginAttempts,
             Dictionary<string, Task<LoginAttempt>> loginAttemptsInProgress, 
             SelfLoadingCache<System.Net.IPAddress, IpHistory> ipHistoryCache)
         {
@@ -111,7 +112,13 @@ namespace StopGuessing.Controllers
                 throw new Exception("The id assigned to the login does not match it's unique key.");
             }
 
-            if (loginAttempt.Outcome == AuthenticationOutcome.Undetermined)
+            if (loginAttempt.Outcome != AuthenticationOutcome.Undetermined)
+            {
+                // The outcome is already set so we simply write to the cache and stable store.
+                WriteLoginAttemptInBackground(loginAttempt, cancellationToken);
+                return loginAttempt;
+            }
+            else
             {
                 // We need to calculate the outcome before we can write to the stable store
                 Task<LoginAttempt> putTask;
@@ -137,16 +144,6 @@ namespace StopGuessing.Controllers
                 }
                 return await putTask;
             }
-            else
-            {
-                // The outcome is already set so we simply write to the cache and stable store.
-                lock (_cacheOfRecentLoginAttempts)
-                {
-                    _cacheOfRecentLoginAttempts[loginAttempt.UniqueKey] = loginAttempt;
-                }
-                await _stableStore.WriteLoginAttemptAsync(loginAttempt, cancellationToken);
-                return loginAttempt;
-            }
         }
 
         // DELETE api/LoginAttempt/<key>
@@ -157,7 +154,29 @@ namespace StopGuessing.Controllers
         }
 
 
+        /// <summary>
+        /// Combines update the local attempt cache with an asyncronous write to stable store.
+        /// </summary>
+        /// <param name="attempt">The attempt to write to cache/stable store.</param>
+        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        protected async Task WriteAttemptAsync(LoginAttempt attempt, CancellationToken cancellationToken) // = default(CancellationToken)
+        {
+            lock (_cacheOfRecentLoginAttempts)
+            {
+                _cacheOfRecentLoginAttempts[attempt.UniqueKey] = attempt;
+            }
+            await _stableStore.WriteLoginAttemptAsync(attempt, cancellationToken);
+        }
 
+        /// <summary>
+        /// Combines update the local attempt cache with a background write to stable store.
+        /// </summary>
+        /// <param name="attempt">The attempt to write to cache/stable store.</param>
+        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        protected void WriteLoginAttemptInBackground(LoginAttempt attempt, CancellationToken cancellationToken)
+        {
+            Task.Run( () => WriteAttemptAsync(attempt, cancellationToken), cancellationToken);
+        }
 
 
         /// <summary>
@@ -177,60 +196,22 @@ namespace StopGuessing.Controllers
             string correctPassword,
             byte[] phase1HashOfCorrectPassword)
         {
-            ECDiffieHellmanCng ecPrivateAccountLogKey = null;
-
             if (clientsIpHistory == null)
                 return;
 
-            foreach (LoginAttempt previousAttempt in clientsIpHistory.RecentLoginFailures.MostRecentToOldest)
+            List<LoginAttempt> loginAttemptsWithOutcompesUpdatedDueToTypoAnalysis =
+            account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(correctPassword,
+                phase1HashOfCorrectPassword,
+                _options.MaxEditDistanceConsideredATypo,
+                clientsIpHistory.RecentLoginFailures.MostRecentToOldest.Where(
+                    attempt => attempt.UsernameOrAccountId == account.UsernameOrAccountId &&
+                               attempt.Outcome != AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
+                               !string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword))
+                );
+
+            foreach (LoginAttempt updatedLoginAttempt in loginAttemptsWithOutcompesUpdatedDueToTypoAnalysis)
             {
-                // We only want to examine invalid password outcomes for the same account (the one which we know the password for)
-                // as these are the only ones we can recognize to be typos.
-                if (previousAttempt.Account != account.UsernameOrAccountId ||
-                    previousAttempt.Outcome != AuthenticationOutcome.CredentialsInvalidIncorrectPassword ||
-                    string.IsNullOrEmpty(previousAttempt.EncryptedIncorrectPassword))
-                    continue;
-
-                // If we haven't yet decrypted the EC key, which we will in turn use to decrypt the password
-                // provided in this login attempt, do it now.  (We don't do it in advance as we don't want to
-                // do the work unless we find at least one record to analyze.)
-                if (ecPrivateAccountLogKey == null)
-                {
-                    // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
-                    try
-                    {
-                        ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
-                            account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
-                    }
-                    catch (Exception)
-                    {
-                        // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
-                        return;
-                    }
-                }
-
-                // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
-                try
-                {
-                    // Attempt to decrypt the password.
-                    string incorrectPasswordFromPreviousAttempt = previousAttempt.DecryptAndGetIncorrectPassword(ecPrivateAccountLogKey);
-
-                    // Use an edit distance calculation to determine if it was a likely typo
-                    bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <= _options.MaxEditDistanceConsideredATypo;
-
-                    // Update the outcome based on this information.
-                    previousAttempt.Outcome = likelyTypo ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
-                                         : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
-
-                    // Ensure that the new outcome makes it into the stable store
-                    Task.Run(() => _stableStore.WriteLoginAttemptAsync(previousAttempt, default(CancellationToken)));
-                }
-                catch (Exception)
-                {
-                    // An exception is likely due to an incorrect key (perhaps outdated).
-                    // Since we simply can't do anything with a record we can't Decrypt, we carry on
-                    // as if nothing ever happened.  No.  Really.  Nothing to see here.
-                }
+                WriteLoginAttemptInBackground(updatedLoginAttempt, default(CancellationToken));
             }
         }
 
@@ -361,13 +342,13 @@ namespace StopGuessing.Controllers
 
                         if ( // We have not already used this account to reduce the BruteLikelihoooScore
                              // earlier in this calculation (during this call to ShouldBlock)
-                            !accountsUsedForSuccessCredit.Contains(success.Account) &&
+                            !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
                             // We HAVE received the credit during a prior recalculation
                             // (during a prior call to ShouldBlock)                        
                             success.HasReceivedCreditForUseToReduceBlockingScore)
                         {
                             // Ensure that we don't count this success more than once
-                            accountsUsedForSuccessCredit.Add(success.Account);
+                            accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
 
                             // Reduce the brute-force attack likelihood score to account for this past successful login
                             bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount;
@@ -388,7 +369,7 @@ namespace StopGuessing.Controllers
 
                         if ( // We have not already used this account to reduce the BruteLikelihoodScore
                              // earlier in this calculation (during this call to ShouldBlock)
-                            !accountsUsedForSuccessCredit.Contains(success.Account) &&
+                            !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
                             // We have NOT received the credit during a prior recalculation
                             // (during a prior call to ShouldBlock)                        
                             !success.HasReceivedCreditForUseToReduceBlockingScore)
@@ -399,12 +380,12 @@ namespace StopGuessing.Controllers
 
                             // Reduce credit from the account for the login so that the account cannot be used to generate
                             // an unlimited number of login successes.
-                            if (await _userAccountClient.TryGetCreditAsync(success.Account))
+                            if (await _userAccountClient.TryGetCreditAsync(success.UsernameOrAccountId))
                             {
                                 // There exists enough credit left in the account for us to use this success.
 
                                 // Ensure that we don't count this success more than once
-                                accountsUsedForSuccessCredit.Add(success.Account);
+                                accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
 
                                 // Reduce the brute-force attack likelihood score to account for this past successful login
                                 bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount;
@@ -450,7 +431,7 @@ namespace StopGuessing.Controllers
             Task<IpHistory> ipHistoryGetTask = _ipHistoryCache.GetAsync(loginAttempt.AddressOfClientInitiatingRequest, cancellationToken);
 
             // Get a copy of the UserAccount record for the account that the client wants to authenticate as.
-            UserAccount account = await _userAccountClient.GetAsync(loginAttempt.Account, cancellationToken);
+            UserAccount account = await _userAccountClient.GetAsync(loginAttempt.UsernameOrAccountId, cancellationToken);
 
             if (account == null)
             {
@@ -461,7 +442,7 @@ namespace StopGuessing.Controllers
                 // the IP need not be penalized for issuign a query that isn't getting it any information it
                 // didn't already have.
                 loginAttempt.Outcome = _passwordPopularityTracker.HasFailedIpAccountPasswordTripleBeenSeenBefore(
-                    loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.Account, passwordProvidedByClient)
+                    loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.UsernameOrAccountId, passwordProvidedByClient)
                     ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
                     : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
             }
@@ -476,7 +457,7 @@ namespace StopGuessing.Controllers
                 // legitimate user and not an unknown client performing a guessing attack.
                 loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount =
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(
-                            loginAttempt.Sha256HashOfCookieProvidedByBrowserBase64Encoded);
+                            loginAttempt.HashOfCookieProvidedByBrowser);
                 
                 // Test to see if the password is correct by calculating the Phase2Hash and comparing it with the Phase2 hash
                 // in this record
@@ -527,7 +508,7 @@ namespace StopGuessing.Controllers
                     // The triple sketch will automatically record that we saw this triple when we check to see if we've seen it before.
                     bool repeatFailureIdentifiedBySketch =
                         _passwordPopularityTracker.HasFailedIpAccountPasswordTripleBeenSeenBefore(
-                            loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.Account,
+                            loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.UsernameOrAccountId,
                             passwordProvidedByClient);
 
                     bool repeatFailureIdentifiedByAccountHashes =
@@ -554,7 +535,7 @@ namespace StopGuessing.Controllers
                     // were typos or non-typos.
                     _userAccountClient.UpdateOutcomesUsingTypoAnalysisInBackground(account.UsernameOrAccountId,
                         passwordProvidedByClient, phase1HashOfProvidedPassword,
-                        loginAttempt.AddressOfClientInitiatingRequest);
+                        loginAttempt.AddressOfClientInitiatingRequest, cancellationToken);
                 }
 
                 // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
@@ -585,10 +566,9 @@ namespace StopGuessing.Controllers
                 _userAccountClient.UpdateForNewLoginAttemptInBackground(account.UsernameOrAccountId, loginAttempt,
                     cancellationToken);
             }
-        
-            // WriteAccountAsync the login attempt to stable store
-            // ReSharper disable once UnusedVariable -- unused variable being used to signify use of background task
-            Task dontwaitforme =_stableStore.WriteLoginAttemptAsync(loginAttempt, cancellationToken);
+
+            // Write the login attempt to stable store for future long-term auditing and analysis.
+            WriteLoginAttemptInBackground(loginAttempt, cancellationToken);
 
             // Mark this task as completed by removing it from the Dictionary of tasks storing loginAttemptsInProgress
             // and by putting the login attempt into our cache of recent login attempts.
@@ -598,10 +578,7 @@ namespace StopGuessing.Controllers
                 _cacheOfRecentLoginAttempts.Add(key, loginAttempt);
                 _loginAttemptsInProgress.Remove(key);
             }
-
-            // Write the login attempt to stable store for future long-term auditing and analysis.
-            await _stableStore.WriteLoginAttemptAsync(loginAttempt, cancellationToken);
-
+            
             // We return the processed login attempt so that the caller can determine its outcome and,
             // in the event that the caller wants to keep a copy of the record, ensure that it has the
             // most up-to-date copy.

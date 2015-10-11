@@ -112,7 +112,7 @@ namespace xUnit_Tests
 
             LoginAttempt attempt = new LoginAttempt
             {
-                Account = username,
+                UsernameOrAccountId = username,
                 AddressOfClientInitiatingRequest = clientAddress,
                 AddressOfServerThatInitiallyReceivedLoginAttempt = serverAddress,
                 TimeOfAttempt = eventTime ?? DateTimeOffset.Now,
