@@ -56,7 +56,7 @@ namespace xUnit_Tests
                 }
 
                 ); // FIXME with loader
-            MyPasswordTracker = new PasswordPopularityTracker(thresholdRequiredToTrackPreciseOccurrences: 10); // FIXME with param
+            MyPasswordTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig",  thresholdRequiredToTrackPreciseOccurrences: 10); // FIXME with param
             MyCacheOfRecentLoginAttempts = new FixedSizeLruCache<string, LoginAttempt>(80000);
             MyLoginAttemptsInProgress = new Dictionary<string, Task<LoginAttempt>>();
 

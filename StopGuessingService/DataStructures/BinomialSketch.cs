@@ -42,6 +42,11 @@ namespace StopGuessing.DataStructures
 
         public ulong NumberOfObservations { get; protected set; }
 
+        public int NumberOfObservationsAccountingForAging => (int)
+            Math.Min(NumberOfObservations, _maxNumberOfObservationsAccountingForAging);
+
+        private ulong _maxNumberOfObservationsAccountingForAging;
+
         private readonly double[] _cumulativeProbabilitySetByChance;
 
         // The bits of the sketch
@@ -70,6 +75,7 @@ namespace StopGuessing.DataStructures
             NumberOfIndexes = numberOfIndexes;
             string keyToPreventAlgorithmicComplexityAttacks1 = keyToPreventAlgorithmicComplexityAttacks ?? "";
             SizeInBits = sizeInBits;
+            _maxNumberOfObservationsAccountingForAging = (ulong) SizeInBits/(ulong) (NumberOfIndexes*2);
             // Align on next byte boundary
             if ((SizeInBits & 7) != 0)
                 SizeInBits = (sizeInBits + 8) ^ 0x7;

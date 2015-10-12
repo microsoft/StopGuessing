@@ -10,13 +10,14 @@ namespace StopGuessing.Models
     public class PasswordPopularityTracker
     {
         /// <summary>
-        /// A count-min sketch that estimates the number of times a failed password has been observed.
-        /// The estimate is an upper bound, as conflicts on sketch entries can cause counts to be falsely higher.
+        /// A sketch that estimates the number of times a failed password has been observed, while minimizing
+        /// privacy risk since all estimates are probabilistic and any password has a small chance of
+        /// appearing to have been observed.
         /// </summary>
-        protected AgingSketch ApproximateOccurrencesOfFailedPassword;
+        protected BinomialSketch BinomialSketchOfFailedPasswords;
 
         /// <summary>
-        /// When a password exceeds the threshold of commonality in the ApproximateOccurrencesOfFailedPassword sketch,
+        /// When a password exceeds the threshold of commonality in the BinomialSketchOfFailedPasswords sketch,
         /// we start tracking its hash using this dictionary to get a precise occurrence count for future occurrences.
         /// This filters out the rare false positives so that we don't track their plaintext values
         /// </summary>
@@ -80,7 +81,9 @@ namespace StopGuessing.Models
         public uint[] LengthOfHistoricalPeriods;
 
 
-        public PasswordPopularityTracker(long estimatedNumberOfAccounts = DefaultEstimatedNumberOfAccounts,
+        public PasswordPopularityTracker(
+            string keyToPreventAlgorithmicComplexityAttacks,
+            long estimatedNumberOfAccounts = DefaultEstimatedNumberOfAccounts,
             int thresholdRequiredToTrackPreciseOccurrences = DefaultMinCountRequiredToTrackPreciseOccurrences,
             double minPercentRequiredToTrackPreciseOccurrences = DefaultMinPercentRequiredToTrackPreciseOccurrences,
             uint thresholdRequiredToStorePlaintext = DefaultMinCountRequiredToStorePlaintext,
@@ -111,9 +114,10 @@ namespace StopGuessing.Models
 
             SketchForTestingIfFailedAccountPasswordPairHasBeenSeenBefore =
                 new AgingMembershipSketch(DefaultNumberOfSketchColumns, conservativelyHighEstimateOfRowsNeeded);
-            ApproximateOccurrencesOfFailedPassword = 
+            BinomialSketchOfFailedPasswords = new BinomialSketch(1024*1024*1024, 64, keyToPreventAlgorithmicComplexityAttacks);
                 new AgingSketch(numberOfColumns, numberOfRows, bitsPerElement);
-            PreciseOccurrencesOfFailedUnsaltedHashedPassword = 
+                new Dictionary<string, uint[]>();
+            PreciseOccurrencesOfFailedUnsaltedHashedPassword =
                 new Dictionary<string, uint[]>();
             SequenceOfFailedUnsaltedHashedPassword =
                 new Sequence<string>((int) LengthOfHistoricalPeriods.Last());
@@ -139,39 +143,41 @@ namespace StopGuessing.Models
 
         public Proportion GetPopularityOfPasswordAmongFailures(string password, bool wasPasswordCorrect)
         {
-            ulong sketchOccurrenceCount;
             Proportion approximatePopularity;
-            Proportion greatestDictionaryPopularity = new Proportion(0,ulong.MaxValue);
-            
+            Proportion greatestDictionaryPopularity = new Proportion(0, ulong.MaxValue);
+            int sketchBitsSet;
+
             if (!wasPasswordCorrect)
             {
                 FailedPasswordsRecordedSoFar += 1d;
-                Sketch.ResultOfUpdate valueState = ApproximateOccurrencesOfFailedPassword.Add(password);
-                approximatePopularity = valueState.PriorProportion;
-                sketchOccurrenceCount = valueState.PriorMin;
+                sketchBitsSet = BinomialSketchOfFailedPasswords.Observe(password);
             }
             else
             {
-                Sketch.ResultOfGet valueState = ApproximateOccurrencesOfFailedPassword.Get(password);
-                approximatePopularity = valueState.Proportion;
-                sketchOccurrenceCount = valueState.Min;
+                sketchBitsSet = BinomialSketchOfFailedPasswords.GetNumberOfIndexesSet(password);
             }
+            approximatePopularity = new Proportion(
+                (ulong)BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet,0.001), // FIXME parameterize?
+                (ulong) BinomialSketchOfFailedPasswords.NumberOfObservationsAccountingForAging);
 
             string passwordHash = Convert.ToBase64String(SimplePasswordHash(password));
             // FUTURE -- always allow to enter loop if PreciseOccurrencesOfFailedUnsaltedHashedPassword.ContainsKey(passwordHash) since
             // the aging sketch might have lost this?
-            if (sketchOccurrenceCount >= _minCountRequiredToTrackPreciseOccurrences &&
-                approximatePopularity.AsDouble >= _minPercentRequiredToTrackPreciseOccurrences)
+            if (PreciseOccurrencesOfFailedUnsaltedHashedPassword.ContainsKey(passwordHash) ||
+                BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, 0.000001d) >
+                _minCountRequiredToTrackPreciseOccurrences)
             {
                 lock (PreciseOccurrencesOfFailedUnsaltedHashedPassword)
                 {
                     if (!PreciseOccurrencesOfFailedUnsaltedHashedPassword.ContainsKey(passwordHash))
-                        PreciseOccurrencesOfFailedUnsaltedHashedPassword[passwordHash] = new uint[LengthOfHistoricalPeriods.Length];
+                        PreciseOccurrencesOfFailedUnsaltedHashedPassword[passwordHash] =
+                            new uint[LengthOfHistoricalPeriods.Length];
 
                     for (int period = 0; period < LengthOfHistoricalPeriods.Length; period++)
                     {
                         // Increment the counter for this period
-                        uint countBeforeIncrement = PreciseOccurrencesOfFailedUnsaltedHashedPassword[passwordHash][period];
+                        uint countBeforeIncrement =
+                            PreciseOccurrencesOfFailedUnsaltedHashedPassword[passwordHash][period];
                         if (!wasPasswordCorrect)
                         {
                             PreciseOccurrencesOfFailedUnsaltedHashedPassword[passwordHash][period]++;
@@ -179,7 +185,8 @@ namespace StopGuessing.Models
                         // Track the pouplarity of the password hash as a fraction of the number of times the hash has
                         // occurred during each period.  Keep the poularity for the period with the highest popularity.
                         ulong lengthOfThisPeriod = LengthOfHistoricalPeriods[period];
-                        Proportion dictionaryPopularityForThisPeriod = new Proportion(countBeforeIncrement, lengthOfThisPeriod); 
+                        Proportion dictionaryPopularityForThisPeriod = new Proportion(countBeforeIncrement,
+                            lengthOfThisPeriod);
                         if (dictionaryPopularityForThisPeriod.AsDouble > greatestDictionaryPopularity.AsDouble)
                             greatestDictionaryPopularity = dictionaryPopularityForThisPeriod;
                     }
@@ -201,7 +208,9 @@ namespace StopGuessing.Models
                                     if (PreciseOccurrencesOfFailedUnsaltedHashedPassword.ContainsKey(hashAtEndOfPeriod))
                                     {
                                         uint countsRemaining =
-                                            --PreciseOccurrencesOfFailedUnsaltedHashedPassword[hashAtEndOfPeriod][period];
+                                            --
+                                                PreciseOccurrencesOfFailedUnsaltedHashedPassword[hashAtEndOfPeriod][
+                                                    period];
                                         if (countsRemaining <= 0 && period == LengthOfHistoricalPeriods.Length - 1)
                                         {
                                             // There are no longer any occurrences of this hash in the entire sequence,
@@ -214,11 +223,11 @@ namespace StopGuessing.Models
                         }
                     }
                 }
-                
+
                 // Add this most recent hash to the sequence so that we can track when it falls
                 // outside of a period boundary.
                 SequenceOfFailedUnsaltedHashedPassword.Add(passwordHash);
-            
+
                 if (greatestDictionaryPopularity.Numerator >= _minCountRequiredToStorePlaintext &&
                     greatestDictionaryPopularity.AsDouble >= _minPercentRequiredToStorePlaintext)
                 {
@@ -233,8 +242,9 @@ namespace StopGuessing.Models
             }
 
             approximatePopularity = approximatePopularity.MinDenominator(greatestDictionaryPopularity.Denominator);
-            return approximatePopularity.AsDouble > greatestDictionaryPopularity.AsDouble ?
-                approximatePopularity : greatestDictionaryPopularity;
+            return approximatePopularity.AsDouble > greatestDictionaryPopularity.AsDouble
+                ? approximatePopularity
+                : greatestDictionaryPopularity;
         }
     }
 
