@@ -1,6 +1,8 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using StopGuessing.EncryptionPrimitives;
@@ -21,8 +23,10 @@ namespace StopGuessing.DataStructures
     /// To count the subset of a keys indexes that have been set, one can call the GetNumberOfIndexesSet method.
     /// Natural variance will cause some never-before-seen keys to have more than k/2 bits set and keys that have been
     /// observed very rarely (or only in the distant past) to have fewer than k/2 bit set.  A key that is observed
-    /// only a few times FIXME  (with ~ k/2 + epsilon bits set) will be no more 
-    /// 
+    /// only a few times (with ~ k/2 + epsilon bits set) will be among ~ .5^{epsilon} false-positive keys that have
+    /// as many bits set by chance.  Thus, until a key has been observed a more substantial number of times it is hard
+    /// to differentiate from false positives.  To have confidence greater than one in a million that a key has been observed,
+    /// it will take an average of 20 observations.
     /// </summary>
     public class BinomialSketch
     {
@@ -35,6 +39,10 @@ namespace StopGuessing.DataStructures
         /// The size of the sketch in bits
         /// </summary>
         public int SizeInBits { get; }
+
+        public ulong NumberOfObservations { get; protected set; }
+
+        private readonly double[] _cumulativeProbabilitySetByChance;
 
         // The bits of the sketch
         private readonly BitArray _sketch;
@@ -78,6 +86,24 @@ namespace StopGuessing.DataStructures
             byte[] initialSketchValues = new byte[capacityInBytes];
             RandomNumberGenerator.Create().GetBytes(initialSketchValues);
             _sketch = new BitArray(initialSketchValues);
+
+            // binomialProbability[i] = (n choose k) * (p)^k * (1-p)^(n-k)
+            // since p=.5, this is (n choose k) 0.5^(n)
+            double[] binomialProbability = new double[numberOfIndexes + 1];
+            double probabilityOfAnyGivenValue = Math.Pow(0.5d, numberOfIndexes);
+            double nChooseK = 1d;
+            for (int k = 0; k <= numberOfIndexes/2; k++)
+            {
+                binomialProbability[k] = binomialProbability[numberOfIndexes-k] =
+                    nChooseK * probabilityOfAnyGivenValue;
+                nChooseK *= (numberOfIndexes - k)/(1d + k);
+            }
+
+            _cumulativeProbabilitySetByChance = new double[numberOfIndexes + 1];
+            _cumulativeProbabilitySetByChance[numberOfIndexes] = binomialProbability[numberOfIndexes];
+            for (int k = numberOfIndexes; k > 0; k--)
+                _cumulativeProbabilitySetByChance[k-1] = 
+                    _cumulativeProbabilitySetByChance[k] + binomialProbability[k-1];
         }
 
         /// <summary>
@@ -89,7 +115,7 @@ namespace StopGuessing.DataStructures
         {
             byte[] sha256HashOfKey = SHA256.Create().ComputeHash(key);
 
-            return _universalHashFunctions.Select(f => (int) f.Hash(sha256HashOfKey) % SizeInBits);
+            return _universalHashFunctions.Select(f => (int) (f.Hash(sha256HashOfKey) % (uint)SizeInBits));
         }
 
         private IEnumerable<int> GetIndexesForKey(string key)
@@ -123,25 +149,44 @@ namespace StopGuessing.DataStructures
         /// result is NumberOfIndexes/2, but will vary with the binomial distribution.</returns>
         public int Observe(string key, RandomNumberGenerator rng = null)
         {
-            rng = rng ?? RandomNumberGenerator.Create();
-
+            // Get a list of indexes that are not yet set
             List<int> indexesUnset = GetUnsetIndexesForKey(key).ToList();
+
+            // We can only update state to record the observation if there is an unset (0) index that we can set (to 1).
             if (indexesUnset.Count > 0)
             {
+                NumberOfObservations++;
+
+                // Create a random number generator if one was not provided by the caller.
+                rng = rng ?? RandomNumberGenerator.Create();
+
+                // We'll need the randomness to determine which bit to set and which to clear 
                 byte[] randBytes = new byte[8];
                 rng.GetBytes(randBytes);
-                int indexToSet = indexesUnset[ (int)_universalHashFunctions[_universalHashFunctions.Length - 1].Hash(randBytes) %
-                                               indexesUnset.Count];
+
+                // First, pick a random index to set by appling the last of the universal hash functions
+                // to the random bytes
+                int indexToSet = 
+                    indexesUnset[ (int) ( _universalHashFunctions[_universalHashFunctions.Length - 1].Hash(randBytes) %
+                                          (uint) indexesUnset.Count ) ];
+
+                // Next, pick the index to clear by applying hash functions to the random bytes until we reach
+                // an index that is set.  (For any reasonable sized number of indexes (e.g., >= 30), the probability
+                // that we would reach the last hash function used earlier, or run out of hash functions, is so small 
+                // as to be something we can ignore.)
                 int indexToClear = 0;
                 foreach (var hashFunction in _universalHashFunctions)
                 {
-                    indexToClear = (int)hashFunction.Hash(randBytes) % SizeInBits;
+                    indexToClear = (int) ( hashFunction.Hash(randBytes) % (uint) SizeInBits);
                     if (_sketch[indexToClear])
+                        // We break when we've found an index to a bit that is set and so can be cleared to 0/false.
                         break;
                 }
                 _sketch[indexToClear] = false;
                 _sketch[indexToSet] = true;
             }
+
+            // The number of bits set to 1/true is the number that were not 0/false.
             return NumberOfIndexes - indexesUnset.Count;
         }
 
@@ -158,5 +203,56 @@ namespace StopGuessing.DataStructures
         {
             return NumberOfIndexes - GetUnsetIndexesForKey(key).Count();
         }
+
+        /// <summary>
+        /// Determine the probability that a given number of indexes might be set simply by random chance.
+        /// If testing to determine whether we've observed a key before, this is a test of the null
+        /// hypothesesis that we have not observed the key.  (In other words, when we have not observed
+        /// a key, the only reason for indexes to be set would be chance.)  The inverse of this probability
+        /// is the expected number of tests one would expect to get one false positive in.
+        /// </summary>
+        /// <param name="numberOfIndexesSet">The number of indexes set for a given key, as returned by
+        /// GetNumberoFindexesSet() or Observe().</param>
+        /// <returns>The probability p</returns>
+        public double TestNullHypothesisThatAllIndexesWereSetByChance(int numberOfIndexesSet)
+        {
+            return _cumulativeProbabilitySetByChance[NumberOfIndexes];
+        }
+
+        public double TestNullHypothesisThatAllIndexesWereSetByChance(string key)
+        {
+            return TestNullHypothesisThatAllIndexesWereSetByChance(GetNumberOfIndexesSet(key));
+        }
+
+        /// <summary>
+        /// Estimates the number of observations of a key (the number of times Observe(key) has been called) at a given level
+        /// of statistical confidence (p value).
+        /// In other words, how many observations can we assume occurred and reject the null hypothesis that fewer observations
+        /// occurred and the nubmer of bits set was this high due to chance.
+        /// </summary>
+        /// <param name="numberOfIndexesSet">The number of indexes set in the sketch as returned by a call to Observe() or Add().
+        /// </param>
+        /// <param name="confidenceLevelCommonlyCalledPValue">The p value, or confidence level, at which we want to be sure
+        /// the claimed number of observations occurred.</param>
+        /// <returns></returns>
+        public int CountObservationsForGivenConfidence(int numberOfIndexesSet, double confidenceLevelCommonlyCalledPValue)
+        {
+            int observations = 0;
+            while (_cumulativeProbabilitySetByChance[numberOfIndexesSet] < confidenceLevelCommonlyCalledPValue)
+            {
+                numberOfIndexesSet--;
+                observations++;
+            }
+            return observations;            
+        }
+
+        /// <param name="key">The key to estimate the number of observations of.</param>
+        /// <param name="confidenceLevelCommonlyCalledPValue">The p value, or confidence level, at which we want to be sure
+        /// the claimed number of observations occurred.</param>
+        public int CountObservationsForGivenConfidence(string key, double confidenceLevelCommonlyCalledPValue)
+        {
+            return CountObservationsForGivenConfidence(GetNumberOfIndexesSet(key), confidenceLevelCommonlyCalledPValue);
+        }
+
     }
 }
