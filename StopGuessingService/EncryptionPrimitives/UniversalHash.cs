@@ -41,7 +41,7 @@ namespace StopGuessing.EncryptionPrimitives
     {
         private readonly ulong _initialRandomKey;
         private readonly ulong[] _randomKeyVector;
-        private readonly int _randomKeyVectorLengthInBytes;
+        private int _randomKeyVectorLengthInBytes;
 
         /// <summary>
         /// This function generates 64 bits and, if fewer bits are requested, returns the leftmost bits.
@@ -55,17 +55,8 @@ namespace StopGuessing.EncryptionPrimitives
 
         public const int MaximumNumberOfResultBitsAllowing32BiasedBits = 64;
 
-        /// <summary>
-        /// Construct a keyed universal hash function.
-        /// 
-        /// An instance of a universal hash function needs to store on the order of RandomKeyVectorLengthInBytes values upon construction,
-        /// so it is best not to initialize this function for large strings (e.g., those over 32k).
-        /// 
-        /// </summary>
-        /// <param name="keyOf16Or24Or32Bytes">A key that should not be known to those who might try to create collisions, provided as an array of 16, 24, or 32 bytes.</param>
-        /// <param name="randomKeyVectorLengthInBytes">The length of the random key vector used for hashing.  Should be twice the length of the longest value you expect to hash,
-        /// unless you hash values bigger than you would want to keep in memory.  If hashing a value longer than this, the universal hash properties may not hold.</param>
-        public UniversalHashFunction(byte[] keyOf16Or24Or32Bytes, int randomKeyVectorLengthInBytes = 256)
+
+        private void SetVectorLength(int randomKeyVectorLengthInBytes)
         {
             // We must allocate at least 16 bytes so we can be sure to be able to hash
             // values up to 64-bit numbers.
@@ -81,6 +72,44 @@ namespace StopGuessing.EncryptionPrimitives
                 randomKeyVectorLengthInBytes += (8 - mod8);
             }
             _randomKeyVectorLengthInBytes = randomKeyVectorLengthInBytes;
+        }
+
+
+        /// <summary>
+        /// Construct a random universal hash function
+        /// </summary>
+        /// <param name="randomKeyVectorLengthInBytes">The length of the random key vector used for hashing.  Should be twice the length of the longest value you expect to hash,
+        /// unless you hash values bigger than you would want to keep in memory.  If hashing a value longer than this, the universal hash properties may not hold.</param>
+        public UniversalHashFunction(int randomKeyVectorLengthInBytes)
+        {
+            int numberOfPseudoRandomBytesNeeded = SetVectorLengthAndGetNumberOfRandomBytesNeeded(randomKeyVectorLengthInBytes);
+            byte[] pseudoRandomBytes = new byte[numberOfPseudoRandomBytesNeeded];
+
+            System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(pseudoRandomBytes);
+
+            // Create the random key vector and fill it with random bytes
+            _randomKeyVector = new ulong[randomKeyVectorLengthInBytes/8];
+            for (int i = 0; i < _randomKeyVector.Length; i++)
+                _randomKeyVector[i] = BitConverter.ToUInt64(pseudoRandomBytes, i*8);
+            // Fill the initial random key with the last remaining 8 bytes
+            _initialRandomKey = BitConverter.ToUInt64(pseudoRandomBytes, randomKeyVectorLengthInBytes);
+        }
+
+
+
+        /// <summary>
+        /// Construct a keyed universal hash function.
+        /// 
+        /// An instance of a universal hash function needs to store on the order of RandomKeyVectorLengthInBytes values upon construction,
+        /// so it is best not to initialize this function for large strings (e.g., those over 32k).
+        /// 
+        /// </summary>
+        /// <param name="keyOf16Or24Or32Bytes">A key that should not be known to those who might try to create collisions, provided as an array of 16, 24, or 32 bytes.</param>
+        /// <param name="randomKeyVectorLengthInBytes">The length of the random key vector used for hashing.  Should be twice the length of the longest value you expect to hash,
+        /// unless you hash values bigger than you would want to keep in memory.  If hashing a value longer than this, the universal hash properties may not hold.</param>
+        public UniversalHashFunction(byte[] keyOf16Or24Or32Bytes, int randomKeyVectorLengthInBytes = 256)
+        {
+            int numberOfRandomBytesToGenerate = SetVectorLengthAndGetNumberOfRandomBytesNeeded(randomKeyVectorLengthInBytes);
 
             // Generate enough random bytes to fill the RandomKeyVector and 4 extra for the InitialRandomKey
             using (System.Security.Cryptography.AesCryptoServiceProvider aes = new System.Security.Cryptography.AesCryptoServiceProvider())
@@ -95,15 +124,12 @@ namespace StopGuessing.EncryptionPrimitives
                 {
                     using (System.Security.Cryptography.CryptoStream cs = new System.Security.Cryptography.CryptoStream(ciphertext, aes.CreateEncryptor(), System.Security.Cryptography.CryptoStreamMode.Write))
                     {
-                        // The number of random bytes we need is equal to the length of the 
-                        // random key vector + 8 bytes for the InitialRandomKey.
-                        int numberOfRandomBytesToGenerate = 8 + randomKeyVectorLengthInBytes;
                         if (numberOfRandomBytesToGenerate % 16 != 0)
                         {
                             // Round to next 128-bit boundary since we're using AES 128-bit blocks to generate randomness
                             numberOfRandomBytesToGenerate += 16 - (numberOfRandomBytesToGenerate % 16);
                         }
-                        cs.Write(new byte[numberOfRandomBytesToGenerate], 0, (int)numberOfRandomBytesToGenerate);
+                        cs.Write(new byte[numberOfRandomBytesToGenerate], 0, numberOfRandomBytesToGenerate);
                         // Ensure all bytes are flushed.
                     }
                     pseudoRandomBytes = ciphertext.ToArray();
@@ -113,8 +139,8 @@ namespace StopGuessing.EncryptionPrimitives
                 _randomKeyVector = new ulong[randomKeyVectorLengthInBytes / 8];
                 for (int i = 0; i < _randomKeyVector.Length; i++)
                     _randomKeyVector[i] = BitConverter.ToUInt64(pseudoRandomBytes, i * 8);
-                // Fill the initial random key with the last remaining 4 bytes
-                _initialRandomKey = BitConverter.ToUInt64(pseudoRandomBytes, (int)randomKeyVectorLengthInBytes);
+                // Fill the initial random key with the last remaining 8 bytes
+                _initialRandomKey = BitConverter.ToUInt64(pseudoRandomBytes, randomKeyVectorLengthInBytes);
             }
         }
 
@@ -143,9 +169,33 @@ namespace StopGuessing.EncryptionPrimitives
                 return HashArrayThatExceedsLengthOfRandomKeyVector(messageToBeHashed, numberOfBitsToReturn);
             ulong sum = _initialRandomKey;
             for (int i = 0; i < messageToBeHashed.Count; i++) {
-                sum += ((ulong)messageToBeHashed[i]) * ((ulong)_randomKeyVector[i]);
+                sum += messageToBeHashed[i] * _randomKeyVector[i];
             }
             return sum >> (64 - numberOfBitsToReturn);
+        }
+
+
+        private int SetVectorLengthAndGetNumberOfRandomBytesNeeded(int randomKeyVectorLengthInBytes)
+        {
+            SetVectorLength(randomKeyVectorLengthInBytes);
+            // We must allocate at least 16 bytes so we can be sure to be able to hash
+            // values up to 64-bit numbers.
+            if (randomKeyVectorLengthInBytes < 16)
+                randomKeyVectorLengthInBytes = 16;
+
+            // Ensure the RandomKeyVectorLengthInBytes falls on a 32-bit boundary
+            int mod8;
+            if ((mod8 = randomKeyVectorLengthInBytes % 8) != 0)
+            {
+                // MaxLengthInBytes is not divisible by 4 bytes.
+                // Round up so that we Get a 32-bit boundary.
+                randomKeyVectorLengthInBytes += (8 - mod8);
+            }
+            _randomKeyVectorLengthInBytes = randomKeyVectorLengthInBytes;
+
+            // The number of random bytes we need is equal to the length of the 
+            // random key vector + 8 bytes for the InitialRandomKey.
+            return 8 + _randomKeyVectorLengthInBytes;
         }
 
         /// <summary>
@@ -164,7 +214,7 @@ namespace StopGuessing.EncryptionPrimitives
             int indexIntoRandomKeyVector = 0;
             for (int i = 0; i < messageToBeHashed.Count; i++)
             {
-                // Construct uint32 to Add to hash from four bytes
+                // Construct uint32 to Observe to hash from four bytes
                 // (or leave zeros where bytes are missing)
                 ulong value = (((UInt32)messageToBeHashed[i]) << 24);
                 if (++i < messageToBeHashed.Count)
@@ -172,9 +222,9 @@ namespace StopGuessing.EncryptionPrimitives
                 if (++i < messageToBeHashed.Count)
                     value |= (((UInt32)messageToBeHashed[i]) << 8);
                 if (++i < messageToBeHashed.Count)
-                    value |= (((UInt32)messageToBeHashed[i]));
+                    value |= messageToBeHashed[i];
 
-                value *= (ulong)_randomKeyVector[indexIntoRandomKeyVector++];
+                value *= _randomKeyVector[indexIntoRandomKeyVector++];
                 sum += value;
             }
             return sum >> (64 - numberOfBitsToReturn);
@@ -256,7 +306,7 @@ namespace StopGuessing.EncryptionPrimitives
         /// <returns>An unsigned hash of <paramref name="numberOfBitsToReturn"/> bits.</returns>
         public ulong Hash(UInt32 valueToHash, int numberOfBitsToReturn = MaximumNumberOfResultBitsGuaranteedToBeUnbiased)
         {
-            ulong hashValue = _initialRandomKey + (((ulong)valueToHash) * _randomKeyVector[0]);
+            ulong hashValue = _initialRandomKey + (valueToHash * _randomKeyVector[0]);
             return hashValue >> (64 - numberOfBitsToReturn);
         }
 
@@ -285,8 +335,8 @@ namespace StopGuessing.EncryptionPrimitives
         public ulong Hash(ulong valueToHash, int numberOfBitsToReturn = MaximumNumberOfResultBitsGuaranteedToBeUnbiased)
         {
             ulong hashValue = _initialRandomKey +
-                (((ulong)valueToHash >> 32) * _randomKeyVector[0]) +
-                (((ulong)valueToHash & (ulong)0xFFFFFFFF) * _randomKeyVector[1]);
+                ((valueToHash >> 32) * _randomKeyVector[0]) +
+                ((valueToHash & 0xFFFFFFFF) * _randomKeyVector[1]);
             return hashValue >> (64 - numberOfBitsToReturn);
         }
 

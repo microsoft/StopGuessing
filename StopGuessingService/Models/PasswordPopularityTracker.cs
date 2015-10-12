@@ -17,7 +17,7 @@ namespace StopGuessing.Models
 
         /// <summary>
         /// When a password exceeds the threshold of commonality in the ApproximateOccurrencesOfFailedPassword sketch,
-        /// we start tracking its hash using this dictionary to Get a precise occurrence count for future occurrences.
+        /// we start tracking its hash using this dictionary to get a precise occurrence count for future occurrences.
         /// This filters out the rare false positives so that we don't track their plaintext values
         /// </summary>
         protected Dictionary<string, uint[]> PreciseOccurrencesOfFailedUnsaltedHashedPassword;
@@ -25,7 +25,7 @@ namespace StopGuessing.Models
         /// <summary>
         /// We track a sedquence of unsalted failed passwords so that we can determine their pouplarity
         /// within different historical frequencies.  We need this sequence because to know how often
-        /// a password occurred among the past n failed passwords, we need to Add a count each time we
+        /// a password occurred among the past n failed passwords, we need to add a count each time we
         /// see it and remove the count when n new failed passwords have been recorded. 
         /// </summary>
         protected Sequence<string> SequenceOfFailedUnsaltedHashedPassword;
@@ -146,7 +146,7 @@ namespace StopGuessing.Models
             if (!wasPasswordCorrect)
             {
                 FailedPasswordsRecordedSoFar += 1d;
-                Sketch.ResultOfUpdate valueState = ApproximateOccurrencesOfFailedPassword.ConservativeAdd(password);
+                Sketch.ResultOfUpdate valueState = ApproximateOccurrencesOfFailedPassword.Add(password);
                 approximatePopularity = valueState.PriorProportion;
                 sketchOccurrenceCount = valueState.PriorMin;
             }

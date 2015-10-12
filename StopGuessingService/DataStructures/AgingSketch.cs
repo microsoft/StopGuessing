@@ -1,11 +1,13 @@
-﻿namespace StopGuessing.DataStructures
+﻿using System.Threading.Tasks;
+
+namespace StopGuessing.DataStructures
 {
 
     public class AgingSketch : Sketch
     {
         readonly ulong[] _numberElementsZero;
         readonly long[] _agingIndex;
-        readonly System.Threading.Thread[] _columnAgingThreads;
+        readonly Task[] _columnAgingTasks;
         readonly ulong _rowZerosMin;
         readonly ulong _rowZerosMax;
 
@@ -17,7 +19,7 @@
             float fractionRowZerosHighWaterMark = DefaultFractionRowZerosHighWaterMark)
             : base(numberOfColumns, numberOfRows, bitsPerElement)
         {
-            _columnAgingThreads = new System.Threading.Thread[numberOfColumns];
+            _columnAgingTasks = new Task[numberOfColumns];
             _agingIndex = new long[numberOfColumns];
             _numberElementsZero = new ulong[numberOfColumns];
             _rowZerosMin = (ulong)(numberOfRows * fractionRowZerosLowWaterMark);
@@ -46,13 +48,14 @@
                     // Zero value replaced by a non-zero => 
                     // One fewer zero element
                     ulong numZeroElements = --_numberElementsZero[column];
-                    if (numZeroElements < _rowZerosMin && (_columnAgingThreads[column] == null))
+                    if (numZeroElements < _rowZerosMin && (_columnAgingTasks[column] == null))
                     {
-                        if (_columnAgingThreads[column] == null)
+                        lock (_columnAgingTasks)
                         {
-                            System.Threading.Thread thread = _columnAgingThreads[column] = 
-                                new System.Threading.Thread(() => AgeColumn(column));
-                            thread.Start();
+                            if (_columnAgingTasks[column] == null)
+                            {
+                                _columnAgingTasks[column] = Task.Run(() => AgeColumn(column));
+                            }
                         }
                     }
                 }
@@ -78,7 +81,10 @@
             _agingIndex[column] = index;
 
             // Mark that the columnn is done
-            _columnAgingThreads[column] = null;
+            lock (_columnAgingTasks)
+            {
+                _columnAgingTasks[column] = null;
+            }
         }
 
     }
@@ -91,9 +97,9 @@
         }
 
         /// <summary>
-        /// Test if a string (<paramref name="s"/>) is a member of the set and Add it if it is not.
+        /// Test if a string (<paramref name="s"/>) is a member of the set and Observe it if it is not.
         /// </summary>
-        /// <param name="s">The string to Add.</param>
+        /// <param name="s">The string to Observe.</param>
         /// <returns>True if <paramref name="s"/> was already a member of the set.</returns>
         public bool AddMember(string s)
         {
