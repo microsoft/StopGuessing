@@ -29,7 +29,9 @@ namespace StopGuessing.Models
         /// Until we've observed enough failure attempts, we use the following denominator for popularity calculations.
         /// This ensures that a small burst of something rare doesn't look popular when we've only had a few observations.
         /// </summary>
-        public ulong MinDenominatorForPasswordPopularity { get; set; } = 1000*1000; // 1 million
+        public ulong MinDenominatorForPasswordPopularity { get; set; } = 100*1000; // 1 million
+
+        public double PopularityConfidenceLevel { get; set; } = 0.00001d; // 1 in 100,000
 
         /// <summary>
         /// This threshold determines whether we consider an account's password to be among the set of 

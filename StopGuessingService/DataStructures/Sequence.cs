@@ -21,6 +21,9 @@ namespace StopGuessing.DataStructures
     /// item 1, the former item 1 becomes item 2, and so on.  If the sequence is at capacity,
     /// the oldest item in the sequence falls off.
     /// 
+    /// This collection is thread-safe.  You can modify it from multiple threads knowing that
+    /// its internal locks will prevent thread-safety issues.
+    /// 
     /// Internally, this collection is a circular array.
     /// </summary>
     /// <typeparam name="T">The type of the item to keep a sequence of.</typeparam>
@@ -122,6 +125,7 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// Add in item to the sequence.  This item will become the most recent item in the sequence (item 0),
         /// the item that was the most recent item will become item 1, and so on.
+        /// This method is thread-safe.
         /// </summary>
         /// <param name="value">The item to Add to the sequence.</param>
         public virtual void Add(T value)
@@ -142,6 +146,7 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// Add in item to the sequence.  This item will become the most recent item in the sequence (item 0),
         /// the item that was the most recent item will become item 1, and so on.
+        /// This method is thread-safe.
         /// </summary>
         /// <param name="values">The set of items to add to the sequence.</param>
         public virtual void AddRange(IEnumerable<T> values)
@@ -164,6 +169,7 @@ namespace StopGuessing.DataStructures
 
         /// <summary>
         /// Test to see whether an item is in the sequence.  This is a linear search and so may be costly for large sequences.
+        /// This method is thread-safe.
         /// </summary>
         /// <param name="value">The item to search for</param>
         /// <returns></returns>
@@ -177,6 +183,7 @@ namespace StopGuessing.DataStructures
 
         /// <summary>
         /// Empty the sequence of all contents
+        /// This method is thread-safe.
         /// </summary>
         public void Clear()
         {
@@ -284,7 +291,13 @@ namespace StopGuessing.DataStructures
         /// </summary>
         public T Current
         {
-            get { return SequenceArray[CurrentItemIndex]; }
+            get
+            {
+                lock (SequenceArray)
+                {
+                    return SequenceArray[CurrentItemIndex];
+                }
+            }
             set { Add(value); }
         }
 

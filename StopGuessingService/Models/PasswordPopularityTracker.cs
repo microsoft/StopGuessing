@@ -147,7 +147,20 @@ namespace StopGuessing.Models
             return SketchForTestingIfNonexistentAccountIpPasswordHasBeenSeenBefore.AddMember(ipNonexistentAccountPasswordTripleAsString);
         }
 
-        public Proportion GetPopularityOfPasswordAmongFailures(string password, bool wasPasswordCorrect)
+        /// <summary>
+        /// Estimate the popularity of a password among past incorrect passwords.
+        /// This will also record the observation of the incorrect password if wasPasswordCorrect is false
+        /// </summary>
+        /// <param name="password">The password to estimate the popularity of.</param>
+        /// <param name="wasPasswordCorrect">True if the passowrd provided was the correct password for this account</param>
+        /// <param name="confidenceLevel">The confidence level required for the minimum threshold of popularity.</param>
+        /// <param name="minDenominatorForPasswordPopularity">When there are few samples observations, use this minimum denomoninator
+        /// to prevent something appearing popular just becausae we haven't seen much else yet.</param>
+        /// <returns></returns>
+        public Proportion GetPopularityOfPasswordAmongFailures(string password,
+            bool wasPasswordCorrect, 
+            double confidenceLevel = 0.001,
+            ulong minDenominatorForPasswordPopularity = 10000)
         {
             int sketchBitsSet;
 
@@ -160,11 +173,11 @@ namespace StopGuessing.Models
             {
                 sketchBitsSet = BinomialSketchOfFailedPasswords.GetNumberOfIndexesSet(password);
             }
-            Proportion approximatePopularity = new Proportion(
-                (ulong)BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet,0.001), // FIXME parameterize?
-                (ulong) BinomialSketchOfFailedPasswords.NumberOfObservationsAccountingForAging);
-
-            Proportion greatestPopularityForAnyPeriod = new Proportion(0, ulong.MaxValue);
+            Proportion highestPopularity = new Proportion(
+                (ulong)BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, confidenceLevel),
+                Math.Min((ulong) BinomialSketchOfFailedPasswords.NumberOfObservationsAccountingForAging, 
+                                 minDenominatorForPasswordPopularity));
+            
             string passwordHash = Convert.ToBase64String(SimplePasswordHash(password));
 
             // If we're already tracking this unsalted hash, or we've seen enough observations
@@ -183,12 +196,13 @@ namespace StopGuessing.Models
                             passwordTrackerForThisPeriod.Get(passwordHash) :
                             passwordTrackerForThisPeriod.Observe(passwordHash);
                     }
-                    if (popularityForThisPeriod.AsDouble > greatestPopularityForAnyPeriod.AsDouble)
-                        greatestPopularityForAnyPeriod = popularityForThisPeriod;
+                    popularityForThisPeriod = popularityForThisPeriod.MinDenominator(minDenominatorForPasswordPopularity);
+                    if (popularityForThisPeriod.AsDouble > highestPopularity.AsDouble)
+                        highestPopularity = popularityForThisPeriod;
                 }
 
-                if (greatestPopularityForAnyPeriod.Numerator >= _minCountRequiredToStorePlaintext &&
-                    greatestPopularityForAnyPeriod.AsDouble >= _minPercentRequiredToStorePlaintext)
+                if (highestPopularity.Numerator >= _minCountRequiredToStorePlaintext &&
+                    highestPopularity.AsDouble >= _minPercentRequiredToStorePlaintext)
                 {
                     lock (MapOfHighlyPopularUnsaltedHashedPasswordsToPlaintextPasswords)
                     {
@@ -199,11 +213,8 @@ namespace StopGuessing.Models
                     }
                 }
             }
-
-            approximatePopularity = approximatePopularity.MinDenominator(greatestPopularityForAnyPeriod.Denominator);
-            return approximatePopularity.AsDouble > greatestPopularityForAnyPeriod.AsDouble
-                ? approximatePopularity
-                : greatestPopularityForAnyPeriod;
+            
+            return highestPopularity;
         }
     }
 

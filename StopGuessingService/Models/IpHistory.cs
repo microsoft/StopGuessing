@@ -65,10 +65,7 @@ namespace StopGuessing.Models
             }
             else
             {
-                lock (RecentLoginFailures)
-                {
-                    RecentLoginFailures.Add(attempt);
-                }
+                RecentLoginFailures.Add(attempt);
             }
         }
 

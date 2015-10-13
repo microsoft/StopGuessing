@@ -206,19 +206,21 @@ namespace xUnit_Tests
         public async Task LoginWithIpWithBadReputationParallelLoadAsync()
         {
             InitTest();
-            string[] usernames = CreateUserAccounts(200);
+            string[] usernames = CreateUserAccounts(250);
             LoginTestCreateAccount(Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
-            Parallel.ForEach(usernames.Skip(10), username =>
+            Parallel.ForEach(usernames.Skip(20), username =>
                 AuthenticateAsync(username, PopularPassword, clientAddress: AttackersIp).Wait());
 
+            Thread.Sleep(2000);
+            
             LoginAttempt firstAttackersAttempt = await AuthenticateAsync(Username1, Password1, clientAddress: AttackersIp);
 
             Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, firstAttackersAttempt.Outcome);
 
             // Now the second attacker should be flagged after using that password 10 times on different accounts.
-            foreach (string username in usernames.Skip(1).Take(9))
+            foreach (string username in usernames.Skip(1).Take(19))
                 await AuthenticateAsync(username, PopularPassword, AnotherAttackersIp);
 
             await AuthenticateAsync(usernames[0], PopularPassword, AnotherAttackersIp);

@@ -10,14 +10,15 @@ namespace StopGuessing.EncryptionPrimitives
 
     public static class ExpensiveHashFunctionFactory
     {
+
+        public const string DefaultFunctionName = "PBKDF2_1000";
+
         private static readonly Dictionary<string, ExpensiveHashFunction> ExpensiveHashFunctions = new Dictionary<string, ExpensiveHashFunction>
             {
-            // FUTURE -- remove before v1 and put something here that is actually expensive.
-                {"SHA256Once", (pwd, salt) =>
-                  SHA256.Create().ComputeHash(salt.Concat(Encoding.UTF8.GetBytes(pwd)).ToArray())}
+                {DefaultFunctionName, (pwd, salt) =>
+                                    new Rfc2898DeriveBytes(pwd, salt, 1000).GetBytes(16) }
             };
 
-        public const string DefaultFunctionName = "SHA256Once";
 
         public static ExpensiveHashFunction Get(string hashFunctionName)
         {

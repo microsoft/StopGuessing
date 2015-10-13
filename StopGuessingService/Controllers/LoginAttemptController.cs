@@ -541,7 +541,8 @@ namespace StopGuessing.Controllers
                 // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
                 // as we are most concerned about frequently-guessed passwords.
                 Proportion popularity = _passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(
-                    passwordProvidedByClient, isSubmittedPasswordCorrect);
+                    passwordProvidedByClient, isSubmittedPasswordCorrect, confidenceLevel: _options.PopularityConfidenceLevel,
+                    minDenominatorForPasswordPopularity: _options.MinDenominatorForPasswordPopularity);
                 // When there's little data, we want to make sure the popularity is not overstated because           
                 // (e.g., if we've only seen 10 account failures since we started watching, it would not be
                 //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
