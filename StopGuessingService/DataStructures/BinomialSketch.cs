@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using StopGuessing.EncryptionPrimitives;
@@ -45,7 +44,7 @@ namespace StopGuessing.DataStructures
         public int NumberOfObservationsAccountingForAging => (int)
             Math.Min(NumberOfObservations, _maxNumberOfObservationsAccountingForAging);
 
-        private ulong _maxNumberOfObservationsAccountingForAging;
+        private readonly ulong _maxNumberOfObservationsAccountingForAging;
 
         private readonly double[] _cumulativeProbabilitySetByChance;
 

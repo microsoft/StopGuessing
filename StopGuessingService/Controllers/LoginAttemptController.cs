@@ -441,7 +441,7 @@ namespace StopGuessing.Controllers
                 // this clientsIpHistory/account/password tripple before and note in the outcome if it's a repeat so that.
                 // the IP need not be penalized for issuign a query that isn't getting it any information it
                 // didn't already have.
-                loginAttempt.Outcome = _passwordPopularityTracker.HasFailedIpAccountPasswordTripleBeenSeenBefore(
+                loginAttempt.Outcome = _passwordPopularityTracker.HasNonexistentAccountIpPasswordTripleBeenSeenBefore(
                     loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.UsernameOrAccountId, passwordProvidedByClient)
                     ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
                     : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
@@ -507,7 +507,7 @@ namespace StopGuessing.Controllers
 
                     // The triple sketch will automatically record that we saw this triple when we check to see if we've seen it before.
                     bool repeatFailureIdentifiedBySketch =
-                        _passwordPopularityTracker.HasFailedIpAccountPasswordTripleBeenSeenBefore(
+                        _passwordPopularityTracker.HasNonexistentAccountIpPasswordTripleBeenSeenBefore(
                             loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.UsernameOrAccountId,
                             passwordProvidedByClient);
 
