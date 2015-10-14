@@ -8,19 +8,25 @@ using StopGuessing.Controllers;
 
 namespace StopGuessing.Clients
 {
+    public interface IUserAccountClient
+    {
+        
+    }
+
     public class UserAccountClient
     {
-        private UserAccountController _userAccountController;
+        private UserAccountController _localUserAccountController;
         private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
 
+       
         public UserAccountClient(IDistributedResponsibilitySet<RemoteHost> responsibleHosts)
         {
             _responsibleHosts = responsibleHosts;
-        }
+        }        
 
-        public void SetUserAccountController(UserAccountController userAccountController)
+        public void SetLocalUserAccountController(UserAccountController userAccountController)
         {
-            _userAccountController = userAccountController;
+            _localUserAccountController = userAccountController;
         }
 
 
@@ -37,7 +43,7 @@ namespace StopGuessing.Clients
 
             if (host.IsLocalHost)
             {
-                return await _userAccountController.TryGetCreditAsync(accountId, amountToGet);
+                return await _localUserAccountController.TryGetCreditAsync(accountId, amountToGet);
             }
             else
             {
@@ -61,7 +67,7 @@ namespace StopGuessing.Clients
             RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
             if (host.IsLocalHost)
             {
-                return await _userAccountController.GetAsync(accountId, cancellationToken);
+                return await _localUserAccountController.GetAsync(accountId, cancellationToken);
             }
             else
             {
@@ -83,7 +89,7 @@ namespace StopGuessing.Clients
             RemoteHost host = _responsibleHosts.FindMemberResponsible(account.UsernameOrAccountId);
             if (host.IsLocalHost)
             {
-                return await _userAccountController.PutAsync(account.UsernameOrAccountId, account, cancellationToken);
+                return await _localUserAccountController.PutAsync(account.UsernameOrAccountId, account, cancellationToken);
             }
             else
             {
@@ -117,7 +123,7 @@ namespace StopGuessing.Clients
             RemoteHost host = _responsibleHosts.FindMemberResponsible(usernameOrAccountId);
             if (host.IsLocalHost)
             {
-                await _userAccountController.UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId, correctPassword,
+                await _localUserAccountController.UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId, correctPassword,
                     phase1HashOfCorrectPassword, ipAddressToExcludeFromAnalysis, cancellationToken);
             }
             else
@@ -159,7 +165,7 @@ namespace StopGuessing.Clients
             RemoteHost host = _responsibleHosts.FindMemberResponsible(usernameOrAccountId);
             if (host.IsLocalHost)
             {
-                await _userAccountController.UpdateForNewLoginAttemptAsync(usernameOrAccountId, attempt, cancellationToken);
+                await _localUserAccountController.UpdateForNewLoginAttemptAsync(usernameOrAccountId, attempt, cancellationToken);
             }
             else
             {

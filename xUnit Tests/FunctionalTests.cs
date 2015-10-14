@@ -18,18 +18,20 @@ namespace xUnit_Tests
     {
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
         private IStableStore _stableStore;
-        public SelfLoadingCache<IPAddress, IpHistory> MyIpHistoryCache;
-        public PasswordPopularityTracker MyPasswordTracker;
-        public static FixedSizeLruCache<string, LoginAttempt> MyCacheOfRecentLoginAttempts;
-        public Dictionary<string, Task<LoginAttempt>> MyLoginAttemptsInProgress;
+//        public SelfLoadingCache<IPAddress, IpHistory> MyIpHistoryCache;
+//        public PasswordPopularityTracker MyPasswordTracker;
+//        public static FixedSizeLruCache<string, LoginAttempt> MyCacheOfRecentLoginAttempts;
+//        public Dictionary<string, Task<LoginAttempt>> MyLoginAttemptsInProgress;
         //public LoginAttemptController MyLoginAttemptController;
         public UserAccountController MyUserAccountController;
         public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
-        public SelfLoadingCache<string, UserAccount> MyUserAccountCache;
+//        public SelfLoadingCache<string, UserAccount> MyUserAccountCache;
 
-        public void InitTest()
+        public void InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
         {
+            if (options == null)
+                options = new BlockingAlgorithmOptions();
             LimitPerTimePeriod[] creditLimits = new[]
             {
                 // 3 per hour
@@ -42,23 +44,21 @@ namespace xUnit_Tests
                 new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
             };
 
-           LoginAttemptController MyLoginAttemptController;
-
-        MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
+            MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
             _stableStore = new MemoryOnlyStableStore();
-            MyUserAccountCache =
-                new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
-            MyIpHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
-                (id, cancellationToken) =>
-                {
-                    return Task.Run(() => new IpHistory(id), cancellationToken);
-                }
+            //MyUserAccountCache =
+            //    new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
+            //MyIpHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
+                //(id, cancellationToken) =>
+                //{
+                //    return Task.Run(() => new IpHistory(id), cancellationToken);
+                //}
 
-                ); // FIXME with loader
-            MyPasswordTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig",  thresholdRequiredToTrackPreciseOccurrences: 10); // FIXME with param
-            MyCacheOfRecentLoginAttempts = new FixedSizeLruCache<string, LoginAttempt>(80000);
-            MyLoginAttemptsInProgress = new Dictionary<string, Task<LoginAttempt>>();
+            //    ); // FIXME with loader
+//            MyPasswordTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig",  thresholdRequiredToTrackPreciseOccurrences: 10); // FIXME with param
+            //MyCacheOfRecentLoginAttempts = new FixedSizeLruCache<string, LoginAttempt>(80000);
+            //MyLoginAttemptsInProgress = new Dictionary<string, Task<LoginAttempt>>();
 
             MyUserAccountClient = new UserAccountClient(MyResponsibleHosts);
             MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts);
@@ -68,17 +68,16 @@ namespace xUnit_Tests
                 {
                     new ConfigureOptions<BlockingAlgorithmOptions>(bao => { })
                 };
-            OptionsManager<BlockingAlgorithmOptions> blockingOptions = new OptionsManager<BlockingAlgorithmOptions>(config);
-            MyUserAccountController = new UserAccountController(blockingOptions, _stableStore, MyUserAccountCache, creditLimits);
-            MyLoginAttemptController = 
-                new LoginAttemptController(blockingOptions, _stableStore, MyPasswordTracker,
-                MyCacheOfRecentLoginAttempts, MyLoginAttemptsInProgress, MyIpHistoryCache);
+            //OptionsManager<BlockingAlgorithmOptions> blockingOptions = new OptionsManager<BlockingAlgorithmOptions>(config);
+            MyUserAccountController = new UserAccountController(MyUserAccountClient, MyLoginAttemptClient, options, _stableStore, creditLimits);
+            LoginAttemptController myLoginAttemptController = new LoginAttemptController(MyLoginAttemptClient, MyUserAccountClient,
+                options, _stableStore);
 
             MyUserAccountController.SetLoginAttemptClient(MyLoginAttemptClient);
-            MyUserAccountClient.SetUserAccountController(MyUserAccountController);
+            MyUserAccountClient.SetLocalUserAccountController(MyUserAccountController);
 
-            MyLoginAttemptController.SetUserAccountClient(MyUserAccountClient);
-            MyLoginAttemptClient.SetLoginAttemptController(MyLoginAttemptController);
+            myLoginAttemptController.SetUserAccountClient(MyUserAccountClient);
+            MyLoginAttemptClient.SetLoginAttemptController(myLoginAttemptController);
             //MyLoginAttemptController
         }
 
@@ -252,7 +251,46 @@ namespace xUnit_Tests
             LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(Username1, Password1, clientAddress: AnotherAttackersIp);
             Assert.Equal(AuthenticationOutcome.CredentialsValid, anotherAttackersAttempt.Outcome);
         }
-        
+
+
+        [Fact]
+        public async Task TestAccountingForTypoDetection()
+        {
+            BlockingAlgorithmOptions options = new BlockingAlgorithmOptions();
+
+            //
+            // Configure so that a single login attempt with an incorrect password
+            // login will block future logins with correct passwords... unless
+            // the incorrect login was the result of a typo.
+            //
+            options.PenaltyForInvalidPasswordPerLoginRarePassword = 1;
+            options.BlockThresholdPopularPassword = 1;
+            options.BlockThresholdUnpopularPassword = 1;
+            options.PenaltyForInvalidPasswordPerLoginTypo = .25d;
+            InitTest(options);
+
+            const string userName = "PeterVenkman";
+            LoginTestCreateAccount(userName, "IRunESPStudies");
+
+            // First, make sure we are correctly blocking when the failed login is not a typo.
+            
+            // Login attempt with incorrect password that is not a typo
+            LoginAttempt attempt = await AuthenticateAsync(userName, "AndNowForAPasswordThat'sCompletelyDifferent", clientAddress: AttackersIp);
+            Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, attempt.Outcome);
+
+            // Login attempt that should be blocked
+            attempt = await AuthenticateAsync(userName, "IRunESPStudies", clientAddress: AttackersIp);
+            Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, attempt.Outcome);
+
+            // With another IP, lgoin with an incorrect password that IS a typo
+            attempt = await AuthenticateAsync(userName, "IRunEPSStudies", clientAddress: ClientsIp);
+            Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, attempt.Outcome);
+
+            // Login attempt should be allowed through once typo is accounted for.
+            attempt = await AuthenticateAsync(userName, "IRunESPStudies", clientAddress: ClientsIp);
+            Assert.Equal(AuthenticationOutcome.CredentialsValid, attempt.Outcome);
+
+        }
 
 
         //[Fact]

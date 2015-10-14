@@ -1,8 +1,12 @@
-﻿using Microsoft.AspNet.Builder;
+﻿using System;
+using Microsoft.AspNet.Builder;
 using Microsoft.AspNet.Hosting;
 using Microsoft.Framework.DependencyInjection;
 using Microsoft.Framework.Configuration;
 using Microsoft.Dnx.Runtime;
+using StopGuessing.Clients;
+using StopGuessing.Controllers;
+using StopGuessing.DataStructures;
 using StopGuessing.Models;
 
 namespace StopGuessing
@@ -45,6 +49,18 @@ namespace StopGuessing
             // Uncomment the following line to add Web API services which makes it easier to port Web API 2 controllers.
             // You will also need to add the Microsoft.AspNet.Mvc.WebApiCompatShim package to the 'dependencies' section of project.json.
             // services.AddWebApiConventions();
+
+            var hosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
+            hosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
+
+            //var stableStore = new MemoryOnlyStableStore();
+
+            services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>( x => hosts);
+            services.AddSingleton<UserAccountClient>();
+            services.AddSingleton<LoginAttemptClient>();
+            services.AddSingleton<UserAccountController>();
+            services.AddSingleton<LoginAttemptController>();
+
         }
 
         // Configure is called after ConfigureServices is called.

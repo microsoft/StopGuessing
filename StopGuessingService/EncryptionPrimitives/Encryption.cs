@@ -24,7 +24,6 @@ namespace StopGuessing.EncryptionPrimitives
             using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
             {
                 aes.Key = key;
-
                 if (iv == null)
                     iv = NullIv;
                 aes.Mode = CipherMode.CBC;

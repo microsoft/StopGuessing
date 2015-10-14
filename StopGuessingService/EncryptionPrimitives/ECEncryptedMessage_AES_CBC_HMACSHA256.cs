@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.Serialization;
 using System.Security.Cryptography;
 
 namespace StopGuessing.EncryptionPrimitives
@@ -13,22 +14,26 @@ namespace StopGuessing.EncryptionPrimitives
     /// The message can be decrypted by providing the private portion of the recipient's EC key,
     /// deriving the session key from that recipeint's private key and the public one-time EC key.
     /// </summary>
+    [DataContract]
     public class EcEncryptedMessageAesCbcHmacSha256
     {
         /// <summary>
         /// The public portion of the one-time EC key used to generate a session (encryption) key.
         /// </summary>
-        byte[] PublicOneTimeEcKey { get; }
+        [DataMember]
+        public byte[] PublicOneTimeEcKey { get; set; }
 
         /// <summary>
         /// The messsage encrypted with AES CBC and a SHA256 MAC at the end of the plaintext.
         /// The encryption key is derived from the private portion of the one-time EC key an the
         /// recipient's public EC key.
         /// </summary>
-        byte[] EncryptedMessage { get; }
+        [DataMember]
+        public byte[] EncryptedMessage { get; set; }
 
 
-
+        public EcEncryptedMessageAesCbcHmacSha256()
+        {}
 
         /// <summary>
         /// Creates an encrypted message
@@ -44,9 +49,9 @@ namespace StopGuessing.EncryptionPrimitives
             EncryptedMessage = Encryption.EncryptAesCbc(plaintextMessageAsByteArray, sessionKey, addHmac: true);
         }
 
-        public EcEncryptedMessageAesCbcHmacSha256(byte[] accountsPublicLogKey, byte[] plaintextMessageAsByteArray)
+        public EcEncryptedMessageAesCbcHmacSha256(byte[] publicOneTimeEcKey, byte[] plaintextMessageAsByteArray)
             : this(
-                ECDiffieHellmanCngPublicKey.FromByteArray(accountsPublicLogKey, CngKeyBlobFormat.EccPublicBlob), plaintextMessageAsByteArray)
+                ECDiffieHellmanCngPublicKey.FromByteArray(publicOneTimeEcKey, CngKeyBlobFormat.EccPublicBlob), plaintextMessageAsByteArray)
         {
         }
 

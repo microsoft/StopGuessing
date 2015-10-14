@@ -22,13 +22,21 @@ namespace StopGuessing.Controllers
         private readonly SelfLoadingCache<string, UserAccount> _userAccountCache;
         private LimitPerTimePeriod[] CreditLimits { get; }
 
-        public UserAccountController(IOptions<BlockingAlgorithmOptions> optionsAccessor,
-            IStableStore stableStore, SelfLoadingCache<string, UserAccount> userAccountCache, LimitPerTimePeriod[] creditLimits)
+        public UserAccountController(
+            //IOptions<BlockingAlgorithmOptions> optionsAccessor,
+            UserAccountClient userAccountClient,
+            LoginAttemptClient loginAttemptClient,
+            BlockingAlgorithmOptions options,
+            IStableStore stableStore,
+            LimitPerTimePeriod[] creditLimits)
         {
-            _options = optionsAccessor.Options;
+//            _options = optionsAccessor.Options;
+            _options = options;
             _stableStore = stableStore;
-            _userAccountCache = userAccountCache;
             CreditLimits = creditLimits;
+            _userAccountCache = new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
+            SetLoginAttemptClient(loginAttemptClient);
+            userAccountClient.SetLocalUserAccountController(this);
         }
 
         public void SetLoginAttemptClient(LoginAttemptClient loginAttemptClient)
@@ -278,6 +286,7 @@ namespace StopGuessing.Controllers
         public UserAccount CreateUserAccount(string usernameOrAccountId,
             string password = null,
             string phase1HashFunctionName = ExpensiveHashFunctionFactory.DefaultFunctionName,
+            int numberOfIterationsToUseForPhase1Hash = 10000,
             byte[] saltUniqueToThisAccount = null,
             int maxNumberOfCookiesToTrack = DefaultMaxNumberOfCookiesToTrack,
             int maxAccountPasswordVerificationFailuresToTrack = DefaultMaxAccountPasswordVerificationFailuresToTrack,
@@ -300,6 +309,7 @@ namespace StopGuessing.Controllers
                     new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
                 ConsumedCredits = new Sequence<UserAccount.ConsumedCredit>((int) CreditLimits.Last().Limit),
                 PasswordHashPhase1FunctionName = phase1HashFunctionName,
+                NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash
                 //Password = password
             };
 

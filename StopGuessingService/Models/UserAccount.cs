@@ -35,17 +35,23 @@ namespace StopGuessing.Models
         public byte[] SaltUniqueToThisAccount { get; set; }
 
         /// <summary>
+        /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
+        /// </summary>
+        [DataMember]
+        public string PasswordHashPhase1FunctionName { get; set; }
+
+        /// <summary>
+        /// The number of iterations to use for the phase 1 hash to make it more expensive.
+        /// </summary>
+        public int NumberOfIterationsToUseForPhase1Hash { get; set; }
+
+        /// <summary>
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
         /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private symmetricKey.
         /// </summary>
         [DataMember]
         public ECDiffieHellmanPublicKey EcPublicAccountLogKey { get; set; }
 
-        /// <summary>
-        /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
-        /// </summary>
-        [DataMember]
-        public string PasswordHashPhase1FunctionName { get; set; }
 
         /// <summary>
         /// The EC private symmetricKey encrypted with phase 1 (expensive) hash of the password
@@ -100,7 +106,8 @@ namespace StopGuessing.Models
         /// <returns>The hash of the password with the specified algorithm using this account's unique salt.</returns>
         public byte[] ComputePhase1Hash(string password)
         {
-            return ExpensiveHashFunctionFactory.Get(PasswordHashPhase1FunctionName)(password, SaltUniqueToThisAccount);
+            return ExpensiveHashFunctionFactory.Get(PasswordHashPhase1FunctionName)(
+                password, SaltUniqueToThisAccount, NumberOfIterationsToUseForPhase1Hash);
         }
 
 
@@ -193,7 +200,9 @@ namespace StopGuessing.Models
         /// <param name="oldPassword">If this optional field is provided and correct, the old password will allow us to re-use the old log decryption symmetricKey.
         /// <b>Providing this parameter will not cause this function to authenticate the user first.  The caller must do so beforehand.</b></param>
         /// <param name="nameOfExpensiveHashFunctionToUse"></param>
-        public void SetPassword(string newPassword, string oldPassword = null, string nameOfExpensiveHashFunctionToUse = null)
+        public void SetPassword(string newPassword, string oldPassword = null,
+            string nameOfExpensiveHashFunctionToUse = null,
+            int? numberOfIterationsToUseForPhase1Hash = null)
         {
             ECDiffieHellmanCng ecAccountLogKey = null;
             byte[] oldPasswordHashPhase1;
@@ -223,12 +232,18 @@ namespace StopGuessing.Models
                         new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport }));
             }
 
-            // If the caller also wants to change the hash function, make that change here now that we're
-            // done hashing the old password and are about to hash the new one.
+            // If the caller also wants to change the hash function or the number of iterations,
+            // make that change here now that we're done hashing the old password and are about to hash the new one.
             if (nameOfExpensiveHashFunctionToUse != null)
             {
                 PasswordHashPhase1FunctionName = nameOfExpensiveHashFunctionToUse;
             }
+
+            if (numberOfIterationsToUseForPhase1Hash.HasValue)
+            {
+                NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash.Value;
+            }
+
             // Calculate the Phase1 hash, which is a computationally-heavy hash of the password
             // We will use this for encrypting the EC account log symmetricKey.
             byte[] newPasswordHashPhase1 = ComputePhase1Hash(newPassword);

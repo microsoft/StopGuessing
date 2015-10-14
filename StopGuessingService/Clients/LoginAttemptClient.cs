@@ -37,7 +37,7 @@ namespace StopGuessing.Clients
             RemoteHost hostResponsibleForClientIp =
                 _responsibleHosts.FindMemberResponsible(loginAttempt.AddressOfClientInitiatingRequest.ToString());
 
-            if (hostResponsibleForClientIp.IsLocalHost)
+            if (hostResponsibleForClientIp.IsLocalHost && _localLoginAttemptController != null)
             {
                 return await _localLoginAttemptController.PutAsync(loginAttempt.UniqueKey, loginAttempt, passwordProvidedByClient, cancellationToken);
             }
@@ -69,7 +69,7 @@ namespace StopGuessing.Clients
             {
                 RemoteHost hostResponsible = loginsForIp.Key;
                 // If the host is this host, we can call the local controller
-                if (hostResponsible.IsLocalHost)
+                if (hostResponsible.IsLocalHost && _localLoginAttemptController != null)
                 {
                     await
                         _localLoginAttemptController.UpdateLoginAttemptOutcomesAsync(loginAttemptsWithUpdatedOutcomes,

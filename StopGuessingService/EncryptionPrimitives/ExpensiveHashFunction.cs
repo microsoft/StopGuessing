@@ -1,22 +1,25 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
+using Microsoft.AspNet.Cryptography.KeyDerivation;
 
 namespace StopGuessing.EncryptionPrimitives
 {
 
-    public delegate byte[] ExpensiveHashFunction(string password, byte[] saltBytes);
+    public delegate byte[] ExpensiveHashFunction(string password, byte[] saltBytes, int iterations);
 
     public static class ExpensiveHashFunctionFactory
     {
 
-        public const string DefaultFunctionName = "PBKDF2_1000";
+        public const string DefaultFunctionName = "PBKDF2_SHA256";
 
         private static readonly Dictionary<string, ExpensiveHashFunction> ExpensiveHashFunctions = new Dictionary<string, ExpensiveHashFunction>
             {
-                {DefaultFunctionName, (pwd, salt) =>
-                                    new Rfc2898DeriveBytes(pwd, salt, 1000).GetBytes(16) }
+                {DefaultFunctionName, (password, salt, iterations) =>
+                KeyDerivation.Pbkdf2(
+                    password: password,
+                    salt: salt,
+                    prf: KeyDerivationPrf.HMACSHA256,
+                    iterationCount: iterations,
+                    numBytesRequested: 16)}
             };
 
 

@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNet.Mvc;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using System.Security.Cryptography;
 using System.Threading;
-using StopGuessing.EncryptionPrimitives;
 using Microsoft.Framework.OptionsModel;
 using StopGuessing.Clients;
 
@@ -28,19 +28,30 @@ namespace StopGuessing.Controllers
         private readonly SelfLoadingCache<System.Net.IPAddress, IpHistory> _ipHistoryCache;
 
         public LoginAttemptController(
-            IOptions<BlockingAlgorithmOptions> optionsAccessor, 
-            IStableStore stableStore, 
-            PasswordPopularityTracker passwordPopularityTracker,
-            FixedSizeLruCache<string, LoginAttempt> cacheOfRecentLoginAttempts,
-            Dictionary<string, Task<LoginAttempt>> loginAttemptsInProgress, 
-            SelfLoadingCache<System.Net.IPAddress, IpHistory> ipHistoryCache)
+//            IOptions<BlockingAlgorithmOptions> optionsAccessor, 
+            LoginAttemptClient loginAttemptClient,
+            UserAccountClient userAccountClient,
+            BlockingAlgorithmOptions blockingOptions,
+            IStableStore stableStore)
+//            Dictionary<string, Task<LoginAttempt>> loginAttemptsInProgress, 
+//            SelfLoadingCache<System.Net.IPAddress, IpHistory> ipHistoryCache)
         {
-            _options = optionsAccessor.Options;
+            _options = blockingOptions;//optionsAccessor.Options;
             _stableStore = stableStore;
-            _passwordPopularityTracker = passwordPopularityTracker;
-            _cacheOfRecentLoginAttempts = cacheOfRecentLoginAttempts;
-            _loginAttemptsInProgress = loginAttemptsInProgress;
-            _ipHistoryCache = ipHistoryCache;
+            _passwordPopularityTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig"
+                //FIXME -- use configuration to get options here"FIXME-uniquekeyfromconfig", thresholdRequiredToTrackPreciseOccurrences: 10);
+                );
+            ;
+            _cacheOfRecentLoginAttempts = new FixedSizeLruCache<string, LoginAttempt>(80000);  // FIXME -- use configuration file for size
+            _loginAttemptsInProgress = new Dictionary<string, Task<LoginAttempt>>();
+            _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
+                (id, cancellationToken) =>
+                {
+                    return Task.Run(() => new IpHistory(id), cancellationToken);
+                    // FUTURE -- option to load from stable store
+                });
+            loginAttemptClient.SetLoginAttemptController(this);     
+            SetUserAccountClient(userAccountClient);       
         }
 
         public void SetUserAccountClient(UserAccountClient userAccountClient)
@@ -205,7 +216,7 @@ namespace StopGuessing.Controllers
                 _options.MaxEditDistanceConsideredATypo,
                 clientsIpHistory.RecentLoginFailures.MostRecentToOldest.Where(
                     attempt => attempt.UsernameOrAccountId == account.UsernameOrAccountId &&
-                               attempt.Outcome != AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
+                               attempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
                                !string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword))
                 );
 
@@ -464,9 +475,7 @@ namespace StopGuessing.Controllers
                 //
                 // First, the expensive (phase1) hash which is used to encrypt the EC public key for this account
                 // (which we use to store the encryptions of incorrect passwords)
-                byte[] phase1HashOfProvidedPassword = ExpensiveHashFunctionFactory.Get(
-                    account.PasswordHashPhase1FunctionName)(
-                        passwordProvidedByClient, account.SaltUniqueToThisAccount);
+                byte[] phase1HashOfProvidedPassword = account.ComputePhase1Hash(passwordProvidedByClient);
                 // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
                 // hash of the phase1 hash.
                 string phase2HashOfProvidedPassword = Convert.ToBase64String(SHA256.Create().ComputeHash((phase1HashOfProvidedPassword)));
