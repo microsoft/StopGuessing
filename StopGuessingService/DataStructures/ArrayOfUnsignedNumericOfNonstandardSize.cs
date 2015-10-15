@@ -99,7 +99,7 @@
             // and 7 is the rightmost (least significant) bit.
 
             // Identify the leftmost bit of the element within the array...
-            long leftmostBit = index * (long)BitsPerElement;
+            long leftmostBit = index * BitsPerElement;
             // the byte at which this bit is located...
             long byteIndexOfLeftmostBit = leftmostBit / 8;
             // and the bit within that byte
@@ -188,7 +188,7 @@
             // and 7 is the rightmost (least significant) bit.
 
             // Identify the leftmost bit of the element within the array...
-            long leftmostBit = index * (long)BitsPerElement;
+            long leftmostBit = index * BitsPerElement;
             // the byte at which this bit is located...
             long byteIndexOfLeftmostBit = leftmostBit / 8;
             // and the bit within that byte

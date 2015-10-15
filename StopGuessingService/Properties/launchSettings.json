@@ -1,10 +1,10 @@
 {
   "profiles": {
     "IIS Express": {
-      "commandName" : "IISExpress",
+      "commandName": "IISExpress",
       "launchBrowser": true,
-      "launchUrl": "api/values",
-      "environmentVariables" : {
+      "launchUrl": "api/LoginAttempt/5",
+      "environmentVariables": {
         "ASPNET_ENV": "Development"
       }
     }

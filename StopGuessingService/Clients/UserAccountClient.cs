@@ -43,7 +43,8 @@ namespace StopGuessing.Clients
 
             if (host.IsLocalHost)
             {
-                return await _localUserAccountController.TryGetCreditAsync(accountId, amountToGet);
+                UserAccount account = await _localUserAccountController.LocalGetAsync(accountId, cancellationToken);
+                return _localUserAccountController.TryGetCredit(account, amountToGet, cancellationToken);
             }
             else
             {
@@ -67,7 +68,7 @@ namespace StopGuessing.Clients
             RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
             if (host.IsLocalHost)
             {
-                return await _localUserAccountController.GetAsync(accountId, cancellationToken);
+                return await _localUserAccountController.LocalGetAsync(accountId, cancellationToken);
             }
             else
             {
@@ -89,7 +90,7 @@ namespace StopGuessing.Clients
             RemoteHost host = _responsibleHosts.FindMemberResponsible(account.UsernameOrAccountId);
             if (host.IsLocalHost)
             {
-                return await _localUserAccountController.PutAsync(account.UsernameOrAccountId, account, cancellationToken);
+                return await _localUserAccountController.PutAsync(account, cancellationToken);
             }
             else
             {

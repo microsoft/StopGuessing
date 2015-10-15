@@ -356,7 +356,7 @@ namespace StopGuessing.DataStructures
                 List<string> keys = counts.Keys.ToList();
                 Dictionary<string, double> result = new Dictionary<string, double>();
                 foreach (string key in keys)
-                    result[key] = ((double)counts[key]) / (double)ulong.MaxValue;
+                    result[key] = counts[key] / (double)ulong.MaxValue;
                 return result;
             }
         }

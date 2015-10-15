@@ -29,13 +29,13 @@ namespace StopGuessing.DataStructures
 
         public double MemoryCeilingThatTriggersCleanupAsFractionOfTotalPhysicalMemory
         {
-            get { return ((double)MemoryCeilingThatTriggersCleanupInBytes) / TotalPhysicalMemoryInBytesAsDouble; }
+            get { return MemoryCeilingThatTriggersCleanupInBytes / TotalPhysicalMemoryInBytesAsDouble; }
             set { MemoryCeilingThatTriggersCleanupInBytes = (long)(TotalPhysicalMemoryInBytesAsDouble * value); }
         }
 
         public double TargetMemoryUsageAfterCleanupAsFractionOfTotalPhysicalMemory
         {
-            get { return ((double)TargetMemoryUsageAfterCleanupInBytes) / TotalPhysicalMemoryInBytesAsDouble; }
+            get { return TargetMemoryUsageAfterCleanupInBytes / TotalPhysicalMemoryInBytesAsDouble; }
             set { TargetMemoryUsageAfterCleanupInBytes = (long)(TotalPhysicalMemoryInBytesAsDouble * value); }
         }
     
@@ -43,7 +43,7 @@ namespace StopGuessing.DataStructures
 //        delegate void OnReduceMemoryUsageEventHandlerDelegate(object sender, ReduceMemoryUsageEventParameters e);
 
         public static readonly long TotalPhysicalMemoryInBytes = (long) 1024*1024*1024*8;//FIXME (new Microsoft.VisualBasic.ComputerInfo()).TotalPhysicalMemory;
-        private static readonly double TotalPhysicalMemoryInBytesAsDouble = (double)TotalPhysicalMemoryInBytes;
+        private static readonly double TotalPhysicalMemoryInBytesAsDouble = TotalPhysicalMemoryInBytes;
 
 
 
@@ -76,10 +76,10 @@ namespace StopGuessing.DataStructures
                     System.Threading.Thread.Sleep(MillisecondsToSleepBetweenChecksToSeeIfCleanupIsNeeded);
 
                     long currentMemoryConsumptionInBytes = GC.GetTotalMemory(true);
-                    if (currentMemoryConsumptionInBytes > (long)MemoryCeilingThatTriggersCleanupInBytes)
+                    if (currentMemoryConsumptionInBytes > MemoryCeilingThatTriggersCleanupInBytes)
                     {
                         long targetReductionRequestedInBytes = currentMemoryConsumptionInBytes - TargetMemoryUsageAfterCleanupInBytes;
-                        double targetReductionAsFractionOfCurrentConsumption = ((double)targetReductionRequestedInBytes) / (double)currentMemoryConsumptionInBytes;
+                        double targetReductionAsFractionOfCurrentConsumption = targetReductionRequestedInBytes / (double)currentMemoryConsumptionInBytes;
                         EventHandler<ReduceMemoryUsageEventParameters> localOnReduceMemoryUsageHandler = OnReduceMemoryUsageEventHandler;
                         if (localOnReduceMemoryUsageHandler != null)
                         {

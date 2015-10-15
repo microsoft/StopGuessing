@@ -89,7 +89,7 @@ namespace StopGuessing.DataStructures
         public void RecoverSpace(double fractionOfItemsToRemove)
         {
             // Calculate the number ot items to remove as a fraction of the total number of items in the cache
-            int numberOfItemsToRemove = (int)(((double)Count) * fractionOfItemsToRemove);
+            int numberOfItemsToRemove = (int)(Count * fractionOfItemsToRemove);
             // Remove that many
             RecoverSpace(numberOfItemsToRemove);
         }

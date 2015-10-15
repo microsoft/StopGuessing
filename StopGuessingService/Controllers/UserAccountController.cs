@@ -9,7 +9,6 @@ using StopGuessing.EncryptionPrimitives;
 using System.Security.Cryptography;
 using System.Threading;
 using StopGuessing.Clients;
-using Microsoft.Framework.OptionsModel;
 
 namespace StopGuessing.Controllers
 {
@@ -60,8 +59,16 @@ namespace StopGuessing.Controllers
         /// <param name="cancellationToken"></param>
         /// <returns>The account record or null if there is no such account.</returns>
         // GET api/UserAccount/stuart
-        [HttpGet("{id:string}")]
-        public async Task<UserAccount> GetAsync(string id, CancellationToken cancellationToken = default(CancellationToken))
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetAsync(string id,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            UserAccount result = await _userAccountCache.GetAsync(id, cancellationToken);
+            return (result == null) ? (IActionResult) (new HttpNotFoundResult()) : (new ObjectResult(result));
+        }
+
+        public async Task<UserAccount> LocalGetAsync(string id,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             return await _userAccountCache.GetAsync(id, cancellationToken);
         }
@@ -76,14 +83,26 @@ namespace StopGuessing.Controllers
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         // PUT api/UserAccount/stuart
-        [HttpPut("{id:string}")]
-        public async Task<UserAccount> PutAsync(string id, [FromBody] UserAccount account, CancellationToken cancellationToken = default(CancellationToken))
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutAsync(string id, [FromBody] UserAccount account,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (id!= account.UsernameOrAccountId)
-                throw new Exception("The user/account name in the PUT url must match the UsernameOrAccountID in the account record in the body.");
+            if (id != account.UsernameOrAccountId)
+            {
+                throw new Exception(
+                    "The user/account name in the PUT url must match the UsernameOrAccountID in the account record in the body.");
+            }
+            UserAccount result = await PutAsync(account, cancellationToken);
+            return new ObjectResult(result);
+        }
+
+        public async Task<UserAccount> PutAsync(UserAccount account,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
             await WriteAccountAsync(account, cancellationToken);
             return account;
         }
+
 
         /// <summary>
         /// When a user has provided the correct password for an account, use it to decrypt the key that stores
@@ -100,15 +119,15 @@ namespace StopGuessing.Controllers
         /// that IP should be blocked or not.</param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
-        [HttpPost("{id:string}")]
-        public async Task<int> UpdateOutcomesUsingTypoAnalysisAsync(
+        [HttpPost("{id}")]
+        public async Task<IActionResult> UpdateOutcomesUsingTypoAnalysisAsync(
             string id,
             [FromBody] string correctPassword,
             [FromBody] byte[] phase1HashOfCorrectPassword,
             [FromBody] System.Net.IPAddress ipAddressToExcludeFromAnalysis,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount account = await GetAsync(id, cancellationToken);
+            UserAccount account = await LocalGetAsync(id, cancellationToken);
 
             List<LoginAttempt> attemptsToUpdate = account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(
                 correctPassword,
@@ -131,7 +150,7 @@ namespace StopGuessing.Controllers
                 _loginAttemptClient.UpdateLoginAttemptOutcomesInBackground(attemptsToUpdate, cancellationToken);
             }
 
-            return attemptsToUpdate.Count;
+            return new ObjectResult(attemptsToUpdate.Count);
         }
 
 
@@ -146,11 +165,11 @@ namespace StopGuessing.Controllers
         /// <param name="id">The username or account id that uniquely identifies the account to update.</param>
         /// <param name="attempt">The attempt to incorporate into the account's records</param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        [HttpPost("{id:string}")]
-        public async Task UpdateForNewLoginAttemptAsync(string id, [FromBody] LoginAttempt attempt,
+        [HttpPost("{id}")]
+        public async Task<IActionResult> UpdateForNewLoginAttemptAsync(string id, [FromBody] LoginAttempt attempt,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount account = await GetAsync(id, cancellationToken);
+            UserAccount account = await LocalGetAsync(id, cancellationToken);
             switch (attempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsValid:
@@ -171,6 +190,7 @@ namespace StopGuessing.Controllers
                     WriteAccountInBackground(account, cancellationToken);
                     break;
             }
+            return new HttpOkResult();
         }
 
 
@@ -182,11 +202,19 @@ namespace StopGuessing.Controllers
         /// <param name="amountToGet">The amount of credit needed.</param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns></returns>
-        [HttpPost("{id:string}")]
-        public async Task<bool> TryGetCreditAsync(string id, [FromBody] float amountToGet = 1f, CancellationToken cancellationToken = default(CancellationToken))
+        [HttpPost("{id}")]
+        public async Task<IActionResult> TryGetCreditAsync(string id, [FromBody] float amountToGet = 1f,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount account = await GetAsync(id, cancellationToken);
+            UserAccount account = await LocalGetAsync(id, cancellationToken);
+            bool result = TryGetCredit(account, amountToGet, cancellationToken);
+            return new ObjectResult(result);
+        }
 
+        public bool TryGetCredit(UserAccount account, 
+            float amountToGet = 1f, 
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
             float amountConsumed = amountToGet;
 
             DateTimeOffset timeAtStartOfMethod = DateTimeOffset.Now;
@@ -227,14 +255,16 @@ namespace StopGuessing.Controllers
                 WhenCreditConsumed = timeAtStartOfMethod,
                 AmountConsumed = amountToGet
             });
+            WriteAccountInBackground(account, cancellationToken);
             return true;
         }
 
 
         // DELETE api/values/5
         [HttpDelete("{id}")]
-        public void Delete(int id)
+        public IActionResult Delete(int id)
         {
+            return new HttpOkResult();
         }
 
 
@@ -243,7 +273,7 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="account">The account to write to cache/stable store.</param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        protected async Task WriteAccountAsync(UserAccount account, CancellationToken cancellationToken) // = default(CancellationToken)
+        protected async Task WriteAccountAsync(UserAccount account, CancellationToken cancellationToken = default(CancellationToken))
         {           
             _userAccountCache[account.UsernameOrAccountId] = account;
             await _stableStore.WriteAccountAsync(account, cancellationToken);
@@ -254,10 +284,10 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="account">The account to write to cache/stable store.</param>
         /// <param name="cancellationToken"></param>
-        protected void WriteAccountInBackground(UserAccount account, CancellationToken cancellationToken)
+        protected void WriteAccountInBackground(UserAccount account, CancellationToken cancellationToken = default(CancellationToken))
         {
             // ReSharper disable once UnusedVariable -- unused variable used to signify background task
-            Task.Run(() => WriteAccountAsync(account, default(CancellationToken)), cancellationToken);
+            Task.Run(() => WriteAccountAsync(account, cancellationToken), cancellationToken);
         }
 
 
@@ -272,6 +302,7 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="usernameOrAccountId">A unique identifier for this account, such as a username, email address, or data index for the account record.</param>
         /// <param name="password">The password for the account.  If null or not provided, no password is set.</param>
+        /// <param name="numberOfIterationsToUseForPhase1Hash">The number of iterations to use when hashing the password.</param>
         /// <param name="saltUniqueToThisAccount">The salt for this account.  If null or not provided, a random salt is generated with length determined
         /// by parameter <paramref name="saltLength"/>.</param>
         /// <param name="maxNumberOfCookiesToTrack">This class tracks cookies associated with browsers that have 

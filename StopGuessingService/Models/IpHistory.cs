@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using StopGuessing.DataStructures;
 
@@ -47,21 +48,15 @@ namespace StopGuessing.Models
             {
                 // If there was a prior success from the same account, remove it, as we only need to track
                 // successes to counter failures and we only counter failures once per account.
-                //Stuart please review this
-                lock (RecentLoginSuccessesAtMostOnePerAccount)
+                LoginAttempt previousAttemptFromSameAccount =
+                    RecentLoginSuccessesAtMostOnePerAccount.FirstOrDefault(la => la.UsernameOrAccountId == attempt.UsernameOrAccountId);
+                if (previousAttemptFromSameAccount != null)
                 {
-                    for (int i = 0; i < RecentLoginSuccessesAtMostOnePerAccount.Count; i++)
-                    {
-                        if (attempt.UsernameOrAccountId == RecentLoginSuccessesAtMostOnePerAccount[i].UsernameOrAccountId)
-                        {
-                            // We found a prior success from the same account.  Remove it.
-                            RecentLoginSuccessesAtMostOnePerAccount.RemoveAt(i);
-                            break;
-                        }
-                    }
-
-                    RecentLoginSuccessesAtMostOnePerAccount.Add(attempt);
+                    // We found a prior success from the same account.  Remove it.
+                    RecentLoginSuccessesAtMostOnePerAccount.Remove(previousAttemptFromSameAccount);
                 }
+
+                RecentLoginSuccessesAtMostOnePerAccount.Add(attempt);
             }
             else
             {
@@ -73,37 +68,33 @@ namespace StopGuessing.Models
         /// <summary>
         /// Update LoginAttempts cached for this IP with new outcomes
         /// </summary>
-        /// <param name="loginAttempts">Copies of the login attempts that have changed</param>
+        /// <param name="changedLoginAttempts">Copies of the login attempts that have changed</param>
         /// <returns></returns>
-        public int UpdateLoginAttemptsWithNewOutcomes(IEnumerable<LoginAttempt> loginAttempts)
+        public int UpdateLoginAttemptsWithNewOutcomes(IEnumerable<LoginAttempt> changedLoginAttempts)
         {
             // Fot the attempts provided in the paramters, create a dictionary mapping the attempt keys to
             // the attempt so that we can look them up quickly when going through the recent failures
             // for this IP.
-            Dictionary<string, LoginAttempt> keyToAttempt = new Dictionary<string, LoginAttempt>();
-            foreach (LoginAttempt attempt in loginAttempts)
+            Dictionary<string, LoginAttempt> keyToChangedAttempts = new Dictionary<string, LoginAttempt>();
+            foreach (LoginAttempt attempt in changedLoginAttempts)
             {
-                keyToAttempt[attempt.UniqueKey] = attempt;
+                keyToChangedAttempts[attempt.UniqueKey] = attempt;
             }
 
-            lock(RecentLoginFailures)
+            // Now walk through the failures for this IP and, if any match the keys for the
+            // accounts in the changedLoginAttempts parameter, change the outcome to match the 
+            // one provided.
+            List<LoginAttempt> attemptsThatNeedToBeUpdated =
+                RecentLoginFailures.MostRecentToOldest.Where(
+                    attempt => keyToChangedAttempts.ContainsKey(attempt.UniqueKey)).ToList();
+            foreach (LoginAttempt attemptThatNeedsToBeUpdated in attemptsThatNeedToBeUpdated)
             {
-                // Now walk through the failures for this IP and, if any match the keys for the
-                // accounts in the loginAttempts parameter, change the outcome to match the 
-                // one provided.
-                int numberOfOutcomesChanged = 0;
-                foreach (LoginAttempt attempt in RecentLoginFailures.MostRecentToOldest)
-                {
-                    string uniqueKey = attempt.UniqueKey;
-                    if (keyToAttempt.ContainsKey(uniqueKey))
-                    {
-                        attempt.Outcome = keyToAttempt[uniqueKey].Outcome;
-                        if (++numberOfOutcomesChanged >= keyToAttempt.Count)
-                            break;
-                    }
-                }
-                return numberOfOutcomesChanged;
+                LoginAttempt changedAttempt = keyToChangedAttempts[attemptThatNeedsToBeUpdated.UniqueKey];
+                // This is where we update the attempt that needs to be updated with the outcome in the attempt that's already
+                // been changed to include the latest outcome.
+                attemptThatNeedsToBeUpdated.Outcome = changedAttempt.Outcome;
             }
+            return attemptsThatNeedToBeUpdated.Count;
         }
 
 

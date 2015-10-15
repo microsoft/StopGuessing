@@ -1,10 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using StopGuessing;
 using StopGuessing.Models;
 
-namespace xUnit_Tests
+namespace StopGuessing
 {
     public class MemoryOnlyStableStore : IStableStore
     {

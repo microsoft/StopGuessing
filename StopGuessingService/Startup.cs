@@ -53,14 +53,18 @@ namespace StopGuessing
             var hosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             hosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
 
-            //var stableStore = new MemoryOnlyStableStore();
+            // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
+            services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
+
+            var options = new BlockingAlgorithmOptions();
+            services.AddSingleton<BlockingAlgorithmOptions>(x => options);
+
 
             services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>( x => hosts);
             services.AddSingleton<UserAccountClient>();
             services.AddSingleton<LoginAttemptClient>();
             services.AddSingleton<UserAccountController>();
             services.AddSingleton<LoginAttemptController>();
-
         }
 
         // Configure is called after ConfigureServices is called.

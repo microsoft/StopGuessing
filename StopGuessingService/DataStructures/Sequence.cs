@@ -309,15 +309,18 @@ namespace StopGuessing.DataStructures
 
         public bool Remove(T item)
         {
-            for (int i = 0; i < Count; i++)
+            lock (SequenceArray)
             {
-                if (Comparer<T>.Default.Compare(item, this[i]) == 0)
+                for (int i = 0; i < Count; i++)
                 {
-                    RemoveAt(i);
-                    return true;
+                    if (Comparer<T>.Default.Compare(item, this[i]) == 0)
+                    {
+                        RemoveAt(i);
+                        return true;
+                    }
                 }
+                return false;
             }
-            return false;
         }
 
         public virtual void RemoveAt(int index)
@@ -370,7 +373,6 @@ namespace StopGuessing.DataStructures
         public class SequenceEnumerator : IEnumerator<T>
         {
             readonly Sequence<T> _sequence;
-            int _index;
             private int _count;
 
             public SequenceEnumerator(Sequence<T> sequence)
@@ -379,23 +381,18 @@ namespace StopGuessing.DataStructures
                 Reset();
             }
 
-            public T Current => _sequence[_index];
+            public T Current => _sequence[_count];
 
             object IEnumerator.Current => Current;
 
             public bool MoveNext()
             {
-                if (--_index < 0)
-                    _index = _sequence.Capacity - 1;
-                return (--_count > 0);
+                return (--_count >= 0);
             }
 
             public void Reset()
             {
                 _count = _sequence.Count;
-                _index = (_sequence.CurrentItemIndex - _sequence.Count) + 1;
-                if (_index < 0)
-                    _index += _sequence.Capacity;
             }
 
             public void Dispose()

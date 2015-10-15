@@ -39,7 +39,7 @@ namespace StopGuessing.Clients
 
             if (hostResponsibleForClientIp.IsLocalHost && _localLoginAttemptController != null)
             {
-                return await _localLoginAttemptController.PutAsync(loginAttempt.UniqueKey, loginAttempt, passwordProvidedByClient, cancellationToken);
+                return await _localLoginAttemptController.PutAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
             }
             else
             {

@@ -199,7 +199,8 @@ namespace StopGuessing.Models
         /// <param name="newPassword">The new password to set.</param>
         /// <param name="oldPassword">If this optional field is provided and correct, the old password will allow us to re-use the old log decryption symmetricKey.
         /// <b>Providing this parameter will not cause this function to authenticate the user first.  The caller must do so beforehand.</b></param>
-        /// <param name="nameOfExpensiveHashFunctionToUse"></param>
+        /// <param name="nameOfExpensiveHashFunctionToUse">The name of the phase 1 (expenseive) hash to use.</param>
+        /// <param name="numberOfIterationsToUseForPhase1Hash">The number of iterations that the hash should be performed.</param>
         public void SetPassword(string newPassword, string oldPassword = null,
             string nameOfExpensiveHashFunctionToUse = null,
             int? numberOfIterationsToUseForPhase1Hash = null)

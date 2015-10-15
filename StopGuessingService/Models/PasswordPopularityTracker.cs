@@ -112,19 +112,12 @@ namespace StopGuessing.Models
             _minCountRequiredToStorePlaintext = thresholdRequiredToStorePlaintext;
 //            _minPercentRequiredToTrackPreciseOccurrences = minPercentRequiredToTrackPreciseOccurrences;
             FailedPasswordsRecordedSoFar = 0d;
-
-
-            //long numberOfColumns = DefaultNumberOfSketchColumns;
-            //long numberOfRows = 2 * ((long)(1d / minPercentRequiredToTrackPreciseOccurrences));
-            //int bitsPerElement = 5;
+            
 
             SketchForTestingIfNonexistentAccountIpPasswordHasBeenSeenBefore =
                 new AgingMembershipSketch(DefaultNumberOfSketchColumns, conservativelyHighEstimateOfRowsNeeded);
-            BinomialSketchOfFailedPasswords = new BinomialSketch(1024*1024*1024, 64, keyToPreventAlgorithmicComplexityAttacks);
-            //PreciseOccurrencesOfFailedUnsaltedHashedPassword =
-            //    new Dictionary<string, uint[]>();
-            //SequenceOfFailedUnsaltedHashedPassword =
-            //    new Sequence<string>((int) LengthOfHistoricalPeriods.Last());
+            BinomialSketchOfFailedPasswords = new BinomialSketch(1024*1024*1024, 64, keyToPreventAlgorithmicComplexityAttacks); // FIXME configuration parameters
+
             MapOfHighlyPopularUnsaltedHashedPasswordsToPlaintextPasswords =
                 new Dictionary<string, string>();
         }

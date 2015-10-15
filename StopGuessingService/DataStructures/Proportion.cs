@@ -17,7 +17,7 @@
         {
             Numerator = numerator;
             Denominator = denominator;
-            AsDouble = Denominator == 0 ? 0 : ((double)Numerator) / ((double)Denominator);
+            AsDouble = Denominator == 0 ? 0 : Numerator / ((double)Denominator);
         }
 
         /// <summary>

@@ -8,7 +8,6 @@ using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using System.Security.Cryptography;
 using System.Threading;
-using Microsoft.Framework.OptionsModel;
 using StopGuessing.Clients;
 
 // For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
@@ -25,23 +24,20 @@ namespace StopGuessing.Controllers
         private readonly FixedSizeLruCache<string, LoginAttempt> _cacheOfRecentLoginAttempts;
         private readonly Dictionary<string, Task<LoginAttempt>> _loginAttemptsInProgress;
         private UserAccountClient _userAccountClient;
-        private readonly SelfLoadingCache<System.Net.IPAddress, IpHistory> _ipHistoryCache;
+        private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
 
         public LoginAttemptController(
-//            IOptions<BlockingAlgorithmOptions> optionsAccessor, 
             LoginAttemptClient loginAttemptClient,
             UserAccountClient userAccountClient,
             BlockingAlgorithmOptions blockingOptions,
             IStableStore stableStore)
-//            Dictionary<string, Task<LoginAttempt>> loginAttemptsInProgress, 
-//            SelfLoadingCache<System.Net.IPAddress, IpHistory> ipHistoryCache)
         {
             _options = blockingOptions;//optionsAccessor.Options;
             _stableStore = stableStore;
             _passwordPopularityTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig"
                 //FIXME -- use configuration to get options here"FIXME-uniquekeyfromconfig", thresholdRequiredToTrackPreciseOccurrences: 10);
                 );
-            ;
+            
             _cacheOfRecentLoginAttempts = new FixedSizeLruCache<string, LoginAttempt>(80000);  // FIXME -- use configuration file for size
             _loginAttemptsInProgress = new Dictionary<string, Task<LoginAttempt>>();
             _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
@@ -66,27 +62,30 @@ namespace StopGuessing.Controllers
             throw new NotImplementedException("Cannot enumerate all login attempts");
         }
 
-        // GET api/values/5
-        [HttpGet("{id:string}")]
-        public async Task<LoginAttempt> GetAsync(string id,
+        // GET api/LoginAttempt/5
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetAsync(string id,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             // FUTURE -- if we ever have a client that would call this, we'd probably want it to go to stable store and such
-            return await new Task<LoginAttempt>(() =>
+            return await Task.Run(() =>
             {
                 LoginAttempt result;
                 lock (_cacheOfRecentLoginAttempts)
                 {
                     _cacheOfRecentLoginAttempts.TryGetValue(id, out result);
                 }
-                return result;
-            });
+                if (result == null)
+                    return (IActionResult) HttpNotFound();
+                else 
+                    return (IActionResult) new ObjectResult(result);
+            }, cancellationToken);
         }
 
         // WriteAccountAsync login attempts
-        // POST api/values
+        // POST api/LoginAttempt/
         [HttpPost]
-        public async Task UpdateLoginAttemptOutcomesAsync([FromBody]List<LoginAttempt> loginAttemptsWithUpdatedOutcomes, 
+        public async Task<IActionResult> UpdateLoginAttemptOutcomesAsync([FromBody]List<LoginAttempt> loginAttemptsWithUpdatedOutcomes, 
             CancellationToken cancellationToken = default(CancellationToken))
         {
             await new Task( () =>
@@ -99,14 +98,20 @@ namespace StopGuessing.Controllers
                         ip.UpdateLoginAttemptsWithNewOutcomes(loginAttemptsWithUpdatedOutcomesByIp.ToList());
                     });
             });
+            return new HttpOkResult();
         }
 
         // PUT api/LoginAttempt/clientsIpHistory-address-datetime
-        [HttpPut("{id:string}")]
-        public async Task<LoginAttempt> PutAsync(string id, [FromBody]LoginAttempt loginAttempt,
-            [FromBody]string passwordProvidedByClient = null,
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutAsync(string id, [FromBody] LoginAttempt loginAttempt,
+            [FromBody] string passwordProvidedByClient = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            if (id != loginAttempt.UniqueKey)
+            {
+                throw new Exception("The id assigned to the login does not match it's unique key.");
+            }
+
             if (loginAttempt.AddressOfServerThatInitiallyReceivedLoginAttempt == null)
             {
                 // Unless the address of the server that received this login attempt from the user client has already
@@ -114,14 +119,16 @@ namespace StopGuessing.Controllers
                 loginAttempt.AddressOfServerThatInitiallyReceivedLoginAttempt = Context.Connection.RemoteIpAddress;
             }
 
-            // To ensure idempotency, make sure that this put has not already been performed or is not already
-            // in progress by a concurrent thread.
+            LoginAttempt result = await PutAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
+            return new ObjectResult(result);
+        }
 
+
+        public async Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt,
+            string passwordProvidedByClient = null,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
             string key = loginAttempt.UniqueKey;
-            if (id != key)
-            {
-                throw new Exception("The id assigned to the login does not match it's unique key.");
-            }
 
             if (loginAttempt.Outcome != AuthenticationOutcome.Undetermined)
             {
@@ -153,15 +160,17 @@ namespace StopGuessing.Controllers
                             ExecutePutAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
                     }
                 }
-                return await putTask;
+                LoginAttempt result = await putTask;
+                return result;
             }
         }
 
         // DELETE api/LoginAttempt/<key>
-        [HttpDelete("{id:string}")]
-        public void Delete(string id)
+        [HttpDelete("{id}")]
+        public IActionResult Delete(string id)
         {
             // no-op
+            return new HttpNotFoundResult();
         }
 
 
