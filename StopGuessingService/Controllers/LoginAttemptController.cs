@@ -29,6 +29,7 @@ namespace StopGuessing.Controllers
         public LoginAttemptController(
             LoginAttemptClient loginAttemptClient,
             UserAccountClient userAccountClient,
+            MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions blockingOptions,
             IStableStore stableStore)
         {
@@ -47,7 +48,8 @@ namespace StopGuessing.Controllers
                     // FUTURE -- option to load from stable store
                 });
             loginAttemptClient.SetLoginAttemptController(this);     
-            SetUserAccountClient(userAccountClient);       
+            SetUserAccountClient(userAccountClient);
+            memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }
 
 
@@ -610,10 +612,9 @@ namespace StopGuessing.Controllers
         /// When memory runs low, call this function to remove a fraction of the space used by non-fixed-size data structures
         /// (In this case, it is the history of information about IP addresses)
         /// </summary>
-        /// <param name="fractionOfItemsToRemove">The fraction of space to recover from variable-sized data structures</param>
-        public void RecoverSpace(double fractionOfItemsToRemove)
+        public void ReduceMemoryUsage(object sender, MemoryUsageLimiter.ReduceMemoryUsageEventParameters parameters)
         {
-            _ipHistoryCache.RecoverSpace(fractionOfItemsToRemove);
+            _ipHistoryCache.RecoverSpace(parameters.FractionOfMemoryToTryToRemove);
         }
     }
 }

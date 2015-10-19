@@ -8,100 +8,88 @@ namespace StopGuessing.DataStructures
 
         public class ReduceMemoryUsageEventParameters : EventArgs
         {
-            public readonly long TargetReductionRequestedInBytes;
-            public readonly double TargetReductionAsFractionOfCurrentConsumption;
-            public readonly long MemoryConsumptionThatTriggeredRecoveryInBytes;
+            public readonly double FractionOfMemoryToTryToRemove;
 
-            public ReduceMemoryUsageEventParameters(long targetReductionRequestedInBytes,
-                    double targetReductionAsFractionOfCurrentConsumption,
-                    long memoryConsumptionThatTriggeredRecoveryInBytes)
+            public ReduceMemoryUsageEventParameters(
+                    double fractionOfMemoryToTryToRemove)
             {
-                TargetReductionRequestedInBytes = targetReductionRequestedInBytes;
-                TargetReductionAsFractionOfCurrentConsumption = targetReductionAsFractionOfCurrentConsumption;
-                MemoryConsumptionThatTriggeredRecoveryInBytes = memoryConsumptionThatTriggeredRecoveryInBytes;
+                FractionOfMemoryToTryToRemove = fractionOfMemoryToTryToRemove;
             }
-        }
-
-        public int MillisecondsToSleepBetweenChecksToSeeIfCleanupIsNeeded = 1000;
-
-        public long MemoryCeilingThatTriggersCleanupInBytes;
-        public long TargetMemoryUsageAfterCleanupInBytes;        
-
-        public double MemoryCeilingThatTriggersCleanupAsFractionOfTotalPhysicalMemory
-        {
-            get { return MemoryCeilingThatTriggersCleanupInBytes / TotalPhysicalMemoryInBytesAsDouble; }
-            set { MemoryCeilingThatTriggersCleanupInBytes = (long)(TotalPhysicalMemoryInBytesAsDouble * value); }
-        }
-
-        public double TargetMemoryUsageAfterCleanupAsFractionOfTotalPhysicalMemory
-        {
-            get { return TargetMemoryUsageAfterCleanupInBytes / TotalPhysicalMemoryInBytesAsDouble; }
-            set { TargetMemoryUsageAfterCleanupInBytes = (long)(TotalPhysicalMemoryInBytesAsDouble * value); }
-        }
-    
-        public event EventHandler<ReduceMemoryUsageEventParameters> OnReduceMemoryUsageEventHandler;
-//        delegate void OnReduceMemoryUsageEventHandlerDelegate(object sender, ReduceMemoryUsageEventParameters e);
-
-        public static readonly long TotalPhysicalMemoryInBytes = (long) 1024*1024*1024*8;//FIXME (new Microsoft.VisualBasic.ComputerInfo()).TotalPhysicalMemory;
-        private static readonly double TotalPhysicalMemoryInBytesAsDouble = TotalPhysicalMemoryInBytes;
-
-
-
-        public MemoryUsageLimiter(long memoryConsumptionThatTriggersCleanup, long targetMemoryConsumptionToReduceToOnCleanup, EventHandler<ReduceMemoryUsageEventParameters> onRecoverMemory = null)
-        {
-            MemoryCeilingThatTriggersCleanupInBytes = memoryConsumptionThatTriggersCleanup;
-            TargetMemoryUsageAfterCleanupInBytes = targetMemoryConsumptionToReduceToOnCleanup;
-            if (onRecoverMemory != null)
-            {
-                OnReduceMemoryUsageEventHandler += onRecoverMemory;
-            }
-
-            // Launch memory check thread
-            System.Threading.Thread memoryLimitCheckThread = new System.Threading.Thread(PeriodicMemoryCheck);
-            memoryLimitCheckThread.Start();
         }
         
-        public MemoryUsageLimiter(double fractionOfPhysicalMemoryThatTriggersCleanup, double targetFractionOfPhysicalMemoryToReduceToOnCleanup, EventHandler<ReduceMemoryUsageEventParameters> onRecoverMemory = null)
-            : this((long)(TotalPhysicalMemoryInBytesAsDouble * fractionOfPhysicalMemoryThatTriggersCleanup),
-                   (long)(TotalPhysicalMemoryInBytesAsDouble * targetFractionOfPhysicalMemoryToReduceToOnCleanup),
-                   onRecoverMemory)
-        {}
+    
+        public event EventHandler<ReduceMemoryUsageEventParameters> OnReduceMemoryUsageEventHandler;
 
-        public void PeriodicMemoryCheck()
+        private readonly double _fractionToRemoveOnCleanup;
+        public MemoryUsageLimiter(
+            double fractionToRemoveOnCleanup = 0.1 /* 10% */,
+            long hardMemoryLimit = 0)
+        {
+            _fractionToRemoveOnCleanup = fractionToRemoveOnCleanup;
+            if (hardMemoryLimit == 0)
+            {
+                Task.Run(() => GenerationalReductionLoop());
+            }
+            else
+            {
+                Task.Run(() => GenerationalReductionLoop());
+            }
+        }
+        
+
+        public void ReduceMemoryUsage()
+        {
+            EventHandler<ReduceMemoryUsageEventParameters> localOnReduceMemoryUsageHandler = OnReduceMemoryUsageEventHandler;
+            if (localOnReduceMemoryUsageHandler != null)
+            {
+                Parallel.ForEach(localOnReduceMemoryUsageHandler.GetInvocationList(),
+                    d => {
+                        try
+                        {
+                            d.DynamicInvoke(this, new ReduceMemoryUsageEventParameters(_fractionToRemoveOnCleanup));
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+                    }
+                    );
+            }
+        }
+
+
+        public void GenerationalReductionLoop()
+        {
+            GC.RegisterForFullGCNotification(15,15);
+
+            while (true)
+            {
+                int collectionCount = GC.CollectionCount(2);
+                GC.WaitForFullGCApproach(-1);
+
+
+
+                if (collectionCount == GC.CollectionCount(2))
+                    GC.Collect();
+
+                GC.WaitForFullGCComplete();
+            }
+            // ReSharper disable once FunctionNeverReturns
+        }
+
+
+        public void ThresholdReductionLoop(long hardMemoryLimit)
         {
             while (true)
             {
                 try
                 {
-                    System.Threading.Thread.Sleep(MillisecondsToSleepBetweenChecksToSeeIfCleanupIsNeeded);
+                    System.Threading.Thread.Sleep(500);
 
                     long currentMemoryConsumptionInBytes = GC.GetTotalMemory(true);
-                    if (currentMemoryConsumptionInBytes > MemoryCeilingThatTriggersCleanupInBytes)
+                    if (currentMemoryConsumptionInBytes > hardMemoryLimit)
                     {
-                        long targetReductionRequestedInBytes = currentMemoryConsumptionInBytes - TargetMemoryUsageAfterCleanupInBytes;
-                        double targetReductionAsFractionOfCurrentConsumption = targetReductionRequestedInBytes / (double)currentMemoryConsumptionInBytes;
-                        EventHandler<ReduceMemoryUsageEventParameters> localOnReduceMemoryUsageHandler = OnReduceMemoryUsageEventHandler;
-                        if (localOnReduceMemoryUsageHandler != null)
-                        {
-                            Parallel.ForEach(localOnReduceMemoryUsageHandler.GetInvocationList(), 
-                                d => {
-                                    try { 
-                                        d.DynamicInvoke(this, 
-                                        new ReduceMemoryUsageEventParameters(targetReductionRequestedInBytes,
-                                        targetReductionAsFractionOfCurrentConsumption,
-                                        currentMemoryConsumptionInBytes));
-                                    }
-                                    catch (Exception)
-                                    {
-                                        // ignored
-                                    }
-                                }
-                                );
-                        }
-
-                            //LocalOnReduceMemoryUsageHandler(this, new ReduceMemoryUsageEventParameters(TargetReductionRequested_InBytes,
-                            //    TargetReduction_AsFractionOfCurrentConsumption,
-                            //    CurrentMemoryConsumption_InBytes));
+                        ReduceMemoryUsage();                        
                     }
                 }
                 catch (Exception)

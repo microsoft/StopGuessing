@@ -1,12 +1,10 @@
 ﻿using System;
 using StopGuessing.Models;
 using System.Net;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 using System.Threading;
-using Microsoft.Framework.OptionsModel;
 using StopGuessing;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
@@ -71,15 +69,18 @@ namespace xUnit_Tests
             configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts);
             configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts);
 
-            List<ConfigureOptions<BlockingAlgorithmOptions>> config =
-                new List<ConfigureOptions<BlockingAlgorithmOptions>>
-                {
-                    new ConfigureOptions<BlockingAlgorithmOptions>(bao => { })
-                };
+            MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
+
+            //List<ConfigureOptions<BlockingAlgorithmOptions>> config =
+            //    new List<ConfigureOptions<BlockingAlgorithmOptions>>
+            //    {
+            //        new ConfigureOptions<BlockingAlgorithmOptions>(bao => { })
+            //    };
             //OptionsManager<BlockingAlgorithmOptions> blockingOptions = new OptionsManager<BlockingAlgorithmOptions>(config);
-            configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient, configuration.MyLoginAttemptClient, options, stableStore, creditLimits);
+            configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient,
+                configuration.MyLoginAttemptClient, memoryUsageLimiter, options, stableStore, creditLimits);
             LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient, configuration.MyUserAccountClient,
-                options, stableStore);
+                memoryUsageLimiter, options, stableStore);
 
             configuration.MyUserAccountController.SetLoginAttemptClient(configuration.MyLoginAttemptClient);
             configuration.MyUserAccountClient.SetLocalUserAccountController(configuration.MyUserAccountController);
@@ -265,17 +266,19 @@ namespace xUnit_Tests
         [Fact]
         public async Task TestAccountingForTypoDetection()
         {
-            BlockingAlgorithmOptions options = new BlockingAlgorithmOptions();
+            BlockingAlgorithmOptions options = new BlockingAlgorithmOptions
+            {
+                PenaltyForInvalidPasswordPerLoginRarePassword = 1,
+                BlockThresholdPopularPassword = 1,
+                BlockThresholdUnpopularPassword = 1,
+                PenaltyForInvalidPasswordPerLoginTypo = .25d
+            };
 
             //
             // Configure so that a single login attempt with an incorrect password
             // login will block future logins with correct passwords... unless
             // the incorrect login was the result of a typo.
             //
-            options.PenaltyForInvalidPasswordPerLoginRarePassword = 1;
-            options.BlockThresholdPopularPassword = 1;
-            options.BlockThresholdUnpopularPassword = 1;
-            options.PenaltyForInvalidPasswordPerLoginTypo = .25d;
             TestConfiguration configuration = InitTest(options);
 
             const string userName = "PeterVenkman";

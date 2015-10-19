@@ -4,6 +4,7 @@ using Microsoft.AspNet.Hosting;
 using Microsoft.Framework.DependencyInjection;
 using Microsoft.Framework.Configuration;
 using Microsoft.Dnx.Runtime;
+using Microsoft.Extensions.DependencyInjection;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
@@ -59,6 +60,7 @@ namespace StopGuessing
             var options = new BlockingAlgorithmOptions();
             services.AddSingleton<BlockingAlgorithmOptions>(x => options);
 
+            services.AddSingleton<MemoryUsageLimiter, MemoryUsageLimiter>();
 
             services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>( x => hosts);
             services.AddSingleton<UserAccountClient>();

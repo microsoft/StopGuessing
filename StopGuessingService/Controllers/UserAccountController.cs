@@ -22,9 +22,9 @@ namespace StopGuessing.Controllers
         private LimitPerTimePeriod[] CreditLimits { get; }
 
         public UserAccountController(
-            //IOptions<BlockingAlgorithmOptions> optionsAccessor,
             UserAccountClient userAccountClient,
             LoginAttemptClient loginAttemptClient,
+            MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions options,
             IStableStore stableStore,
             LimitPerTimePeriod[] creditLimits)
@@ -36,6 +36,7 @@ namespace StopGuessing.Controllers
             _userAccountCache = new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
             SetLoginAttemptClient(loginAttemptClient);
             userAccountClient.SetLocalUserAccountController(this);
+            memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }
 
         public void SetLoginAttemptClient(LoginAttemptClient loginAttemptClient)
@@ -358,10 +359,9 @@ namespace StopGuessing.Controllers
         /// When memory runs low, call this function to remove a fraction of the space used by non-fixed-size data structures
         /// (In this case, it is the cache of user accounts)
         /// </summary>
-        /// <param name="fractionOfItemsToRemove">The fraction of space to recover from variable-sized data structures</param>
-        public void RecoverSpace(double fractionOfItemsToRemove)
+        public void ReduceMemoryUsage(object sender, MemoryUsageLimiter.ReduceMemoryUsageEventParameters parameters)
         {
-            _userAccountCache.RecoverSpace(fractionOfItemsToRemove);
+            _userAccountCache.RecoverSpace(parameters.FractionOfMemoryToTryToRemove);
         }
 
 
