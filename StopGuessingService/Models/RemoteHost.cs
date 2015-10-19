@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Configuration;
 
 namespace StopGuessing.Models
 {
@@ -12,5 +13,20 @@ namespace StopGuessing.Models
         public Uri Uri { get; set; }
 
         public bool IsLocalHost { get; set; }
+
+        public override string ToString()
+        {
+            return Uri.ToString();
+        }
+    }
+
+    public class TestRemoveHost : RemoteHost
+    {
+        public string KeyPrefix { get; set; }
+
+        public new string ToString()
+        {
+            return KeyPrefix + base.ToString();
+        }
     }
 }

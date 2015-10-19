@@ -50,6 +50,7 @@ namespace StopGuessing.Controllers
             SetUserAccountClient(userAccountClient);       
         }
 
+
         public void SetUserAccountClient(UserAccountClient userAccountClient)
         {
             _userAccountClient = userAccountClient;
@@ -116,7 +117,7 @@ namespace StopGuessing.Controllers
             {
                 // Unless the address of the server that received this login attempt from the user client has already
                 // been specified, we'll assume it was the server initiating this put request.
-                loginAttempt.AddressOfServerThatInitiallyReceivedLoginAttempt = Context.Connection.RemoteIpAddress;
+                loginAttempt.AddressOfServerThatInitiallyReceivedLoginAttempt = HttpContext.Connection.RemoteIpAddress;
             }
 
             LoginAttempt result = await PutAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
@@ -604,5 +605,15 @@ namespace StopGuessing.Controllers
             return loginAttempt;
         }
 
+
+        /// <summary>
+        /// When memory runs low, call this function to remove a fraction of the space used by non-fixed-size data structures
+        /// (In this case, it is the history of information about IP addresses)
+        /// </summary>
+        /// <param name="fractionOfItemsToRemove">The fraction of space to recover from variable-sized data structures</param>
+        public void RecoverSpace(double fractionOfItemsToRemove)
+        {
+            _ipHistoryCache.RecoverSpace(fractionOfItemsToRemove);
+        }
     }
 }

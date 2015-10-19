@@ -354,6 +354,15 @@ namespace StopGuessing.Controllers
 
 
 
+        /// <summary>
+        /// When memory runs low, call this function to remove a fraction of the space used by non-fixed-size data structures
+        /// (In this case, it is the cache of user accounts)
+        /// </summary>
+        /// <param name="fractionOfItemsToRemove">The fraction of space to recover from variable-sized data structures</param>
+        public void RecoverSpace(double fractionOfItemsToRemove)
+        {
+            _userAccountCache.RecoverSpace(fractionOfItemsToRemove);
+        }
 
 
 

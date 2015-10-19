@@ -16,7 +16,7 @@ namespace StopGuessing
         public Startup(IHostingEnvironment env, IApplicationEnvironment appEnv)
         {    // Setup configuration sources.
 
-            ConfigurationBuilder builder = new ConfigurationBuilder(appEnv.ApplicationBasePath);
+            //ConfigurationBuilder builder = new ConfigurationBuilder(appEnv.ApplicationBasePath);
             //.AddJsonFile("config.json")
             //    .AddJsonFile($"config.{env.EnvironmentName}.json", optional: true);
 
@@ -26,7 +26,7 @@ namespace StopGuessing
                 // For more details on using the user secret store see http://go.microsoft.com/fwlink/?LinkID=532709
                 //builder.AddUserSecrets();
             }
-            builder.AddEnvironmentVariables();
+            //builder.AddEnvironmentVariables();
         }
 
         // This method gets called by a runtime.
@@ -51,7 +51,7 @@ namespace StopGuessing
             // services.AddWebApiConventions();
 
             var hosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
-            hosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
+            hosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:35358"), IsLocalHost = true });
 
             // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
             services.AddSingleton<IStableStore, MemoryOnlyStableStore>();

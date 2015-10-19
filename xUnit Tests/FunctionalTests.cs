@@ -14,22 +14,30 @@ using StopGuessing.DataStructures;
 
 namespace xUnit_Tests
 {
-    public class FunctionalTests
+    public class TestConfiguration
     {
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
-        private IStableStore _stableStore;
+        public UserAccountController MyUserAccountController;
+        public UserAccountClient MyUserAccountClient;
+        public LoginAttemptClient MyLoginAttemptClient;
+    }
+
+    public class FunctionalTests
+    {
+        //public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
 //        public SelfLoadingCache<IPAddress, IpHistory> MyIpHistoryCache;
 //        public PasswordPopularityTracker MyPasswordTracker;
 //        public static FixedSizeLruCache<string, LoginAttempt> MyCacheOfRecentLoginAttempts;
 //        public Dictionary<string, Task<LoginAttempt>> MyLoginAttemptsInProgress;
         //public LoginAttemptController MyLoginAttemptController;
-        public UserAccountController MyUserAccountController;
-        public UserAccountClient MyUserAccountClient;
-        public LoginAttemptClient MyLoginAttemptClient;
+        //public UserAccountController MyUserAccountController;
+        //public UserAccountClient MyUserAccountClient;
+        //public LoginAttemptClient MyLoginAttemptClient;
 //        public SelfLoadingCache<string, UserAccount> MyUserAccountCache;
 
-        public void InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
+        public TestConfiguration InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
         {
+            TestConfiguration configuration = new TestConfiguration();
             if (options == null)
                 options = new BlockingAlgorithmOptions();
             LimitPerTimePeriod[] creditLimits = new[]
@@ -44,24 +52,24 @@ namespace xUnit_Tests
                 new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
             };
 
-            MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
-            MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
-            _stableStore = new MemoryOnlyStableStore();
+            configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
+            configuration.MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
+            IStableStore stableStore = new MemoryOnlyStableStore();
             //MyUserAccountCache =
             //    new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
             //MyIpHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
-                //(id, cancellationToken) =>
-                //{
-                //    return Task.Run(() => new IpHistory(id), cancellationToken);
-                //}
+            //(id, cancellationToken) =>
+            //{
+            //    return Task.Run(() => new IpHistory(id), cancellationToken);
+            //}
 
             //    ); // FIXME with loader
-//            MyPasswordTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig",  thresholdRequiredToTrackPreciseOccurrences: 10); // FIXME with param
+            //            MyPasswordTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig",  thresholdRequiredToTrackPreciseOccurrences: 10); // FIXME with param
             //MyCacheOfRecentLoginAttempts = new FixedSizeLruCache<string, LoginAttempt>(80000);
             //MyLoginAttemptsInProgress = new Dictionary<string, Task<LoginAttempt>>();
 
-            MyUserAccountClient = new UserAccountClient(MyResponsibleHosts);
-            MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts);
+            configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts);
+            configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts);
 
             List<ConfigureOptions<BlockingAlgorithmOptions>> config =
                 new List<ConfigureOptions<BlockingAlgorithmOptions>>
@@ -69,34 +77,35 @@ namespace xUnit_Tests
                     new ConfigureOptions<BlockingAlgorithmOptions>(bao => { })
                 };
             //OptionsManager<BlockingAlgorithmOptions> blockingOptions = new OptionsManager<BlockingAlgorithmOptions>(config);
-            MyUserAccountController = new UserAccountController(MyUserAccountClient, MyLoginAttemptClient, options, _stableStore, creditLimits);
-            LoginAttemptController myLoginAttemptController = new LoginAttemptController(MyLoginAttemptClient, MyUserAccountClient,
-                options, _stableStore);
+            configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient, configuration.MyLoginAttemptClient, options, stableStore, creditLimits);
+            LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient, configuration.MyUserAccountClient,
+                options, stableStore);
 
-            MyUserAccountController.SetLoginAttemptClient(MyLoginAttemptClient);
-            MyUserAccountClient.SetLocalUserAccountController(MyUserAccountController);
+            configuration.MyUserAccountController.SetLoginAttemptClient(configuration.MyLoginAttemptClient);
+            configuration.MyUserAccountClient.SetLocalUserAccountController(configuration.MyUserAccountController);
 
-            myLoginAttemptController.SetUserAccountClient(MyUserAccountClient);
-            MyLoginAttemptClient.SetLoginAttemptController(myLoginAttemptController);
+            myLoginAttemptController.SetUserAccountClient(configuration.MyUserAccountClient);
+            configuration.MyLoginAttemptClient.SetLoginAttemptController(myLoginAttemptController);
             //MyLoginAttemptController
+            return configuration;
         }
 
-        public UserAccount LoginTestCreateAccount(string usernameOrAccountId, string password)
+        public UserAccount LoginTestCreateAccount(TestConfiguration configuration, string usernameOrAccountId, string password)
         {
-            UserAccount account = MyUserAccountController.CreateUserAccount(usernameOrAccountId, password);
-            MyUserAccountController.PutAsync(account.UsernameOrAccountId, account).Wait();
+            UserAccount account = configuration.MyUserAccountController.CreateUserAccount(usernameOrAccountId, password);
+            configuration.MyUserAccountController.PutAsync(account.UsernameOrAccountId, account).Wait();
             return account;
         }
 
-        public string[] CreateUserAccounts(int numberOfAccounts)
+        public string[] CreateUserAccounts(TestConfiguration configuration, int numberOfAccounts)
         {
             string[] usernames = Enumerable.Range(1, numberOfAccounts).Select(x => "testuser" + x.ToString()).ToArray();
             foreach (string username in usernames)
-                LoginTestCreateAccount(username, "passwordfor" + username);
+                LoginTestCreateAccount(configuration, username, "passwordfor" + username);
             return usernames;
         }
 
-        public async Task<LoginAttempt> AuthenticateAsync(string username, string password,
+        public async Task<LoginAttempt> AuthenticateAsync(TestConfiguration configuration, string username, string password,
             IPAddress clientAddress = null,
             IPAddress serverAddress = null,
             string api = "web",
@@ -119,7 +128,7 @@ namespace xUnit_Tests
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };
 
-            return await MyLoginAttemptClient.PutAsync(attempt, password, cancellationToken);
+            return await configuration.MyLoginAttemptClient.PutAsync(attempt, password, cancellationToken);
         }
 
 
@@ -133,11 +142,11 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginTestTryCorrectPassword()
         {
-            InitTest();
+            TestConfiguration configuration = InitTest();
 
-            LoginTestCreateAccount(Username1, Password1);
+            LoginTestCreateAccount(configuration, Username1, Password1);
 
-            LoginAttempt attempt = await AuthenticateAsync(Username1, Password1);
+            LoginAttempt attempt = await AuthenticateAsync(configuration, Username1, Password1);
             
             Assert.Equal(AuthenticationOutcome.CredentialsValid, attempt.Outcome);
         }
@@ -145,15 +154,15 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithInvalidPassword()
         {
-            InitTest();
-            LoginTestCreateAccount(Username1, Password1);
+            TestConfiguration configuration = InitTest();
+            LoginTestCreateAccount(configuration, Username1, Password1);
 
-            LoginAttempt attempt = await AuthenticateAsync(Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
+            LoginAttempt attempt = await AuthenticateAsync(configuration, Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
 
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, attempt.Outcome);
 
             // Try the same wrong password again.  outcome should be CredentialsInvalidRepeatedIncorrectPassword
-            LoginAttempt secondAttempt = await AuthenticateAsync(Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
+            LoginAttempt secondAttempt = await AuthenticateAsync(configuration, Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
 
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword, secondAttempt.Outcome);            
         }
@@ -161,16 +170,16 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithInvalidAccount()
         {
-            InitTest();
-            LoginTestCreateAccount(Username1, Password1);
+            TestConfiguration configuration = InitTest();
+            LoginTestCreateAccount(configuration, Username1, Password1);
             
             // Try the right password for user1, for a nonexistent user
-            LoginAttempt firstAttempt = await AuthenticateAsync("KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
+            LoginAttempt firstAttempt = await AuthenticateAsync(configuration,"KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
             
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidNoSuchAccount, firstAttempt.Outcome);
 
             // Repeat of Try the right password for user1, for a nonexistent user
-            LoginAttempt secondAttempt = await AuthenticateAsync("KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
+            LoginAttempt secondAttempt = await AuthenticateAsync(configuration, "KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
             
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount, secondAttempt.Outcome);
         }
@@ -178,25 +187,25 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithIpWithBadReputationAsync()
         {
-            InitTest();
-            string[] usernames = CreateUserAccounts(200);
-            LoginTestCreateAccount(Username1, Password1);
+            TestConfiguration configuration = InitTest();
+            string[] usernames = CreateUserAccounts(configuration, 200);
+            LoginTestCreateAccount(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             foreach (string username in usernames.Skip(10))
-                await AuthenticateAsync(username, PopularPassword, clientAddress: AttackersIp);
+                await AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp);
 
-            LoginAttempt firstAttackersAttempt = await AuthenticateAsync(Username1, Password1, clientAddress: AttackersIp);
+            LoginAttempt firstAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AttackersIp);
 
             Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, firstAttackersAttempt.Outcome);
 
             // Now the second attacker should be flagged after using that password 10 times on different accounts.
             foreach (string username in usernames.Skip(1).Take(9))
-                await AuthenticateAsync(username, PopularPassword, AnotherAttackersIp);
+                await AuthenticateAsync(configuration, username, PopularPassword, AnotherAttackersIp);
         
-            await AuthenticateAsync(usernames[0], PopularPassword, AnotherAttackersIp);
+            await AuthenticateAsync(configuration, usernames[0], PopularPassword, AnotherAttackersIp);
 
-            LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(Username1, Password1, clientAddress: AnotherAttackersIp);
+            LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AnotherAttackersIp);
 
             Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, anotherAttackersAttempt.Outcome);
         }
@@ -204,27 +213,27 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithIpWithBadReputationParallelLoadAsync()
         {
-            InitTest();
-            string[] usernames = CreateUserAccounts(250);
-            LoginTestCreateAccount(Username1, Password1);
+            TestConfiguration configuration = InitTest();
+            string[] usernames = CreateUserAccounts(configuration, 250);
+            LoginTestCreateAccount(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             Parallel.ForEach(usernames.Skip(20), username =>
-                AuthenticateAsync(username, PopularPassword, clientAddress: AttackersIp).Wait());
+                AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp).Wait());
 
             Thread.Sleep(2000);
             
-            LoginAttempt firstAttackersAttempt = await AuthenticateAsync(Username1, Password1, clientAddress: AttackersIp);
+            LoginAttempt firstAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AttackersIp);
 
             Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, firstAttackersAttempt.Outcome);
 
             // Now the second attacker should be flagged after using that password 10 times on different accounts.
             foreach (string username in usernames.Skip(1).Take(19))
-                await AuthenticateAsync(username, PopularPassword, AnotherAttackersIp);
+                await AuthenticateAsync(configuration, username, PopularPassword, AnotherAttackersIp);
 
-            await AuthenticateAsync(usernames[0], PopularPassword, AnotherAttackersIp);
+            await AuthenticateAsync(configuration, usernames[0], PopularPassword, AnotherAttackersIp);
 
-            LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(Username1, Password1, clientAddress: AnotherAttackersIp);
+            LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AnotherAttackersIp);
 
             Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, anotherAttackersAttempt.Outcome);
         }
@@ -232,23 +241,23 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithIpWithMixedReputationAsync()
         {
-            InitTest();
-            string[] usernames = CreateUserAccounts(500);
-            LoginTestCreateAccount(Username1, Password1);
+            TestConfiguration configuration = InitTest();
+            string[] usernames = CreateUserAccounts(configuration, 500);
+            LoginTestCreateAccount(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             foreach (string username in usernames.Skip(100))
-                await AuthenticateAsync(username, PopularPassword, clientAddress: AttackersIp);
+                await AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp);
 
             // Now have our client get the correct password half the time, and the popular incorrect password half the time.
             bool shouldGuessPopular = true;
             foreach (string username in usernames.Take(50))
             {
-                await AuthenticateAsync(username, shouldGuessPopular ? PopularPassword : "passwordfor" + username, ClientsIp);
+                await AuthenticateAsync(configuration, username, shouldGuessPopular ? PopularPassword : "passwordfor" + username, ClientsIp);
                 shouldGuessPopular = !shouldGuessPopular;
             }
             
-            LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(Username1, Password1, clientAddress: AnotherAttackersIp);
+            LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AnotherAttackersIp);
             Assert.Equal(AuthenticationOutcome.CredentialsValid, anotherAttackersAttempt.Outcome);
         }
 
@@ -267,27 +276,27 @@ namespace xUnit_Tests
             options.BlockThresholdPopularPassword = 1;
             options.BlockThresholdUnpopularPassword = 1;
             options.PenaltyForInvalidPasswordPerLoginTypo = .25d;
-            InitTest(options);
+            TestConfiguration configuration = InitTest(options);
 
             const string userName = "PeterVenkman";
-            LoginTestCreateAccount(userName, "IRunESPStudies");
+            LoginTestCreateAccount(configuration, userName, "IRunESPStudies");
 
             // First, make sure we are correctly blocking when the failed login is not a typo.
             
             // Login attempt with incorrect password that is not a typo
-            LoginAttempt attempt = await AuthenticateAsync(userName, "AndNowForAPasswordThat'sCompletelyDifferent", clientAddress: AttackersIp);
+            LoginAttempt attempt = await AuthenticateAsync(configuration, userName, "AndNowForAPasswordThat'sCompletelyDifferent", clientAddress: AttackersIp);
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, attempt.Outcome);
 
             // Login attempt that should be blocked
-            attempt = await AuthenticateAsync(userName, "IRunESPStudies", clientAddress: AttackersIp);
+            attempt = await AuthenticateAsync(configuration, userName, "IRunESPStudies", clientAddress: AttackersIp);
             Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, attempt.Outcome);
 
             // With another IP, lgoin with an incorrect password that IS a typo
-            attempt = await AuthenticateAsync(userName, "IRunEPSStudies", clientAddress: ClientsIp);
+            attempt = await AuthenticateAsync(configuration, userName, "IRunEPSStudies", clientAddress: ClientsIp);
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, attempt.Outcome);
 
             // Login attempt should be allowed through once typo is accounted for.
-            attempt = await AuthenticateAsync(userName, "IRunESPStudies", clientAddress: ClientsIp);
+            attempt = await AuthenticateAsync(configuration, userName, "IRunESPStudies", clientAddress: ClientsIp);
             Assert.Equal(AuthenticationOutcome.CredentialsValid, attempt.Outcome);
 
         }
