@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "StopGuessingService", "StopGuessingService\StopGuessingService.xproj", "{2AE8A8B0-D6CC-444B-AF67-840D37AD83CA}"
-EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "xUnit Tests", "xUnit Tests\xUnit Tests.xproj", "{650A5A85-5956-491E-9312-5E25A27D1108}"
+EndProject
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "StopGuessing", "StopGuessing\StopGuessing.xproj", "{BA64F492-2BE9-422C-B899-9CFEA0D1A048}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,14 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{2AE8A8B0-D6CC-444B-AF67-840D37AD83CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2AE8A8B0-D6CC-444B-AF67-840D37AD83CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2AE8A8B0-D6CC-444B-AF67-840D37AD83CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2AE8A8B0-D6CC-444B-AF67-840D37AD83CA}.Release|Any CPU.Build.0 = Release|Any CPU
 		{650A5A85-5956-491E-9312-5E25A27D1108}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{650A5A85-5956-491E-9312-5E25A27D1108}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{650A5A85-5956-491E-9312-5E25A27D1108}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{650A5A85-5956-491E-9312-5E25A27D1108}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BA64F492-2BE9-422C-B899-9CFEA0D1A048}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BA64F492-2BE9-422C-B899-9CFEA0D1A048}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BA64F492-2BE9-422C-B899-9CFEA0D1A048}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BA64F492-2BE9-422C-B899-9CFEA0D1A048}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
