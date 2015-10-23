@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "xUnit Tests", "xUnit Tests\xUnit Tests.xproj", "{650A5A85-5956-491E-9312-5E25A27D1108}"
+	ProjectSection(ProjectDependencies) = postProject
+		{BA64F492-2BE9-422C-B899-9CFEA0D1A048} = {BA64F492-2BE9-422C-B899-9CFEA0D1A048}
+	EndProjectSection
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "StopGuessing", "StopGuessing\StopGuessing.xproj", "{BA64F492-2BE9-422C-B899-9CFEA0D1A048}"
 EndProject
