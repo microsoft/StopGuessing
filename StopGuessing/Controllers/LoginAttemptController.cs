@@ -74,14 +74,15 @@ namespace StopGuessing.Controllers
             return await Task.Run(() =>
             {
                 LoginAttempt result;
-                lock (_cacheOfRecentLoginAttempts)
-                {
-                    _cacheOfRecentLoginAttempts.TryGetValue(id, out result);
-                }
+                _cacheOfRecentLoginAttempts.TryGetValue(id, out result);
                 if (result == null)
-                    return (IActionResult) HttpNotFound();
-                else 
+                {
+                    return HttpNotFound();
+                }
+                else
+                {
                     return (IActionResult) new ObjectResult(result);
+                }
             }, cancellationToken);
         }
 
@@ -144,7 +145,7 @@ namespace StopGuessing.Controllers
                 // We need to calculate the outcome before we can write to the stable store
                 Task<LoginAttempt> putTask;
 
-                lock (_cacheOfRecentLoginAttempts)
+                lock (_loginAttemptsInProgress)
                 {
                     if (_cacheOfRecentLoginAttempts.ContainsKey(key))
                     {
@@ -184,10 +185,7 @@ namespace StopGuessing.Controllers
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         protected async Task WriteAttemptAsync(LoginAttempt attempt, CancellationToken cancellationToken) // = default(CancellationToken)
         {
-            lock (_cacheOfRecentLoginAttempts)
-            {
-                _cacheOfRecentLoginAttempts[attempt.UniqueKey] = attempt;
-            }
+            _cacheOfRecentLoginAttempts[attempt.UniqueKey] = attempt;
             await _stableStore.WriteLoginAttemptAsync(attempt, cancellationToken);
         }
 
@@ -593,14 +591,14 @@ namespace StopGuessing.Controllers
             WriteLoginAttemptInBackground(loginAttempt, cancellationToken);
 
             // Mark this task as completed by removing it from the Dictionary of tasks storing loginAttemptsInProgress
-            // and by putting the login attempt into our cache of recent login attempts.
-            lock (_cacheOfRecentLoginAttempts)
+            // and by putting the login attempt into our cache of recent login attempts.            
+            string key = loginAttempt.UniqueKey;
+            _cacheOfRecentLoginAttempts.Add(key, loginAttempt);
+            lock (_loginAttemptsInProgress)
             {
-                string key = loginAttempt.UniqueKey;
-                _cacheOfRecentLoginAttempts.Add(key, loginAttempt);
                 _loginAttemptsInProgress.Remove(key);
             }
-            
+
             // We return the processed login attempt so that the caller can determine its outcome and,
             // in the event that the caller wants to keep a copy of the record, ensure that it has the
             // most up-to-date copy.

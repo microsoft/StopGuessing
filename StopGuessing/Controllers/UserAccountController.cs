@@ -294,64 +294,6 @@ namespace StopGuessing.Controllers
 
 
 
-        private const int DefaultSaltLength = 8;
-        private const int DefaultMaxAccountPasswordVerificationFailuresToTrack = 32;
-        private const int DefaultMaxNumberOfCookiesToTrack = 24;
-
-        /// <summary>
-        /// Create a UserAccount record to match a given username or account id.
-        /// </summary>
-        /// <param name="usernameOrAccountId">A unique identifier for this account, such as a username, email address, or data index for the account record.</param>
-        /// <param name="password">The password for the account.  If null or not provided, no password is set.</param>
-        /// <param name="numberOfIterationsToUseForPhase1Hash">The number of iterations to use when hashing the password.</param>
-        /// <param name="saltUniqueToThisAccount">The salt for this account.  If null or not provided, a random salt is generated with length determined
-        /// by parameter <paramref name="saltLength"/>.</param>
-        /// <param name="maxNumberOfCookiesToTrack">This class tracks cookies associated with browsers that have 
-        /// successfully logged into this account.  This parameter, if set, overrides the default maximum number of such cookies to track.</param>
-        /// <param name="maxAccountPasswordVerificationFailuresToTrack">This class keeps information about failed attempts to login
-        /// to this account that can be examined on the next successful login.  This parameter ovverrides the default number of failures to track.</param>
-        /// <param name="phase1HashFunctionName">A hash function that is expensive enough to calculate to make offline dictionary attacks 
-        /// expensive, but not so expensive as to slow the authentication system to a halt.  If not specified, a default function will be
-        /// used.</param>
-        /// <param name="saltLength">If <paramref name="saltUniqueToThisAccount"/>is not specified or null, the constructor will create
-        /// a random salt of this length.  If this length is not specified, a default will be used.</param>
-        public UserAccount CreateUserAccount(string usernameOrAccountId,
-            string password = null,
-            string phase1HashFunctionName = ExpensiveHashFunctionFactory.DefaultFunctionName,
-            int numberOfIterationsToUseForPhase1Hash = 10000,
-            byte[] saltUniqueToThisAccount = null,
-            int maxNumberOfCookiesToTrack = DefaultMaxNumberOfCookiesToTrack,
-            int maxAccountPasswordVerificationFailuresToTrack = DefaultMaxAccountPasswordVerificationFailuresToTrack,
-            int saltLength = DefaultSaltLength)
-        {
-
-            if (saltUniqueToThisAccount == null)
-            {
-                saltUniqueToThisAccount = new byte[DefaultSaltLength];
-                RandomNumberGenerator.Create().GetBytes(saltUniqueToThisAccount);
-            }
-
-            UserAccount newAccount = new UserAccount
-            {
-                UsernameOrAccountId = usernameOrAccountId,
-                SaltUniqueToThisAccount = saltUniqueToThisAccount,
-                HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount =
-                    new CapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
-                PasswordVerificationFailures =
-                    new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
-                ConsumedCredits = new Sequence<UserAccount.ConsumedCredit>((int) CreditLimits.Last().Limit),
-                PasswordHashPhase1FunctionName = phase1HashFunctionName,
-                NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash
-                //Password = password
-            };
-
-            if (password != null)
-            {
-                newAccount.SetPassword(password);
-            }
-
-            return newAccount;
-        }
 
 
 

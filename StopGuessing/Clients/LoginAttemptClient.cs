@@ -32,7 +32,8 @@ namespace StopGuessing.Clients
         /// <param name="loginAttempt"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt, string passwordProvidedByClient = null, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt, string passwordProvidedByClient = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             RemoteHost hostResponsibleForClientIp =
                 _responsibleHosts.FindMemberResponsible(loginAttempt.AddressOfClientInitiatingRequest.ToString());
@@ -79,6 +80,7 @@ namespace StopGuessing.Clients
                 {
                     // Kick off a remote request for this record in the background.
                     // FUTURE -- should get timeout and re-try if IP is not availble.
+                    // ReSharper disable once UnusedVariable
                     Task donotwaitforthisbackgroundtask =
                         Task.Run(() =>
                             RestClientHelper.PostAsync(hostResponsible.Uri, "/api/LoginAttempt",

@@ -18,6 +18,7 @@ namespace xUnit_Tests
         public UserAccountController MyUserAccountController;
         public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
+        public LimitPerTimePeriod[] CreditLimits;
     }
 
     public class FunctionalTests
@@ -38,7 +39,7 @@ namespace xUnit_Tests
             TestConfiguration configuration = new TestConfiguration();
             if (options == null)
                 options = new BlockingAlgorithmOptions();
-            LimitPerTimePeriod[] creditLimits = new[]
+            configuration.CreditLimits = new[]
             {
                 // 3 per hour
                 new LimitPerTimePeriod(new TimeSpan(1, 0, 0), 3f),
@@ -78,7 +79,8 @@ namespace xUnit_Tests
             //    };
             //OptionsManager<BlockingAlgorithmOptions> blockingOptions = new OptionsManager<BlockingAlgorithmOptions>(config);
             configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient,
-                configuration.MyLoginAttemptClient, memoryUsageLimiter, options, stableStore, creditLimits);
+                configuration.MyLoginAttemptClient, memoryUsageLimiter, options, stableStore, 
+                configuration.CreditLimits);
             LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient, configuration.MyUserAccountClient,
                 memoryUsageLimiter, options, stableStore);
 
@@ -93,7 +95,8 @@ namespace xUnit_Tests
 
         public UserAccount LoginTestCreateAccount(TestConfiguration configuration, string usernameOrAccountId, string password)
         {
-            UserAccount account = configuration.MyUserAccountController.CreateUserAccount(usernameOrAccountId, password);
+            UserAccount account = UserAccount.Create(usernameOrAccountId,
+              (int) configuration.CreditLimits.Last().Limit,  password);
             configuration.MyUserAccountController.PutAsync(account.UsernameOrAccountId, account).Wait();
             return account;
         }
