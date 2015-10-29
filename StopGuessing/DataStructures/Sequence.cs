@@ -29,7 +29,7 @@ namespace StopGuessing.DataStructures
     /// <typeparam name="T">The type of the item to keep a sequence of.</typeparam>
     [DataContract]
     [JsonConverter(typeof(SequenceConverter))]
-    public class Sequence<T> : ICollection<T>, IEquatable<Sequence<T>>, IComparable<T> //, IEnumerable<T> , IList<T>
+    public class Sequence<T> : ICollection<T>, IEquatable<Sequence<T>>// , IComparable<T> //, IEnumerable<T> , IList<T>
     {
         [IgnoreDataMember]
         protected int CurrentItemIndex;
@@ -370,10 +370,10 @@ namespace StopGuessing.DataStructures
             return GetSubsequence().GetHashCode();
         }
 
-        public int CompareTo(T other)
-        {
-            throw new NotImplementedException();
-        }
+        //public int CompareTo(T other)
+        //{
+        //    throw new NotImplementedException();
+        //}
 
         public class SequenceEnumerator : IEnumerator<T>
         {

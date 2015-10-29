@@ -17,7 +17,7 @@ namespace StopGuessing.Clients
 
         private UserAccountController _localUserAccountController;
         private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
-        private RemoteHost _localHost;
+        private readonly RemoteHost _localHost;
 
         public UserAccountClient(IDistributedResponsibilitySet<RemoteHost> responsibleHosts, RemoteHost localHost)
         {
