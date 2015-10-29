@@ -16,7 +16,7 @@ namespace xUnit_Tests
             byte[] iv = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
             string password = "testpwd1234";
             byte[] keyfrompwd = Encryption.KeyGenFromPwd(password, salt);
-            //          using (StopGuessing.encryption cs = new System.Security.Cryptography.CryptoStream(ciphertext, aes.CreateEncryptor(), System.Security.Cryptography.CryptoStreamMode.WriteAccountAsync))
+            //          using (StopGuessing.encryption cs = new System.Security.Cryptography.CryptoStream(ciphertext, aes.CreateEncryptor(), System.Security.Cryptography.CryptoStreamMode.WriteAccountToStableStoreAsync))
             //          byte[] encrypteddata = EncryptAesCbc(plaintext, key, null, false);
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, iv, false);
@@ -33,7 +33,7 @@ namespace xUnit_Tests
             byte[] salt = new byte[] { 3, 21, 3, 4, 2, 2, 3, 1 };
             string password = "testpwd1234";
             byte[] keyfrompwd = Encryption.KeyGenFromPwd(password, salt);
-            //          using (StopGuessing.encryption cs = new System.Security.Cryptography.CryptoStream(ciphertext, aes.CreateEncryptor(), System.Security.Cryptography.CryptoStreamMode.WriteAccountAsync))
+            //          using (StopGuessing.encryption cs = new System.Security.Cryptography.CryptoStream(ciphertext, aes.CreateEncryptor(), System.Security.Cryptography.CryptoStreamMode.WriteAccountToStableStoreAsync))
             //          byte[] encrypteddata = EncryptAesCbc(plaintext, key, null, false);
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, addHmac: false);
@@ -50,7 +50,7 @@ namespace xUnit_Tests
             byte[] salt = new byte[] { 3, 21, 3, 4, 2, 2, 3, 1 };
             string password = "testpwd1234";
             byte[] keyfrompwd = Encryption.KeyGenFromPwd(password, salt);
-            //          using (StopGuessing.encryption cs = new System.Security.Cryptography.CryptoStream(ciphertext, aes.CreateEncryptor(), System.Security.Cryptography.CryptoStreamMode.WriteAccountAsync))
+            //          using (StopGuessing.encryption cs = new System.Security.Cryptography.CryptoStream(ciphertext, aes.CreateEncryptor(), System.Security.Cryptography.CryptoStreamMode.WriteAccountToStableStoreAsync))
             //          byte[] encrypteddata = EncryptAesCbc(plaintext, key, null, false);
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, addHmac: true);

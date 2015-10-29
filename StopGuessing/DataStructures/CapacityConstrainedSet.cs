@@ -142,10 +142,10 @@ namespace StopGuessing.DataStructures
             dynamic set = value;
             // Start the object
             writer.WriteStartObject();
-            // WriteAccountAsync the capacity
+            // WriteAccountToStableStoreAsync the capacity
             writer.WritePropertyName(CapacityName);
             serializer.Serialize(writer, set.Capacity);
-            // WriteAccountAsync the members
+            // WriteAccountToStableStoreAsync the members
             writer.WritePropertyName(MembersName);
             serializer.Serialize(writer, set.InOrderAdded);
             // Close the object 

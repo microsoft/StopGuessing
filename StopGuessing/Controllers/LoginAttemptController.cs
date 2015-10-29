@@ -25,6 +25,7 @@ namespace StopGuessing.Controllers
         private readonly Dictionary<string, Task<LoginAttempt>> _loginAttemptsInProgress;
         private UserAccountClient _userAccountClient;
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
+        private readonly LoginAttemptClient _loginAttemptClient;
 
         public LoginAttemptController(
             LoginAttemptClient loginAttemptClient,
@@ -47,7 +48,8 @@ namespace StopGuessing.Controllers
                     return Task.Run(() => new IpHistory(id), cancellationToken);
                     // FUTURE -- option to load from stable store
                 });
-            loginAttemptClient.SetLoginAttemptController(this);     
+            _loginAttemptClient = loginAttemptClient;
+            _loginAttemptClient.SetLocalLoginAttemptController(this);     
             SetUserAccountClient(userAccountClient);
             memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }
@@ -70,6 +72,8 @@ namespace StopGuessing.Controllers
         public async Task<IActionResult> GetAsync(string id,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            // FIXME -- do it like they do in UserAttemptClient's get
+            // FIXME -- repalce calls to the cache with calls to this
             // FUTURE -- if we ever have a client that would call this, we'd probably want it to go to stable store and such
             return await Task.Run(() =>
             {
@@ -86,7 +90,7 @@ namespace StopGuessing.Controllers
             }, cancellationToken);
         }
 
-        // WriteAccountAsync login attempts
+        // WriteAccountToStableStoreAsync login attempts
         // POST api/LoginAttempt/
         [HttpPost]
         public async Task<IActionResult> UpdateLoginAttemptOutcomesAsync([FromBody]List<LoginAttempt> loginAttemptsWithUpdatedOutcomes, 
@@ -98,8 +102,9 @@ namespace StopGuessing.Controllers
                     loginAttemptsWithUpdatedOutcomes.ToLookup(attempt => attempt.AddressOfClientInitiatingRequest),
                     loginAttemptsWithUpdatedOutcomesByIp =>
                     {
-                        IpHistory ip = _ipHistoryCache.GetAsync(loginAttemptsWithUpdatedOutcomesByIp.Key, cancellationToken).Result;
-                        ip.UpdateLoginAttemptsWithNewOutcomes(loginAttemptsWithUpdatedOutcomesByIp.ToList());
+                        IpHistory ip;
+                        if (_ipHistoryCache.TryGetValue(loginAttemptsWithUpdatedOutcomesByIp.Key, out ip))
+                            ip.UpdateLoginAttemptsWithNewOutcomes(loginAttemptsWithUpdatedOutcomesByIp.ToList());
                     });
             });
             return new HttpOkResult();
@@ -109,6 +114,8 @@ namespace StopGuessing.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutAsync(string id, [FromBody] LoginAttempt loginAttempt,
             [FromBody] string passwordProvidedByClient = null,
+            [FromBody] bool cacheOnly = false,
+            [FromBody] List<RemoteHost> responsibleHosts = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             if (id != loginAttempt.UniqueKey)
@@ -123,24 +130,27 @@ namespace StopGuessing.Controllers
                 loginAttempt.AddressOfServerThatInitiallyReceivedLoginAttempt = HttpContext.Connection.RemoteIpAddress;
             }
 
-            LoginAttempt result = await PutAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
+            if (cacheOnly)
+            {
+                _cacheOfRecentLoginAttempts.Add(loginAttempt.UniqueKey, loginAttempt);
+                return new ObjectResult(loginAttempt);
+            }
+
+            LoginAttempt result = await PutAsync(loginAttempt, passwordProvidedByClient,
+                responsibleHosts, cancellationToken);
             return new ObjectResult(result);
         }
 
 
         public async Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt,
             string passwordProvidedByClient = null,
+            [FromBody] List<RemoteHost> serversResponsibleForCachingThisLoginAttempt = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             string key = loginAttempt.UniqueKey;
 
-            if (loginAttempt.Outcome != AuthenticationOutcome.Undetermined)
-            {
-                // The outcome is already set so we simply write to the cache and stable store.
-                WriteLoginAttemptInBackground(loginAttempt, cancellationToken);
-                return loginAttempt;
-            }
-            else
+            bool writeToStableStoreNeeded = true;
+            if (loginAttempt.Outcome == AuthenticationOutcome.Undetermined)
             {
                 // We need to calculate the outcome before we can write to the stable store
                 Task<LoginAttempt> putTask;
@@ -154,19 +164,39 @@ namespace StopGuessing.Controllers
                     }
                     else if (_loginAttemptsInProgress.TryGetValue(key, out putTask))
                     {
-                        // Another thread already started this put, and we are waiting for the outcome.
+                        // Another thread already started this put, and will write the
+                        // outcome to stable store.  We need only await the outcome.
+                        writeToStableStoreNeeded = false;
                     }
                     else
                     {
                         // This thread will need to perform the put
                         // FUTURE -- does this release the lock fast enough?
                         _loginAttemptsInProgress[key] = putTask =
-                            ExecutePutAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
+                            DetermineLoginAttemptOutcomeAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
                     }
                 }
-                LoginAttempt result = await putTask;
-                return result;
+                loginAttempt = await putTask;
             }
+
+            if (writeToStableStoreNeeded)
+            {
+                // The outcome is already set so we simply write to the cache and stable store.
+                WriteLoginAttemptInBackground(loginAttempt, cancellationToken);
+
+                if (serversResponsibleForCachingThisLoginAttempt == null)
+                {
+                    serversResponsibleForCachingThisLoginAttempt =
+                    _loginAttemptClient.GetServersResponsibleForCachingALoginAttempt(loginAttempt);
+                }
+
+                    foreach (RemoteHost server in serversResponsibleForCachingThisLoginAttempt.Where(server => !server.IsLocalHost))
+                    {
+                        _loginAttemptClient.PutCacheOnlyBackground(loginAttempt, server, cancellationToken: cancellationToken);
+                    }
+            }
+
+            return loginAttempt;            
         }
 
         // DELETE api/LoginAttempt/<key>
@@ -255,7 +285,11 @@ namespace StopGuessing.Controllers
         }
 
         /// <returns></returns>
-        public async Task UpdateOutcomeIfIpShouldBeBlockedAsync(LoginAttempt loginAttempt, IpHistory ip)
+        public async Task UpdateOutcomeIfIpShouldBeBlockedAsync(
+            LoginAttempt loginAttempt,
+            IpHistory ip,
+            List<RemoteHost> serversResponsibleForCachingTheAccount,
+            CancellationToken cancellationToken)
         {
             // Always allow a login if there's a valid device cookie associate with this account
             // FUTURE -- we probably want to do something at the account level to track targetted attacks
@@ -401,7 +435,9 @@ namespace StopGuessing.Controllers
 
                             // Reduce credit from the account for the login so that the account cannot be used to generate
                             // an unlimited number of login successes.
-                            if (await _userAccountClient.TryGetCreditAsync(success.UsernameOrAccountId))
+                            if (await _userAccountClient.TryGetCreditAsync(success.UsernameOrAccountId, 
+                                        serversResponsibleForCachingThisAccount: serversResponsibleForCachingTheAccount,
+                                        cancellationToken: cancellationToken))
                             {
                                 // There exists enough credit left in the account for us to use this success.
 
@@ -445,14 +481,22 @@ namespace StopGuessing.Controllers
         /// <returns>If the password is correct and the IP not blocked, returns AuthenticationOutcome.CredentialsValid.
         /// Otherwise, it returns a different AuthenticationOutcome.
         /// The client should not be made aware of any information beyond whether the login was allowed or not.</returns>
-        protected async Task<LoginAttempt> ExecutePutAsync(LoginAttempt loginAttempt, string passwordProvidedByClient, CancellationToken cancellationToken)
+        protected async Task<LoginAttempt> DetermineLoginAttemptOutcomeAsync(
+            LoginAttempt loginAttempt, 
+            string passwordProvidedByClient,
+            CancellationToken cancellationToken)
         {   
             // We'll need to know more about the IP making this attempt, so let's get the historical information
             // we've been keeping about it.
             Task<IpHistory> ipHistoryGetTask = _ipHistoryCache.GetAsync(loginAttempt.AddressOfClientInitiatingRequest, cancellationToken);
 
+            List<RemoteHost> serversResponsibleForCachingThisAccount =
+                _userAccountClient.GetServersResponsibleForCachingAnAccount(loginAttempt.UsernameOrAccountId);
+
             // Get a copy of the UserAccount record for the account that the client wants to authenticate as.
-            UserAccount account = await _userAccountClient.GetAsync(loginAttempt.UsernameOrAccountId, cancellationToken);
+            UserAccount account = await _userAccountClient.GetAsync(loginAttempt.UsernameOrAccountId, 
+                serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
+                cancellationToken: cancellationToken);
 
             if (account == null)
             {
@@ -554,7 +598,10 @@ namespace StopGuessing.Controllers
                     // were typos or non-typos.
                     _userAccountClient.UpdateOutcomesUsingTypoAnalysisInBackground(account.UsernameOrAccountId,
                         passwordProvidedByClient, phase1HashOfProvidedPassword,
-                        loginAttempt.AddressOfClientInitiatingRequest, cancellationToken);
+                        loginAttempt.AddressOfClientInitiatingRequest,
+                        serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
+                        timeout: new TimeSpan(0, 0, 0, 1),
+                        cancellationToken: cancellationToken);
                 }
 
                 // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
@@ -573,7 +620,7 @@ namespace StopGuessing.Controllers
                 // correct lest we create a timing indicator (slower responses for correct passwords) that attackers could use
                 // to guess passwords even if we'd blocked their IPs.
                 IpHistory ip = await ipHistoryGetTask;
-               await UpdateOutcomeIfIpShouldBeBlockedAsync(loginAttempt, ip);
+                await UpdateOutcomeIfIpShouldBeBlockedAsync(loginAttempt, ip, serversResponsibleForCachingThisAccount, cancellationToken);
 
                 // Add this LoginAttempt to our history of all login attempts for this IP address.
                 ip.RecordLoginAttempt(loginAttempt);
@@ -583,12 +630,11 @@ namespace StopGuessing.Controllers
                 // to include this one.
                 // If it's a failure, it will add this to the list of failures that we may be able to learn about later when
                 // we know what the correct password is and can determine if it was a typo.
-                _userAccountClient.UpdateForNewLoginAttemptInBackground(account.UsernameOrAccountId, loginAttempt,
-                    cancellationToken);
+                _userAccountClient.UpdateForNewLoginAttemptInBackground(loginAttempt,
+                    timeout: new TimeSpan(0, 0, 0, 1),
+                    serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
+                    cancellationToken: cancellationToken);
             }
-
-            // Write the login attempt to stable store for future long-term auditing and analysis.
-            WriteLoginAttemptInBackground(loginAttempt, cancellationToken);
 
             // Mark this task as completed by removing it from the Dictionary of tasks storing loginAttemptsInProgress
             // and by putting the login attempt into our cache of recent login attempts.            
