@@ -14,6 +14,10 @@ namespace StopGuessing.Models
 
     public class BlockingAlgorithmOptions
     {
+        //FIXME
+        public int NumberOfRedundentHostsToCacheIPs = 3;
+        public int NumberOfRedundentHostsToCachePasswordPopularity = 3;
+
         public float MaxEditDistanceConsideredATypo { get; set; } = 2f;
         public double PenaltyForInvalidAccount { get; set; } = 10d;
         public double PenaltyForInvalidPasswordPerLoginTypo { get; set; } = .25d;

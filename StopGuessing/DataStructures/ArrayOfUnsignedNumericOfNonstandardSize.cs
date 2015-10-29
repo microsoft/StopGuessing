@@ -168,7 +168,7 @@
 
 
         /// <summary>
-        /// WriteAccountAsync <paramref name="value"/> into the array at index <paramref name="index"/>.
+        /// WriteAccountToStableStoreAsync <paramref name="value"/> into the array at index <paramref name="index"/>.
         /// Implemenets the set{} functioanlity of <code>this[ulong index].</code>
         /// If passed <paramref name="value"/> greater than MaxValue (2^BitsPerElement-1),
         /// MaxValue will be written instead. 
@@ -233,7 +233,7 @@
                 // and will thus shift the value to be written to the right by two bits.
                 byte valueToWrite = (byte)(value >> numberOfBitsLeftAfterThisWrite);
 
-                // WriteAccountAsync out the byte
+                // WriteAccountToStableStoreAsync out the byte
                 if (numberOfBitsToWriteToThisByte == 8)
                 {
                     // If writing 8 bits, writing to memory is as simple as storing the 8 bits
@@ -275,7 +275,7 @@
                     // Use binary OR to incorporate the bits we will store
                     byte newValue = (byte)(unmodifiedBitsFromOldValue | valueToWrite);
 
-                    // WriteAccountAsync out the new value
+                    // WriteAccountToStableStoreAsync out the new value
                     AsByteArray[byteIndex] = newValue;
                 }
             }

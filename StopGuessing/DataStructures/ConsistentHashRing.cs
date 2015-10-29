@@ -157,14 +157,14 @@ namespace StopGuessing.DataStructures
                     // Get the set of points  for the member
                     ulong[] points = GetPointsForMember(uniqueKeyIdentifiyingMember);
 
-                    // WriteAccountAsync the mapping of points to members to include the new points
+                    // WriteAccountToStableStoreAsync the mapping of points to members to include the new points
                     // and map them to this new member.
                     foreach (ulong point in points)
                     {
                         PointsToMembers[point] = new KeyValuePair<string, TMember>(uniqueKeyIdentifiyingMember, member);
                     }
 
-                    // WriteAccountAsync the sorted list of points to include the new points,
+                    // WriteAccountToStableStoreAsync the sorted list of points to include the new points,
                     // leaving the list temporarily unsorted.
                     SortedPoints.AddRange(points);
 
@@ -201,13 +201,13 @@ namespace StopGuessing.DataStructures
 
                         // Get the set of points  for the member
                         ulong[] points = GetPointsForMember(keyAndMember.Key);
-                        // WriteAccountAsync the mapping of points to members to include the new points
+                        // WriteAccountToStableStoreAsync the mapping of points to members to include the new points
                         // and map them to this new member.
                         foreach (ulong point in points)
                         {
                             PointsToMembers[point] = keyAndMember;
                         }
-                        // WriteAccountAsync the sorted list of points to include the new points,
+                        // WriteAccountToStableStoreAsync the sorted list of points to include the new points,
                         // leaving the list unsorted until we've added them for all the new members.
                         SortedPoints.AddRange(points);
                     }

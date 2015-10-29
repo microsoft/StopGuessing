@@ -17,6 +17,7 @@ namespace StopGuessing.Controllers
     {
         private readonly IStableStore _stableStore;
         private LoginAttemptClient _loginAttemptClient;
+        private readonly UserAccountClient _userAccountClient;
         private readonly BlockingAlgorithmOptions _options;
         private readonly SelfLoadingCache<string, UserAccount> _userAccountCache;
         private LimitPerTimePeriod[] CreditLimits { get; }
@@ -32,6 +33,7 @@ namespace StopGuessing.Controllers
 //            _options = optionsAccessor.Options;
             _options = options;
             _stableStore = stableStore;
+            _userAccountClient = userAccountClient;
             CreditLimits = creditLimits;
             _userAccountCache = new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
             SetLoginAttemptClient(loginAttemptClient);
@@ -62,15 +64,32 @@ namespace StopGuessing.Controllers
         // GET api/UserAccount/stuart
         [HttpGet("{id}")]
         public async Task<IActionResult> GetAsync(string id,
+            [FromBody] List<RemoteHost> serversResponsibleFOrCachingAnAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount result = await _userAccountCache.GetAsync(id, cancellationToken);
+            UserAccount result = await LocalGetAsync(id, serversResponsibleFOrCachingAnAccount, cancellationToken);
             return (result == null) ? (IActionResult) (new HttpNotFoundResult()) : (new ObjectResult(result));
         }
 
         public async Task<UserAccount> LocalGetAsync(string id,
+            List<RemoteHost> serversResponsibleForCachingAnAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            UserAccount account;
+
+            if (_userAccountCache.TryGetValue(id, out account))
+                return account;
+
+            if (serversResponsibleForCachingAnAccount == null)
+            {
+                serversResponsibleForCachingAnAccount = _userAccountClient.GetServersResponsibleForCachingAnAccount(id);
+            }
+
+            account = await _stableStore.ReadAccountAsync(id, cancellationToken);
+            // what to do if read fails?
+            _userAccountCache.Add(account.UsernameOrAccountId, account);
+
+            // FIXME -- ensure consistent loading?
             return await _userAccountCache.GetAsync(id, cancellationToken);
         }
 
@@ -81,11 +100,19 @@ namespace StopGuessing.Controllers
         ///  which should be equal to account.UsernameOrAccountId,
         ///  but is provided in the URL for RESTfullness</param>
         /// <param name="account">The account record to store</param>
+        /// <param name="onlyUpdateTheInMemoryCacheOfTheAccount">If set to true, the PUT operation will only update the in-memory cache.  If false,
+        /// the operation will update both the stable store and the in-memory caches of all host responsible for caching
+        /// this account record.</param>
+        /// <param name="serversResponsibleFOrCachingAnAccount"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         // PUT api/UserAccount/stuart
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutAsync(string id, [FromBody] UserAccount account,
+        public async Task<IActionResult> PutAsync(
+            string id,
+            [FromBody] UserAccount account,
+            [FromBody] bool onlyUpdateTheInMemoryCacheOfTheAccount = false,
+            [FromBody] List<RemoteHost> serversResponsibleFOrCachingAnAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             if (id != account.UsernameOrAccountId)
@@ -93,14 +120,35 @@ namespace StopGuessing.Controllers
                 throw new Exception(
                     "The user/account name in the PUT url must match the UsernameOrAccountID in the account record in the body.");
             }
-            UserAccount result = await PutAsync(account, cancellationToken);
+            UserAccount result = await PutAsync(account, onlyUpdateTheInMemoryCacheOfTheAccount, serversResponsibleFOrCachingAnAccount, cancellationToken);
             return new ObjectResult(result);
         }
 
         public async Task<UserAccount> PutAsync(UserAccount account,
+            bool onlyUpdateTheInMemoryCacheOfTheAccount = false,
+            List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            await WriteAccountAsync(account, cancellationToken);
+            _userAccountCache.Add(account.UsernameOrAccountId, account);
+
+            if (onlyUpdateTheInMemoryCacheOfTheAccount)
+                return account;
+
+            Task stableStoreWritingTask =
+                WriteAccountToStableStoreAsync(account, cancellationToken);
+
+            if (serversResponsibleForCachingThisAccount == null)
+            {
+                serversResponsibleForCachingThisAccount =
+                    _userAccountClient.GetServersResponsibleForCachingAnAccount(account);
+            }
+            
+            foreach (var server in serversResponsibleForCachingThisAccount.Where(server => !server.IsLocalHost))
+            {
+                _userAccountClient.PutCacheOnlyInBackground(account, server, cancellationToken: cancellationToken);
+            }
+
+            await stableStoreWritingTask;
             return account;
         }
 
@@ -118,6 +166,7 @@ namespace StopGuessing.Controllers
         /// <param name="ipAddressToExcludeFromAnalysis">This is used to prevent the analysis fro examining LoginAttempts from this IP.
         /// We use it because it's more efficient to perform the analysis for that IP as part of the process of evaluting whether
         /// that IP should be blocked or not.</param>
+        /// <param name="serversResponsibleForCachingThisAccount"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
         [HttpPost("{id}")]
@@ -126,9 +175,10 @@ namespace StopGuessing.Controllers
             [FromBody] string correctPassword,
             [FromBody] byte[] phase1HashOfCorrectPassword,
             [FromBody] System.Net.IPAddress ipAddressToExcludeFromAnalysis,
+            [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount account = await LocalGetAsync(id, cancellationToken);
+            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
 
             List<LoginAttempt> attemptsToUpdate = account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(
                 correctPassword,
@@ -143,12 +193,18 @@ namespace StopGuessing.Controllers
 
             if (attemptsToUpdate.Count > 0)
             {
-                // Update this UserAccount in stable store.
-                WriteAccountInBackground(account, cancellationToken);
+                // Update this UserAccount in stable store.  Updating caches is not important as the worst
+                // outcome of inconsistency is that the same analyses are performed again and the
+                // outcomes are again updated.
+
+                // FIXME -- can we write only changes to the login attempts?  Do we even need this?
+                WriteAccountToStableStoreInBackground(account, cancellationToken);
 
                 // Update the primary copies of the LoginAttempt records with outcomes we've modified using
                 // our typo analysis. 
-                _loginAttemptClient.UpdateLoginAttemptOutcomesInBackground(attemptsToUpdate, cancellationToken);
+                _loginAttemptClient.UpdateLoginAttemptOutcomesInBackground(attemptsToUpdate,
+                    timeout: new TimeSpan(0, 0, 0, 1),
+                    cancellationToken: cancellationToken);
             }
 
             return new ObjectResult(attemptsToUpdate.Count);
@@ -165,12 +221,19 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="id">The username or account id that uniquely identifies the account to update.</param>
         /// <param name="attempt">The attempt to incorporate into the account's records</param>
+        /// <param name="serversResponsibleForCachingThisAccount"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        /// <param name="onlyUpdateTheInMemoryCacheOfTheAccount"></param>
         [HttpPost("{id}")]
-        public async Task<IActionResult> UpdateForNewLoginAttemptAsync(string id, [FromBody] LoginAttempt attempt,
+        public async Task<IActionResult> UpdateForNewLoginAttemptAsync(
+            string id,
+            [FromBody] LoginAttempt attempt,
+            [FromBody] bool onlyUpdateTheInMemoryCacheOfTheAccount = false,
+            [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
-        {
-            UserAccount account = await LocalGetAsync(id, cancellationToken);
+        {            
+            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
+            bool accountHasBeenModified = false;
             switch (attempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsValid:
@@ -180,7 +243,7 @@ namespace StopGuessing.Controllers
                     {
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
                             attempt.HashOfCookieProvidedByBrowser);
-                        WriteAccountInBackground(account, cancellationToken);
+                        accountHasBeenModified = true;
                     }
                     break;
                 case AuthenticationOutcome.CredentialsValidButBlocked:
@@ -188,15 +251,23 @@ namespace StopGuessing.Controllers
                 default:
                     // Add this login attempt to the length-limited sequence of failed login attempts.
                     account.PasswordVerificationFailures.Add(attempt);
-                    WriteAccountInBackground(account, cancellationToken);
+                    accountHasBeenModified = true;
                     break;
+            }
+            if (accountHasBeenModified)
+            {
+                if (!onlyUpdateTheInMemoryCacheOfTheAccount)
+                {
+                    _userAccountClient.UpdateForNewLoginAttemptCacheOnlyInBackground(attempt,
+                        serversResponsibleForCachingThisAccount, cancellationToken: cancellationToken);
+                }
             }
             return new HttpOkResult();
         }
 
 
         /// <summary>
-        /// Try to get a credit that can be used to allow this account's successful login from an IP addresss to undo some
+        /// ClientHelper to get a credit that can be used to allow this account's successful login from an IP addresss to undo some
         /// of the reputational damage caused by failed attempts.
         /// </summary>
         /// <param name="id">The username or account id that uniquely identifies the account to get a credit from.</param>
@@ -204,10 +275,13 @@ namespace StopGuessing.Controllers
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns></returns>
         [HttpPost("{id}")]
-        public async Task<IActionResult> TryGetCreditAsync(string id, [FromBody] float amountToGet = 1f,
+        public async Task<IActionResult> TryGetCreditAsync(
+            string id,
+            [FromBody] float amountToGet = 1f,
+            [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount account = await LocalGetAsync(id, cancellationToken);
+            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
             bool result = TryGetCredit(account, amountToGet, cancellationToken);
             return new ObjectResult(result);
         }
@@ -256,9 +330,11 @@ namespace StopGuessing.Controllers
                 WhenCreditConsumed = timeAtStartOfMethod,
                 AmountConsumed = amountToGet
             });
-            WriteAccountInBackground(account, cancellationToken);
+            // FIXME -- can we write only this field?
+            WriteAccountToStableStoreInBackground(account, cancellationToken);
             return true;
         }
+        
 
 
         // DELETE api/values/5
@@ -274,9 +350,10 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="account">The account to write to cache/stable store.</param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        protected async Task WriteAccountAsync(UserAccount account, CancellationToken cancellationToken = default(CancellationToken))
-        {           
-            _userAccountCache[account.UsernameOrAccountId] = account;
+        protected async Task WriteAccountToStableStoreAsync(
+                        UserAccount account,
+                        CancellationToken cancellationToken = default(CancellationToken))
+        {
             await _stableStore.WriteAccountAsync(account, cancellationToken);
         }
 
@@ -285,15 +362,12 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="account">The account to write to cache/stable store.</param>
         /// <param name="cancellationToken"></param>
-        protected void WriteAccountInBackground(UserAccount account, CancellationToken cancellationToken = default(CancellationToken))
+        protected void WriteAccountToStableStoreInBackground(UserAccount account,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             // ReSharper disable once UnusedVariable -- unused variable used to signify background task
-            Task.Run(() => WriteAccountAsync(account, cancellationToken), cancellationToken);
+            Task.Run(() => WriteAccountToStableStoreAsync(account, cancellationToken), cancellationToken);
         }
-
-
-
-
 
 
 

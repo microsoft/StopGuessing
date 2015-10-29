@@ -74,7 +74,6 @@ namespace StopGuessing.Models
         [DataMember]
         public CapacityConstrainedSet<string> HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
 
-
         /// <summary>
         /// A length-limited sequence of records describing failed login attempts (invalid passwords) 
         /// </summary>

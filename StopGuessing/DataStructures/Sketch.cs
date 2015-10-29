@@ -428,7 +428,7 @@ namespace StopGuessing.DataStructures
 
 
         /// <summary>
-        /// WriteAccountAsync <paramref name="value"/> to the underlying sketch data structure (two-dimensional array) at 
+        /// WriteAccountToStableStoreAsync <paramref name="value"/> to the underlying sketch data structure (two-dimensional array) at 
         /// column (Table) <paramref name="column"/> and row (element) <paramref name="row"/>. 
         /// </summary>
         /// <param name="column">The column (table) to write to.</param>
@@ -549,7 +549,7 @@ namespace StopGuessing.DataStructures
             ulong[] values = new ulong[elementIndexForEachColumn.Length];
             for (int column = 0; column < elementIndexForEachColumn.Length; column++)
             {
-                // WriteAccountAsync the value
+                // WriteAccountToStableStoreAsync the value
                 ulong value = Read(column, elementIndexForEachColumn[column]);
 
                 // Track the original min/max value
@@ -579,7 +579,7 @@ namespace StopGuessing.DataStructures
             ulong newMin = Math.Min(originalMin + amountToAdd, MaxValue);
             ulong newMax = Math.Max(originalMax, newMin);
 
-            // WriteAccountAsync the post-Add value ONLY where the existing value at the [column][row_index] address is less than it.
+            // WriteAccountToStableStoreAsync the post-Add value ONLY where the existing value at the [column][row_index] address is less than it.
             for (int column = 0; column < elementIndexForEachColumn.Length; column++)
             {
                 if (values[column] < newMin)

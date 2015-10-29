@@ -23,18 +23,7 @@ namespace xUnit_Tests
 
     public class FunctionalTests
     {
-        //public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
-//        public SelfLoadingCache<IPAddress, IpHistory> MyIpHistoryCache;
-//        public PasswordPopularityTracker MyPasswordTracker;
-//        public static FixedSizeLruCache<string, LoginAttempt> MyCacheOfRecentLoginAttempts;
-//        public Dictionary<string, Task<LoginAttempt>> MyLoginAttemptsInProgress;
-        //public LoginAttemptController MyLoginAttemptController;
-        //public UserAccountController MyUserAccountController;
-        //public UserAccountClient MyUserAccountClient;
-        //public LoginAttemptClient MyLoginAttemptClient;
-//        public SelfLoadingCache<string, UserAccount> MyUserAccountCache;
-
-        public TestConfiguration InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
+        public static TestConfiguration InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
         {
             TestConfiguration configuration = new TestConfiguration();
             if (options == null)
@@ -54,30 +43,12 @@ namespace xUnit_Tests
             configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             configuration.MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
             IStableStore stableStore = new MemoryOnlyStableStore();
-            //MyUserAccountCache =
-            //    new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
-            //MyIpHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
-            //(id, cancellationToken) =>
-            //{
-            //    return Task.Run(() => new IpHistory(id), cancellationToken);
-            //}
-
-            //    ); // FIXME with loader
-            //            MyPasswordTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig",  thresholdRequiredToTrackPreciseOccurrences: 10); // FIXME with param
-            //MyCacheOfRecentLoginAttempts = new FixedSizeLruCache<string, LoginAttempt>(80000);
-            //MyLoginAttemptsInProgress = new Dictionary<string, Task<LoginAttempt>>();
-
+            
             configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts);
             configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts);
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
-            //List<ConfigureOptions<BlockingAlgorithmOptions>> config =
-            //    new List<ConfigureOptions<BlockingAlgorithmOptions>>
-            //    {
-            //        new ConfigureOptions<BlockingAlgorithmOptions>(bao => { })
-            //    };
-            //OptionsManager<BlockingAlgorithmOptions> blockingOptions = new OptionsManager<BlockingAlgorithmOptions>(config);
             configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient,
                 configuration.MyLoginAttemptClient, memoryUsageLimiter, options, stableStore, 
                 configuration.CreditLimits);
@@ -88,12 +59,11 @@ namespace xUnit_Tests
             configuration.MyUserAccountClient.SetLocalUserAccountController(configuration.MyUserAccountController);
 
             myLoginAttemptController.SetUserAccountClient(configuration.MyUserAccountClient);
-            configuration.MyLoginAttemptClient.SetLoginAttemptController(myLoginAttemptController);
-            //MyLoginAttemptController
+            configuration.MyLoginAttemptClient.SetLocalLoginAttemptController(myLoginAttemptController);
             return configuration;
         }
 
-        public UserAccount LoginTestCreateAccount(TestConfiguration configuration, string usernameOrAccountId, string password)
+        public static UserAccount LoginTestCreateAccount(TestConfiguration configuration, string usernameOrAccountId, string password)
         {
             UserAccount account = UserAccount.Create(usernameOrAccountId,
               (int) configuration.CreditLimits.Last().Limit,  password);
@@ -101,7 +71,7 @@ namespace xUnit_Tests
             return account;
         }
 
-        public string[] CreateUserAccounts(TestConfiguration configuration, int numberOfAccounts)
+        public static string[] CreateUserAccounts(TestConfiguration configuration, int numberOfAccounts)
         {
             string[] usernames = Enumerable.Range(1, numberOfAccounts).Select(x => "testuser" + x.ToString()).ToArray();
             foreach (string username in usernames)
@@ -132,7 +102,8 @@ namespace xUnit_Tests
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };
 
-            return await configuration.MyLoginAttemptClient.PutAsync(attempt, password, cancellationToken);
+            return await configuration.MyLoginAttemptClient.PutAsync(attempt, password,
+                cancellationToken: cancellationToken);                
         }
 
 
@@ -165,7 +136,7 @@ namespace xUnit_Tests
 
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, attempt.Outcome);
 
-            // Try the same wrong password again.  outcome should be CredentialsInvalidRepeatedIncorrectPassword
+            // ClientHelper the same wrong password again.  outcome should be CredentialsInvalidRepeatedIncorrectPassword
             LoginAttempt secondAttempt = await AuthenticateAsync(configuration, Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
 
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword, secondAttempt.Outcome);            
@@ -177,12 +148,12 @@ namespace xUnit_Tests
             TestConfiguration configuration = InitTest();
             LoginTestCreateAccount(configuration, Username1, Password1);
             
-            // Try the right password for user1, for a nonexistent user
+            // ClientHelper the right password for user1, for a nonexistent user
             LoginAttempt firstAttempt = await AuthenticateAsync(configuration,"KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
             
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidNoSuchAccount, firstAttempt.Outcome);
 
-            // Repeat of Try the right password for user1, for a nonexistent user
+            // Repeat of ClientHelper the right password for user1, for a nonexistent user
             LoginAttempt secondAttempt = await AuthenticateAsync(configuration, "KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
             
             Assert.Equal(AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount, secondAttempt.Outcome);
