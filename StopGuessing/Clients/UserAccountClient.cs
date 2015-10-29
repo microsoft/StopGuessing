@@ -2,7 +2,6 @@
 using StopGuessing.Models;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Eventing.Reader;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,16 +11,18 @@ namespace StopGuessing.Clients
 {
     public class UserAccountClient
     {
-        private const int NumberOfRedundentHostsToCacheEachAccount = 3; // FIXME 
-        private const int TimeoutMs = 500; // FIXME -- config
+        int NumberOfRedundentHostsToCacheEachAccount => Math.Min(3, _responsibleHosts.Count); // FUTURE -- use configuration file value
+        private TimeSpan DefaultTimeout { get; } = new TimeSpan(0, 0, 0, 0, 500); // FUTURE use configuration value
+
 
         private UserAccountController _localUserAccountController;
         private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
+        private RemoteHost _localHost;
 
-
-        public UserAccountClient(IDistributedResponsibilitySet<RemoteHost> responsibleHosts)
+        public UserAccountClient(IDistributedResponsibilitySet<RemoteHost> responsibleHosts, RemoteHost localHost)
         {
             _responsibleHosts = responsibleHosts;
+            _localHost = localHost;
         }
 
         public void SetLocalUserAccountController(UserAccountController userAccountController)
@@ -44,33 +45,38 @@ namespace StopGuessing.Clients
         /// <summary>
         /// Calls UserAccountController.TryGetCreditAsync()
         /// </summary>
-        /// <param name="accountId"></param>
+        /// <param name="usernameOrAccountId"></param>
         /// <param name="amountToGet"></param>
         /// <param name="serversResponsibleForCachingThisAccount"></param>
         /// <param name="timeout"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns></returns>
-        public async Task<bool> TryGetCreditAsync(string accountId, float amountToGet = 1f,
+        public async Task<bool> TryGetCreditAsync(string usernameOrAccountId,
+            float amountToGet = 1f,
             List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            // FIXME use RestClientHelper.TryServersUntilOneResponds()
-            RemoteHost host = _responsibleHosts.FindMemberResponsible(accountId);
-
-            if (host.IsLocalHost)
+            if (serversResponsibleForCachingThisAccount == null)
             {
-                UserAccount account = await _localUserAccountController.LocalGetAsync(accountId, serversResponsibleForCachingThisAccount, cancellationToken);
-                return _localUserAccountController.TryGetCredit(account, amountToGet, cancellationToken);
+                serversResponsibleForCachingThisAccount = GetServersResponsibleForCachingAnAccount(usernameOrAccountId);
             }
-            else
-            {
-                return await RestClientHelper.PostAsync<bool>(host.Uri,
-                    "/api/UserAccount/" + Uri.EscapeUriString(accountId) + "/TryGetCredit", new Object[]
-                    {
-                        new KeyValuePair<string, float>("amountToGet", 1f)
-                    }, timeout, cancellationToken);
-            }
+            return await RestClientHelper.TryServersUntilOneResponds(
+                iterationParameters: serversResponsibleForCachingThisAccount,
+                timeBetweenRetries: timeout ?? DefaultTimeout,
+                actionToTry: async (server, localTimeout) => server.Equals(_localHost)
+                    ? await _localUserAccountController.LocalTryGetCreditAsync(
+                        usernameOrAccountId, amountToGet,
+                        serversResponsibleForCachingThisAccount, cancellationToken)
+                    : await RestClientHelper.PostAsync<bool>(server.Uri,
+                        "/api/UserAccount/" + Uri.EscapeUriString(usernameOrAccountId) + "/TryGetCredit",
+                        new Object[]
+                        {
+                            new KeyValuePair<string, float>("amountToGet", 1f),
+                            new KeyValuePair<string, List<RemoteHost>>("serversResponsibleForCachingThisAccount",
+                                serversResponsibleForCachingThisAccount)
+                        }, localTimeout, cancellationToken),
+                cancellationToken: cancellationToken);
         }
 
         /// <summary>
@@ -78,6 +84,7 @@ namespace StopGuessing.Clients
         /// to fetch a UserAccount records by its usernameOrAccountId.
         /// </summary>
         /// <param name="accountId">The unique ID of the account to fetch.</param>
+        /// <param name="serversResponsibleForCachingThisAccount"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <param name="timeout"></param>
         /// <returns>The account record that was retrieved.</returns>
@@ -95,10 +102,10 @@ namespace StopGuessing.Clients
 
             return await RestClientHelper.TryServersUntilOneResponds(
                 serversResponsibleForCachingThisAccount,
-                timeout ?? new TimeSpan(0, 0, 0, 0, 250),
+                timeout ?? DefaultTimeout,
                 async (server, innerTimeout) =>
                 {
-                    if (server.IsLocalHost)
+                    if (server.Equals(_localHost))
                         return await _localUserAccountController.LocalGetAsync(accountId, serversResponsibleForCachingThisAccount, cancellationToken);
                     else
                         return await RestClientHelper.GetAsync<UserAccount>(server.Uri, pathUri, timeout:innerTimeout, cancellationToken: cancellationToken);
@@ -122,9 +129,9 @@ namespace StopGuessing.Clients
 
             return await RestClientHelper.TryServersUntilOneResponds(
                 serversResponsibleFOrCachingAnAccount,
-                timeout ?? new TimeSpan(0, 0, 0, 1),
+                timeout ?? DefaultTimeout,
                 async (server, innerTimeout) =>
-                    server.IsLocalHost
+                    server.Equals(_localHost)
                         ? await
                             _localUserAccountController.PutAsync(account, false, serversResponsibleFOrCachingAnAccount,
                                 cancellationToken)
@@ -141,25 +148,29 @@ namespace StopGuessing.Clients
                 cancellationToken);
         }
 
-        public async Task<UserAccount> PutCacheOnlyAsync(UserAccount account,
-            RemoteHost server,
+        public async Task PutCacheOnlyAsync(UserAccount account,
+            List<RemoteHost> serversResponsibleForCachingThisAccount,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            return await RestClientHelper.PutAsync<UserAccount>(server.Uri,
-                "/api/UserAccount/" + Uri.EscapeUriString(account.UsernameOrAccountId), new Object[]
-                {
-                    new KeyValuePair<string, UserAccount>("account", account),
-                    new KeyValuePair<string, bool>("cacheOnly", true),
-                }, timeout, cancellationToken);
+            await Task.WhenAll(serversResponsibleForCachingThisAccount.Where(server => !server.Equals(_localHost)).Select(
+                async server => await RestClientHelper.PutAsync(
+                    server.Uri,
+                    "/api/UserAccount/" + Uri.EscapeUriString(account.UsernameOrAccountId), new Object[]
+                    {
+                        new KeyValuePair<string, UserAccount>("account", account),
+                        new KeyValuePair<string, bool>("cacheOnly", true),
+                    }, timeout, cancellationToken)
+                ));
         }
 
         public void PutCacheOnlyInBackground(UserAccount account,
-            RemoteHost server,
+            List<RemoteHost> serversResponsibleForCachingThisAccount,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            Task.Run(() => PutCacheOnlyAsync(account, server, timeout, cancellationToken), cancellationToken);
+            Task.Run(() => PutCacheOnlyAsync(account, serversResponsibleForCachingThisAccount, 
+                timeout, cancellationToken), cancellationToken);
         }
 
         /// <summary>
@@ -179,34 +190,47 @@ namespace StopGuessing.Clients
         /// <param name="timeout"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
-        public async Task UpdateOutcomesUsingTypoAnalysisAsync(string usernameOrAccountId, string correctPassword,
+        public async Task UpdateOutcomesUsingTypoAnalysisAsync(string usernameOrAccountId,
+            string correctPassword,
             byte[] phase1HashOfCorrectPassword,
             System.Net.IPAddress ipAddressToExcludeFromAnalysis,
             List<RemoteHost> serversResponsibleForCachingThisAccount,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            // FIXME -- use RestClientHelper.TryServersUntilOneResponds()
-            RemoteHost host = _responsibleHosts.FindMemberResponsible(usernameOrAccountId);
-            if (host.IsLocalHost)
+            if (serversResponsibleForCachingThisAccount == null)
             {
-                await
-                    _localUserAccountController.UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId,
-                        correctPassword,
-                        phase1HashOfCorrectPassword, ipAddressToExcludeFromAnalysis, 
-                        serversResponsibleForCachingThisAccount, cancellationToken);
+                serversResponsibleForCachingThisAccount = GetServersResponsibleForCachingAnAccount(usernameOrAccountId);
             }
-            else
-            {
-                await RestClientHelper.PostAsync(host.Uri,
-                    "/api/UserAccount/" + Uri.EscapeUriString(usernameOrAccountId), new Object[]
+
+            await RestClientHelper.TryServersUntilOneResponds(
+                iterationParameters: serversResponsibleForCachingThisAccount,
+                actionToTry: async (server, innerTimeout) =>
+                {
+                    if (server.Equals(_localHost))
                     {
-                        new KeyValuePair<string, string>("correctPassword", correctPassword),
-                        new KeyValuePair<string, byte[]>("phase1HashOfCorrectPassword", phase1HashOfCorrectPassword),
-                        new KeyValuePair<string, System.Net.IPAddress>("ipAddressToExcludeFromAnalysis",
-                            ipAddressToExcludeFromAnalysis),
-                    }, timeout, cancellationToken);
-            }
+                        await _localUserAccountController.UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId,
+                            correctPassword,
+                            phase1HashOfCorrectPassword, ipAddressToExcludeFromAnalysis,
+                            serversResponsibleForCachingThisAccount, cancellationToken);
+                    }
+                    else
+                    {
+                        await RestClientHelper.PostAsync(server.Uri,
+                            "/api/UserAccount/" + Uri.EscapeUriString(usernameOrAccountId), new Object[]
+                            {
+                                new KeyValuePair<string, string>("correctPassword", correctPassword),
+                                new KeyValuePair<string, byte[]>("phase1HashOfCorrectPassword",
+                                    phase1HashOfCorrectPassword),
+                                new KeyValuePair<string, System.Net.IPAddress>("ipAddressToExcludeFromAnalysis",
+                                    ipAddressToExcludeFromAnalysis)
+                            },
+                            timeout: innerTimeout,
+                            cancellationToken: cancellationToken);
+                    }
+                },
+                timeBetweenRetries: timeout ?? DefaultTimeout,
+                cancellationToken: cancellationToken);
         }
 
 
@@ -249,10 +273,10 @@ namespace StopGuessing.Clients
 
             await RestClientHelper.TryServersUntilOneResponds(
                 serversResponsibleForCachingThisAccount,
-                timeout ?? new TimeSpan(0, 0, 0, 1),
+                timeout ?? DefaultTimeout,
                 async (server, innerTimeout) =>
                 {
-                    if (server.IsLocalHost)
+                    if (server.Equals(_localHost))
                         await _localUserAccountController.UpdateForNewLoginAttemptAsync(
                             attempt.UsernameOrAccountId, attempt, false,
                             serversResponsibleForCachingThisAccount,

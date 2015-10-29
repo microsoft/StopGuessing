@@ -13,6 +13,7 @@ namespace StopGuessing.DataStructures
 {
     public static class RestClientHelper
     {
+        public class TimeoutException : Exception {}
 
         private static void ConfigureClient(HttpClient client, Uri baseAddress, TimeSpan? timeout = null)
         {
@@ -168,30 +169,58 @@ namespace StopGuessing.DataStructures
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         public async static Task<TResult> TryServersUntilOneResponds<TResult, TIterationParameter>(
-            List<TIterationParameter> iterationParameters,
+            IEnumerable<TIterationParameter> iterationParameters,
             TimeSpan timeBetweenRetries,
             Func<TIterationParameter, TimeSpan, Task<TResult>> actionToTry,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
             List<Task<TResult>> attemptsInProgress = new List<Task<TResult>>();
-            // FIXME -- how to handle exceptions?
-
+            
             int indexOfTaskFound = -1;
             TimeSpan timeUntilFinalTimeout = new TimeSpan(
-                timeBetweenRetries.Ticks * iterationParameters.Count);
-            while (indexOfTaskFound == -1 && attemptsInProgress.Count < iterationParameters.Count)
+                timeBetweenRetries.Ticks * iterationParameterQueue.Count);
+
+            while (indexOfTaskFound == -1 && iterationParameterQueue.Count > 0)
             {
+                TimeSpan localtimeUntilFinalTimeout = timeUntilFinalTimeout;
                 attemptsInProgress.Add(Task.Run(async () =>
-                        await actionToTry(
-                        iterationParameters[attemptsInProgress.Count], timeUntilFinalTimeout),
-                        cancellationToken));
+                {
+                    TResult result = await actionToTry(iterationParameterQueue.Dequeue(), localtimeUntilFinalTimeout);
+                    return result;
+                }, cancellationToken));
+
                 indexOfTaskFound = Task.WaitAny(
                         (attemptsInProgress.Select(t => (Task)t).ToArray()),
                         (int)timeBetweenRetries.TotalMilliseconds,
                         cancellationToken);
-                timeUntilFinalTimeout = timeUntilFinalTimeout.Subtract(timeBetweenRetries);
+
+                if (indexOfTaskFound >= 0 && attemptsInProgress[indexOfTaskFound].IsFaulted)
+                {
+                    // The task completed not because it was successful, but because of an exception.
+                    if (attemptsInProgress.Count > 1 || iterationParameterQueue.Count > 0)
+                    {
+                        // There are stil other attempts that may succeed.  Let's just ignore this error.
+                        attemptsInProgress.RemoveAt(indexOfTaskFound);
+                        indexOfTaskFound = -1;
+                    }
+                    else
+                    {
+                        // This attempt was our last hope.  There are no more yet to complete or to run.
+                        // We'll do nothing an allow the exception to come back to the caller.
+                    }
+                }
+
+                timeUntilFinalTimeout = timeUntilFinalTimeout.Subtract(timeBetweenRetries);                
             }
-            return await attemptsInProgress[indexOfTaskFound];
+            if (indexOfTaskFound >= 0)
+            {
+                return await attemptsInProgress[indexOfTaskFound];
+            }
+            else
+            {
+                throw new TimeoutException();
+            }
         }
 
         public static async Task TryServersUntilOneResponds<TIterationParameter>(
@@ -200,24 +229,52 @@ namespace StopGuessing.DataStructures
             Func<TIterationParameter, TimeSpan, Task> actionToTry,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
             List<Task> attemptsInProgress = new List<Task>();
 
             int indexOfTaskFound = -1;
             TimeSpan timeUntilFinalTimeout = new TimeSpan(
-                timeBetweenRetries.Ticks*iterationParameters.Count);
-            while (indexOfTaskFound == -1 && attemptsInProgress.Count < iterationParameters.Count)
+                timeBetweenRetries.Ticks * iterationParameterQueue.Count);
+
+            while (indexOfTaskFound == -1 && iterationParameterQueue.Count > 0)
             {
+                TimeSpan localtimeUntilFinalTimeout = timeUntilFinalTimeout;
                 attemptsInProgress.Add(Task.Run(async () =>
-                    await actionToTry(
-                        iterationParameters[attemptsInProgress.Count], timeUntilFinalTimeout),
-                    cancellationToken));
+                {
+                    await actionToTry(iterationParameterQueue.Dequeue(), localtimeUntilFinalTimeout);
+                }, cancellationToken));
+
                 indexOfTaskFound = Task.WaitAny(
-                    (attemptsInProgress.Select(t => (Task) t).ToArray()),
-                    (int) timeBetweenRetries.TotalMilliseconds,
-                    cancellationToken);
+                        (attemptsInProgress.Select(t => (Task)t).ToArray()),
+                        (int)timeBetweenRetries.TotalMilliseconds,
+                        cancellationToken);
+
+                if (indexOfTaskFound >= 0 && attemptsInProgress[indexOfTaskFound].IsFaulted)
+                {
+                    // The task completed not because it was successful, but because of an exception.
+                    if (attemptsInProgress.Count > 1 || iterationParameterQueue.Count > 0)
+                    {
+                        // There are stil other attempts that may succeed.  Let's just ignore this error.
+                        attemptsInProgress.RemoveAt(indexOfTaskFound);
+                        indexOfTaskFound = -1;
+                    }
+                    else
+                    {
+                        // This attempt was our last hope.  There are no more yet to complete or to run.
+                        // We'll do nothing an allow the exception to come back to the caller.
+                    }
+                }
+
                 timeUntilFinalTimeout = timeUntilFinalTimeout.Subtract(timeBetweenRetries);
             }
-            await attemptsInProgress[indexOfTaskFound];
+            if (indexOfTaskFound >= 0)
+            {
+                await attemptsInProgress[indexOfTaskFound];
+            }
+            else
+            {
+                throw new TimeoutException();
+            }
         }
 
     }

@@ -136,7 +136,8 @@ namespace StopGuessing.Models
                 UrlEncoder.Default.UrlEncode(clientIpAddress.ToString()) + "&" +
                 UrlEncoder.Default.UrlEncode(account) + "&" +
                UrlEncoder.Default.UrlEncode(password);
-            // FIXME - run through expensive hash function
+            // FIXME - run through expensive hash function, or use binomial bloom filter with high false positive rate?
+            // The latter seems attractive as of 2015/10/29
             return SketchForTestingIfNonexistentAccountIpPasswordHasBeenSeenBefore.AddMember(ipNonexistentAccountPasswordTripleAsString);
         }
 

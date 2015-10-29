@@ -5,8 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNet.Mvc;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
-using StopGuessing.EncryptionPrimitives;
-using System.Security.Cryptography;
 using System.Threading;
 using StopGuessing.Clients;
 
@@ -21,6 +19,8 @@ namespace StopGuessing.Controllers
         private readonly BlockingAlgorithmOptions _options;
         private readonly SelfLoadingCache<string, UserAccount> _userAccountCache;
         private LimitPerTimePeriod[] CreditLimits { get; }
+
+        TimeSpan DefaultTimeout { get; } = new TimeSpan(0, 0, 0, 0, 500);
 
         public UserAccountController(
             UserAccountClient userAccountClient,
@@ -59,15 +59,16 @@ namespace StopGuessing.Controllers
         /// This method may look in the cache first and only go to stable store if it doesn't find it.
         /// </summary>
         /// <param name="id">The unique identifier of the record to UserAccount fetch</param>
+        /// <param name="serversResponsibleForCachingAnAccount"></param>
         /// <param name="cancellationToken"></param>
         /// <returns>The account record or null if there is no such account.</returns>
         // GET api/UserAccount/stuart
         [HttpGet("{id}")]
         public async Task<IActionResult> GetAsync(string id,
-            [FromBody] List<RemoteHost> serversResponsibleFOrCachingAnAccount = null,
+            [FromBody] List<RemoteHost> serversResponsibleForCachingAnAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount result = await LocalGetAsync(id, serversResponsibleFOrCachingAnAccount, cancellationToken);
+            UserAccount result = await LocalGetAsync(id, serversResponsibleForCachingAnAccount, cancellationToken);
             return (result == null) ? (IActionResult) (new HttpNotFoundResult()) : (new ObjectResult(result));
         }
 
@@ -86,11 +87,19 @@ namespace StopGuessing.Controllers
             }
 
             account = await _stableStore.ReadAccountAsync(id, cancellationToken);
-            // what to do if read fails?
-            _userAccountCache.Add(account.UsernameOrAccountId, account);
 
-            // FIXME -- ensure consistent loading?
-            return await _userAccountCache.GetAsync(id, cancellationToken);
+            if (account != null)
+            {
+                _userAccountCache.Add(account.UsernameOrAccountId, account);
+                WriteAccountInBackground(account,
+                    serversResponsibleForCachingAnAccount,
+                    updateTheLocalCache: true,
+                    updateRemoteCaches: true,
+                    updateStableStore: false,
+                    cancellationToken: cancellationToken);
+            }
+
+            return account;
         }
 
         /// <summary>
@@ -103,7 +112,7 @@ namespace StopGuessing.Controllers
         /// <param name="onlyUpdateTheInMemoryCacheOfTheAccount">If set to true, the PUT operation will only update the in-memory cache.  If false,
         /// the operation will update both the stable store and the in-memory caches of all host responsible for caching
         /// this account record.</param>
-        /// <param name="serversResponsibleFOrCachingAnAccount"></param>
+        /// <param name="serversResponsibleForCachingAnAccount"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         // PUT api/UserAccount/stuart
@@ -112,7 +121,7 @@ namespace StopGuessing.Controllers
             string id,
             [FromBody] UserAccount account,
             [FromBody] bool onlyUpdateTheInMemoryCacheOfTheAccount = false,
-            [FromBody] List<RemoteHost> serversResponsibleFOrCachingAnAccount = null,
+            [FromBody] List<RemoteHost> serversResponsibleForCachingAnAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             if (id != account.UsernameOrAccountId)
@@ -120,7 +129,7 @@ namespace StopGuessing.Controllers
                 throw new Exception(
                     "The user/account name in the PUT url must match the UsernameOrAccountID in the account record in the body.");
             }
-            UserAccount result = await PutAsync(account, onlyUpdateTheInMemoryCacheOfTheAccount, serversResponsibleFOrCachingAnAccount, cancellationToken);
+            UserAccount result = await PutAsync(account, onlyUpdateTheInMemoryCacheOfTheAccount, serversResponsibleForCachingAnAccount, cancellationToken);
             return new ObjectResult(result);
         }
 
@@ -129,26 +138,13 @@ namespace StopGuessing.Controllers
             List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            _userAccountCache.Add(account.UsernameOrAccountId, account);
+            await WriteAccountAsync(account,
+                serversResponsibleForCachingThisAccount,
+                updateTheLocalCache: true,
+                updateStableStore: !onlyUpdateTheInMemoryCacheOfTheAccount,
+                updateRemoteCaches: !onlyUpdateTheInMemoryCacheOfTheAccount,
+                cancellationToken: cancellationToken);
 
-            if (onlyUpdateTheInMemoryCacheOfTheAccount)
-                return account;
-
-            Task stableStoreWritingTask =
-                WriteAccountToStableStoreAsync(account, cancellationToken);
-
-            if (serversResponsibleForCachingThisAccount == null)
-            {
-                serversResponsibleForCachingThisAccount =
-                    _userAccountClient.GetServersResponsibleForCachingAnAccount(account);
-            }
-            
-            foreach (var server in serversResponsibleForCachingThisAccount.Where(server => !server.IsLocalHost))
-            {
-                _userAccountClient.PutCacheOnlyInBackground(account, server, cancellationToken: cancellationToken);
-            }
-
-            await stableStoreWritingTask;
             return account;
         }
 
@@ -180,6 +176,7 @@ namespace StopGuessing.Controllers
         {
             UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
 
+            // Do the typo analysis and obtain the set of LoginAttempt records with outcomes changed due to the analyis
             List<LoginAttempt> attemptsToUpdate = account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(
                 correctPassword,
                 phase1HashOfCorrectPassword,
@@ -193,17 +190,18 @@ namespace StopGuessing.Controllers
 
             if (attemptsToUpdate.Count > 0)
             {
-                // Update this UserAccount in stable store.  Updating caches is not important as the worst
+                // Update this UserAccount in stable store.  Updating caches is not as important as the worst
                 // outcome of inconsistency is that the same analyses are performed again and the
                 // outcomes are again updated.
-
-                // FIXME -- can we write only changes to the login attempts?  Do we even need this?
-                WriteAccountToStableStoreInBackground(account, cancellationToken);
+                // FUTURE -- can we write only changes to the login attempts?  Do we even need this?
+                WriteAccountInBackground(account, serversResponsibleForCachingThisAccount,
+                    updateTheLocalCache:false, updateRemoteCaches: true, updateStableStore: true,
+                    cancellationToken: cancellationToken);
 
                 // Update the primary copies of the LoginAttempt records with outcomes we've modified using
                 // our typo analysis. 
                 _loginAttemptClient.UpdateLoginAttemptOutcomesInBackground(attemptsToUpdate,
-                    timeout: new TimeSpan(0, 0, 0, 1),
+                    timeout: DefaultTimeout,
                     cancellationToken: cancellationToken);
             }
 
@@ -231,8 +229,22 @@ namespace StopGuessing.Controllers
             [FromBody] bool onlyUpdateTheInMemoryCacheOfTheAccount = false,
             [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
-        {            
-            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
+        {
+            UserAccount account;
+            if (onlyUpdateTheInMemoryCacheOfTheAccount)
+            {
+                if (!_userAccountCache.TryGetValue(id, out account))
+                {
+                    // We're only supposed to update the cache, but there's no record of this account in the cache.
+                    // We're done without doing anything.
+                    return new HttpOkResult();
+                }
+            }
+            else
+            {
+                account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
+            }
+
             bool accountHasBeenModified = false;
             switch (attempt.Outcome)
             {
@@ -254,14 +266,16 @@ namespace StopGuessing.Controllers
                     accountHasBeenModified = true;
                     break;
             }
-            if (accountHasBeenModified)
+            if (accountHasBeenModified && !onlyUpdateTheInMemoryCacheOfTheAccount)
             {
-                if (!onlyUpdateTheInMemoryCacheOfTheAccount)
-                {
-                    _userAccountClient.UpdateForNewLoginAttemptCacheOnlyInBackground(attempt,
-                        serversResponsibleForCachingThisAccount, cancellationToken: cancellationToken);
-                }
+                // We've updated the account with the new login attempt.
+                // We should update all the other cache and stable store.
+                // FUTURE -- isolate stable store updates of login attempts from more important information (current password)
+                WriteAccountInBackground(account, serversResponsibleForCachingThisAccount,
+                    updateTheLocalCache: false, updateRemoteCaches:true, updateStableStore:true,
+                    cancellationToken: cancellationToken);
             }
+
             return new HttpOkResult();
         }
 
@@ -272,6 +286,7 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="id">The username or account id that uniquely identifies the account to get a credit from.</param>
         /// <param name="amountToGet">The amount of credit needed.</param>
+        /// <param name="serversResponsibleForCachingThisAccount"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns></returns>
         [HttpPost("{id}")]
@@ -281,15 +296,17 @@ namespace StopGuessing.Controllers
             [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
-            bool result = TryGetCredit(account, amountToGet, cancellationToken);
-            return new ObjectResult(result);
+            return new ObjectResult(await LocalTryGetCreditAsync(id, amountToGet, serversResponsibleForCachingThisAccount, cancellationToken));
         }
 
-        public bool TryGetCredit(UserAccount account, 
-            float amountToGet = 1f, 
+        public async Task<bool> LocalTryGetCreditAsync(
+            string id,
+            float amountToGet = 1f,
+            List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
+
             float amountConsumed = amountToGet;
 
             DateTimeOffset timeAtStartOfMethod = DateTimeOffset.Now;
@@ -330,8 +347,8 @@ namespace StopGuessing.Controllers
                 WhenCreditConsumed = timeAtStartOfMethod,
                 AmountConsumed = amountToGet
             });
-            // FIXME -- can we write only this field?
-            WriteAccountToStableStoreInBackground(account, cancellationToken);
+            // FUTURE -- can we write only this field?
+            WriteAccountInBackground(account, serversResponsibleForCachingThisAccount, false, true, true, cancellationToken);
             return true;
         }
         
@@ -349,24 +366,74 @@ namespace StopGuessing.Controllers
         /// Combines update the local account cache with an asyncronous write to stable store.
         /// </summary>
         /// <param name="account">The account to write to cache/stable store.</param>
+        /// <param name="serversResponsibleForCachingThisAccount"></param>
+        /// <param name="updateTheLocalCache"></param>
+        /// <param name="updateRemoteCaches"></param>
+        /// <param name="updateStableStore"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        protected async Task WriteAccountToStableStoreAsync(
+        protected async Task WriteAccountAsync(
                         UserAccount account,
+                        List<RemoteHost> serversResponsibleForCachingThisAccount = null,
+                        bool updateTheLocalCache = true,
+                        bool updateRemoteCaches = true,
+                        bool updateStableStore = true,
                         CancellationToken cancellationToken = default(CancellationToken))
         {
-            await _stableStore.WriteAccountAsync(account, cancellationToken);
+            Task stableStoreTask = null;
+
+            if (updateTheLocalCache)
+            {
+                // Write to the local cache on this server
+                _userAccountCache[account.UsernameOrAccountId] = account;
+            }
+
+            if (updateStableStore)
+            {
+                // Write to stable consistent storage (e.g. database) that the system is configured to use
+                stableStoreTask = _stableStore.WriteAccountAsync(account, cancellationToken);
+            }
+
+            if (updateRemoteCaches)
+            {
+                // Identify the servers that cache this LoginAttempt and will need their cache entries updated
+                if (serversResponsibleForCachingThisAccount == null)
+                {
+                    serversResponsibleForCachingThisAccount =
+                        _userAccountClient.GetServersResponsibleForCachingAnAccount(account);
+                }
+
+                // Update the cache entries for this LoginAttempt on the remote servers.
+                _userAccountClient.PutCacheOnlyInBackground(account,
+                    serversResponsibleForCachingThisAccount,
+                    cancellationToken: cancellationToken);
+            }
+
+            // If writing to stable store, wait until the write has completed before returning.
+            if (stableStoreTask != null)
+                await stableStoreTask;
         }
 
         /// <summary>
         /// Combines update the local account cache with a background write to stable store.
         /// </summary>
         /// <param name="account">The account to write to cache/stable store.</param>
-        /// <param name="cancellationToken"></param>
-        protected void WriteAccountToStableStoreInBackground(UserAccount account,
+        /// <param name="serversResponsibleForCachingThisAccount"></param>
+        /// <param name="updateTheLocalCache"></param>
+        /// <param name="updateRemoteCaches"></param>
+        /// <param name="updateStableStore"></param>
+        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        protected void WriteAccountInBackground(
+            UserAccount account,
+            List<RemoteHost> serversResponsibleForCachingThisAccount = null,
+            bool updateTheLocalCache = true,
+            bool updateRemoteCaches = true,
+            bool updateStableStore = true,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             // ReSharper disable once UnusedVariable -- unused variable used to signify background task
-            Task.Run(() => WriteAccountToStableStoreAsync(account, cancellationToken), cancellationToken);
+            Task.Run(() => WriteAccountAsync(account, serversResponsibleForCachingThisAccount,
+                updateTheLocalCache, updateRemoteCaches, updateStableStore, cancellationToken), 
+                cancellationToken);
         }
 
 
