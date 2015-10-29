@@ -46,12 +46,18 @@ namespace StopGuessing
             // services.AddWebApiConventions();
 
             var hosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
-            hosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:35358"), IsLocalHost = true });
+            RemoteHost localHost = new RemoteHost {Uri = new Uri("http://localhost:35358")};
+
+            services.AddSingleton<RemoteHost>(x => localHost);
+            hosts.Add("localhost", localHost);
 
             // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
             services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
 
             var options = new BlockingAlgorithmOptions();
+
+
+            services.AddSingleton<BlockingAlgorithmOptions>(x => options);
             services.AddSingleton<BlockingAlgorithmOptions>(x => options);
 
             services.AddSingleton<MemoryUsageLimiter, MemoryUsageLimiter>();

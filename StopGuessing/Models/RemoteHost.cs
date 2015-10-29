@@ -13,7 +13,7 @@ namespace StopGuessing.Models
         public Uri Uri { get; set; }
 
         // FIXME -- remove this and find another way to test
-        public bool IsLocalHost { get; set; }
+        // public bool IsLocalHost { get; set; }
 
         public override string ToString()
         {

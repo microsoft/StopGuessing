@@ -400,7 +400,7 @@ namespace StopGuessing.DataStructures
                 // Since MinIndex == MaxIndex, we can use either as an index into the point
                 // that we've found to be the closest point on the ring >= to the key's point.                
                 if (pointToFind > SortedPoints[0] && SortedPoints[minIndex] < pointToFind)
-                    throw new Exception("Illegal");//FIXME
+                    throw new Exception("Illegal");
 
                 return PointsToMembers[SortedPoints[minIndex]].Value;
             }

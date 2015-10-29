@@ -41,11 +41,12 @@ namespace xUnit_Tests
             };
 
             configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
-            configuration.MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
+            RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
+            configuration.MyResponsibleHosts.Add("localhost", localHost);
             IStableStore stableStore = new MemoryOnlyStableStore();
             
-            configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts);
-            configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts);
+            configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts, localHost);
+            configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
