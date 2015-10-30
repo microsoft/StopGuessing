@@ -10,6 +10,7 @@ namespace StopGuessing
         public Dictionary<string, UserAccount> Accounts = new Dictionary<string, UserAccount>();
         public Dictionary<string, LoginAttempt> LoginAttempts = new Dictionary<string, LoginAttempt>();
 
+
         public async Task<bool> IsIpAddressAlwaysPermittedAsync(System.Net.IPAddress clientIpAddress, CancellationToken cancelToken = default(CancellationToken))
         {
             return await Task.Run( () => false, cancelToken);
@@ -17,6 +18,8 @@ namespace StopGuessing
 
         public async Task<UserAccount> ReadAccountAsync(string usernameOrAccountId, CancellationToken cancelToken)
         {
+            if (Accounts == null)
+                return null;
             return await Task.Run( () =>
             {
                 lock (Accounts)
@@ -57,6 +60,9 @@ namespace StopGuessing
 
         public async Task WriteAccountAsync(UserAccount account, CancellationToken cancelToken)
         {
+            if (Accounts == null)
+                return;
+
             await Task.Run(() =>
             {
                 lock (Accounts)

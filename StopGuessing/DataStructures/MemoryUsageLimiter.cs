@@ -32,7 +32,7 @@ namespace StopGuessing.DataStructures
             }
             else
             {
-                Task.Run(() => GenerationalReductionLoop());
+                Task.Run(() => ThresholdReductionLoop(hardMemoryLimit));
             }
         }
         
@@ -66,8 +66,8 @@ namespace StopGuessing.DataStructures
             {
                 int collectionCount = GC.CollectionCount(2);
                 GC.WaitForFullGCApproach(-1);
-
-
+                
+                ReduceMemoryUsage();
 
                 if (collectionCount == GC.CollectionCount(2))
                     GC.Collect();

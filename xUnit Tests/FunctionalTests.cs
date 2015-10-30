@@ -19,6 +19,7 @@ namespace xUnit_Tests
         public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
         public LimitPerTimePeriod[] CreditLimits;
+        public MemoryOnlyStableStore StableStore;
     }
 
     public class FunctionalTests
@@ -43,7 +44,7 @@ namespace xUnit_Tests
             configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
             configuration.MyResponsibleHosts.Add("localhost", localHost);
-            IStableStore stableStore = new MemoryOnlyStableStore();
+            IStableStore stableStore = configuration.StableStore = new MemoryOnlyStableStore();
             
             configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts, localHost);
             configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
