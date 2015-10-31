@@ -33,6 +33,8 @@ namespace StopGuessing
 
         public async Task<LoginAttempt> ReadLoginAttemptAsync(string key, CancellationToken cancelToken)
         {
+            if (LoginAttempts == null)
+                return null;
             return await Task.Run(() =>
             {
                 lock (LoginAttempts)
@@ -74,6 +76,8 @@ namespace StopGuessing
 
         public async Task WriteLoginAttemptAsync(LoginAttempt attempt, CancellationToken cancelToken)
         {
+            if (LoginAttempts == null)
+                return;
             await Task.Run(() =>
             {
                 lock (LoginAttempts)

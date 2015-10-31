@@ -22,7 +22,7 @@ namespace StopGuessing.DataStructures
 
         private readonly double _fractionToRemoveOnCleanup;
         public MemoryUsageLimiter(
-            double fractionToRemoveOnCleanup = 0.1 /* 10% */,
+            double fractionToRemoveOnCleanup = 0.2 /* 20% */,
             long hardMemoryLimit = 0)
         {
             _fractionToRemoveOnCleanup = fractionToRemoveOnCleanup;
@@ -60,7 +60,7 @@ namespace StopGuessing.DataStructures
 
         public void GenerationalReductionLoop()
         {
-            GC.RegisterForFullGCNotification(15,15);
+            GC.RegisterForFullGCNotification(10,10);
 
             while (true)
             {
@@ -84,12 +84,14 @@ namespace StopGuessing.DataStructures
             {
                 try
                 {
-                    System.Threading.Thread.Sleep(500);
+                    System.Threading.Thread.Sleep(250);
 
                     long currentMemoryConsumptionInBytes = GC.GetTotalMemory(true);
                     if (currentMemoryConsumptionInBytes > hardMemoryLimit)
                     {
-                        ReduceMemoryUsage();                        
+                        Console.Error.WriteLine("Starting memory reduction.");
+                        ReduceMemoryUsage();
+                        Console.Error.WriteLine("Completing memory reduction.");
                     }
                 }
                 catch (Exception)

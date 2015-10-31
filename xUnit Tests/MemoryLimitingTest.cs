@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -11,10 +10,12 @@ namespace xUnit_Tests
         [Fact]
         public void BigFreakinAllocationTest()
         {
+            Console.Error.WriteLine("Starting test");
+            Console.Out.WriteLine("Out starting test.");
             TestConfiguration config = FunctionalTests.InitTest();
             config.StableStore.Accounts = null;
 
-            uint levelOfParallelism = 1;
+            uint levelOfParallelism = 8;
             List<Task> tasks = new List<Task>();
             // Create so many accounts that we have to flush them from cache.
             for (uint thread = 1; thread <= levelOfParallelism; thread++)//
@@ -26,12 +27,12 @@ namespace xUnit_Tests
             Task.WaitAll(tasks.ToArray());
         }
 
-        static readonly string bigString = new string('*', 100000);
+        static readonly string BigString = new string('*', 10*1024);
         public void BigFreakinAllocationTestLoop(TestConfiguration config, uint threadIndex, uint levelOfParallelism)
         {
-            for (uint i = threadIndex; i < 1 * 1024 * 1024; i += levelOfParallelism)
+            for (uint i = threadIndex; i < 512 * 1024; i += levelOfParallelism)
             {
-                string username = "User" + i + bigString;
+                string username = "User" + i + BigString;
                 System.Threading.Thread.Sleep(10);
                 FunctionalTests.LoginTestCreateAccount(config, username, "passwordfor" + i);
             }
