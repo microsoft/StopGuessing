@@ -14,6 +14,7 @@ namespace xUnit_Tests
             Console.Out.WriteLine("Out starting test.");
             TestConfiguration config = FunctionalTests.InitTest();
             config.StableStore.Accounts = null;
+            config.StableStore.LoginAttempts = null;
 
             uint levelOfParallelism = 8;
             List<Task> tasks = new List<Task>();
