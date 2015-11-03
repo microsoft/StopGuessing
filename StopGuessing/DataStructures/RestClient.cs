@@ -192,7 +192,7 @@ namespace StopGuessing.DataStructures
 
                 indexOfTaskFound = Task.WaitAny(
                         (attemptsInProgress.Select(t => (Task)t).ToArray()),
-                        (int)timeBetweenRetries.TotalMilliseconds,
+                        // FIXME (int)timeBetweenRetries.TotalMilliseconds,
                         cancellationToken);
 
                 if (indexOfTaskFound >= 0 && attemptsInProgress[indexOfTaskFound].IsFaulted)
@@ -246,7 +246,7 @@ namespace StopGuessing.DataStructures
 
                 indexOfTaskFound = Task.WaitAny(
                         (attemptsInProgress.Select(t => (Task)t).ToArray()),
-                        (int)timeBetweenRetries.TotalMilliseconds,
+                        // FIXME (int)timeBetweenRetries.TotalMilliseconds,
                         cancellationToken);
 
                 if (indexOfTaskFound >= 0 && attemptsInProgress[indexOfTaskFound].IsFaulted)

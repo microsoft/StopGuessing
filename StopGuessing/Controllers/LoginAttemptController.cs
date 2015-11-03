@@ -385,7 +385,8 @@ namespace StopGuessing.Controllers
                 return;
 
             // Choose a block threshold based on whether the provided password was popular or not.
-            // (If the actual password isn't popular, the loginAttempt will be blocked either way.)
+            // (If the actual password is among those commonly guessed, we need to be more aggressive in
+            //  blocking potential guessing attacks.)
             double blockThreshold = loginAttempt.PasswordsPopularityAmongFailedGuesses >= _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular ?
                 _options.BlockThresholdPopularPassword : _options.BlockThresholdUnpopularPassword;
 
