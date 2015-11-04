@@ -56,7 +56,7 @@ namespace StopGuessing.DataStructures
             }
             finally
             {
-                _readWriteLock.ExitWriteLock();
+                _readWriteLock.ExitReadLock();
             }
             return result;
         }
