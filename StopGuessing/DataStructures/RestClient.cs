@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Net.Http.Headers;
 using System.Threading;
-using Microsoft.AspNet.Mvc.Razor.Directives;
 using Newtonsoft.Json;
 
 namespace StopGuessing.DataStructures
@@ -175,6 +174,13 @@ namespace StopGuessing.DataStructures
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
+
+            // FIXME Hack to test perf
+            if (iterationParameterQueue.Count == 1)
+            {
+                return await actionToTry(iterationParameterQueue.Dequeue(), timeBetweenRetries);
+            }
+
             List<Task<TResult>> attemptsInProgress = new List<Task<TResult>>();
             
             int indexOfTaskFound = -1;
@@ -230,6 +236,14 @@ namespace StopGuessing.DataStructures
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
+
+            // FIXME Hack to test perf
+            if (iterationParameterQueue.Count == 1)
+            {
+                await actionToTry(iterationParameterQueue.Dequeue(), timeBetweenRetries);
+                return;
+            }
+
             List<Task> attemptsInProgress = new List<Task>();
 
             int indexOfTaskFound = -1;

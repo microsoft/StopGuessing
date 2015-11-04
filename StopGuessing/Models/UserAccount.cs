@@ -43,6 +43,7 @@ namespace StopGuessing.Models
         /// <summary>
         /// The number of iterations to use for the phase 1 hash to make it more expensive.
         /// </summary>
+        [DataMember]
         public int NumberOfIterationsToUseForPhase1Hash { get; set; }
 
         /// <summary>

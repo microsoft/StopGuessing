@@ -199,8 +199,11 @@ namespace StopGuessing.Controllers
                         // This thread will need to perform the outcome calculation, and will place
                         // the result in the cache.  We'll start that task off but await it outside
                         // the lock on _loginAttemptsInProgress so that we can release the lock.
+                        LoginAttempt attemptToDetermineOutcomeOf = loginAttempt;
                         _loginAttemptsInProgress[key] = outcomeCalculationTask =
-                            DetermineLoginAttemptOutcomeAsync(loginAttempt, passwordProvidedByClient, cancellationToken);
+                            Task.Run( () => DetermineLoginAttemptOutcomeAsync(
+                                attemptToDetermineOutcomeOf, passwordProvidedByClient, cancellationToken),
+                                cancellationToken );
                         // The above call will update the local cache and remove _loginAttemptsInProgress[key]
                         // It's best to do add the LoginAttempt to the local cache there, and not below,
                         // because we want to ensure the value is in the cache before we remove the signal
