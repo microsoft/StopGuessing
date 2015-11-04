@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using StopGuessing.Models;
@@ -7,8 +8,8 @@ namespace StopGuessing
 {
     public class MemoryOnlyStableStore : IStableStore
     {
-        public Dictionary<string, UserAccount> Accounts = new Dictionary<string, UserAccount>();
-        public Dictionary<string, LoginAttempt> LoginAttempts = new Dictionary<string, LoginAttempt>();
+        public ConcurrentDictionary<string, UserAccount> Accounts = new ConcurrentDictionary<string, UserAccount>();
+        public ConcurrentDictionary<string, LoginAttempt> LoginAttempts = new ConcurrentDictionary<string, LoginAttempt>();
 
 
         public async Task<bool> IsIpAddressAlwaysPermittedAsync(System.Net.IPAddress clientIpAddress, CancellationToken cancelToken = default(CancellationToken))
@@ -22,12 +23,9 @@ namespace StopGuessing
                 return null;
             return await Task.Run( () =>
             {
-                lock (Accounts)
-                {
-                    UserAccount account;
-                    Accounts.TryGetValue(usernameOrAccountId, out account);
-                    return account;
-                }
+                UserAccount account;
+                Accounts.TryGetValue(usernameOrAccountId, out account);
+                return account;
             }, cancelToken);
         }
 
@@ -37,12 +35,9 @@ namespace StopGuessing
                 return null;
             return await Task.Run(() =>
             {
-                lock (LoginAttempts)
-                {
-                    LoginAttempt attempt;
-                    LoginAttempts.TryGetValue(key, out attempt);
-                    return attempt;
-                }
+                LoginAttempt attempt;
+                LoginAttempts.TryGetValue(key, out attempt);
+                return attempt;
             }, cancelToken);
         }
 
@@ -65,12 +60,17 @@ namespace StopGuessing
             if (Accounts == null)
                 return;
 
+            // REMOVE FOR PRODUCTION
+            // For testing the mipact of Task.Run() on performance
+            //if (true)
+            //{
+            //    Accounts[account.UsernameOrAccountId] = account;
+            //    return;
+            //}
+
             await Task.Run(() =>
             {
-                lock (Accounts)
-                {
-                    Accounts[account.UsernameOrAccountId] = account;
-                }
+                Accounts[account.UsernameOrAccountId] = account;
             }, cancelToken);
         }
 
@@ -80,10 +80,7 @@ namespace StopGuessing
                 return;
             await Task.Run(() =>
             {
-                lock (LoginAttempts)
-                {
-                    LoginAttempts[attempt.UniqueKey] = attempt;
-                }
+                LoginAttempts[attempt.UniqueKey] = attempt;
             }, cancelToken);
         }
     }

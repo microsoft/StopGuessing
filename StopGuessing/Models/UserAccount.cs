@@ -339,7 +339,7 @@ namespace StopGuessing.Models
                     new CapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
                 PasswordVerificationFailures =
                     new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
-                ConsumedCredits = new Sequence<UserAccount.ConsumedCredit>(consumedCreditSequenceLength),
+                ConsumedCredits = new Sequence<ConsumedCredit>(consumedCreditSequenceLength),
                 PasswordHashPhase1FunctionName = phase1HashFunctionName,
                 NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash
                 //Password = password
