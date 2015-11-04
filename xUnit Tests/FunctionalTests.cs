@@ -65,19 +65,25 @@ namespace xUnit_Tests
             return configuration;
         }
 
-        public static UserAccount LoginTestCreateAccount(TestConfiguration configuration, string usernameOrAccountId, string password)
+        public async static Task<UserAccount> CreateTestAccountAsync(TestConfiguration configuration, string usernameOrAccountId, string password)
         {
             UserAccount account = UserAccount.Create(usernameOrAccountId,
-              (int) configuration.CreditLimits.Last().Limit,  password);
-            configuration.MyUserAccountController.PutAsync(account.UsernameOrAccountId, account).Wait();
+              (int) configuration.CreditLimits.Last().Limit,  password,
+              numberOfIterationsToUseForPhase1Hash: 1);
+            await configuration.MyUserAccountController.PutAsync(account.UsernameOrAccountId, account);
             return account;
         }
 
         public static string[] CreateUserAccounts(TestConfiguration configuration, int numberOfAccounts)
         {
             string[] usernames = Enumerable.Range(1, numberOfAccounts).Select(x => "testuser" + x.ToString()).ToArray();
-            foreach (string username in usernames)
-                LoginTestCreateAccount(configuration, username, "passwordfor" + username);
+            //foreach (string username in usernames)
+            //    CreateTestAccountAsync(configuration, username, "passwordfor" + username).Wait();
+            Parallel.ForEach(usernames,
+                async (username) => await CreateTestAccountAsync(configuration, username, "passwordfor" + username)
+                );
+
+
             return usernames;
         }
 
@@ -121,7 +127,7 @@ namespace xUnit_Tests
         {
             TestConfiguration configuration = InitTest();
 
-            LoginTestCreateAccount(configuration, Username1, Password1);
+            CreateTestAccountAsync(configuration, Username1, Password1);
 
             LoginAttempt attempt = await AuthenticateAsync(configuration, Username1, Password1);
             
@@ -132,7 +138,7 @@ namespace xUnit_Tests
         public async Task LoginWithInvalidPassword()
         {
             TestConfiguration configuration = InitTest();
-            LoginTestCreateAccount(configuration, Username1, Password1);
+            CreateTestAccountAsync(configuration, Username1, Password1);
 
             LoginAttempt attempt = await AuthenticateAsync(configuration, Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
 
@@ -148,7 +154,7 @@ namespace xUnit_Tests
         public async Task LoginWithInvalidAccount()
         {
             TestConfiguration configuration = InitTest();
-            LoginTestCreateAccount(configuration, Username1, Password1);
+            CreateTestAccountAsync(configuration, Username1, Password1);
             
             // ClientHelper the right password for user1, for a nonexistent user
             LoginAttempt firstAttempt = await AuthenticateAsync(configuration,"KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
@@ -166,7 +172,7 @@ namespace xUnit_Tests
         {
             TestConfiguration configuration = InitTest();
             string[] usernames = CreateUserAccounts(configuration, 200);
-            LoginTestCreateAccount(configuration, Username1, Password1);
+            CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             foreach (string username in usernames.Skip(10))
@@ -191,12 +197,13 @@ namespace xUnit_Tests
         public async Task LoginWithIpWithBadReputationParallelLoadAsync()
         {
             TestConfiguration configuration = InitTest();
+            //((MemoryOnlyStableStore) configuration.StableStore).Accounts = null;
             string[] usernames = CreateUserAccounts(configuration, 250);
-            LoginTestCreateAccount(configuration, Username1, Password1);
+            CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
-            Parallel.ForEach(usernames.Skip(20), username =>
-                AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp).Wait());
+            Parallel.ForEach(usernames.Skip(20), async (username) =>
+                await AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp));
 
             Thread.Sleep(2000);
             
@@ -220,7 +227,7 @@ namespace xUnit_Tests
         {
             TestConfiguration configuration = InitTest();
             string[] usernames = CreateUserAccounts(configuration, 500);
-            LoginTestCreateAccount(configuration, Username1, Password1);
+            CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             foreach (string username in usernames.Skip(100))
@@ -258,7 +265,7 @@ namespace xUnit_Tests
             TestConfiguration configuration = InitTest(options);
 
             const string userName = "PeterVenkman";
-            LoginTestCreateAccount(configuration, userName, "IRunESPStudies");
+            CreateTestAccountAsync(configuration, userName, "IRunESPStudies");
 
             // First, make sure we are correctly blocking when the failed login is not a typo.
             

@@ -35,7 +35,7 @@ namespace xUnit_Tests
             {
                 string username = "User" + i + BigString;
                 System.Threading.Thread.Sleep(10);
-                FunctionalTests.LoginTestCreateAccount(config, username, "passwordfor" + i);
+                FunctionalTests.CreateTestAccountAsync(config, username, "passwordfor" + i);
             }
         }
     }

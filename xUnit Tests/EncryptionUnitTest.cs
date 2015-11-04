@@ -75,7 +75,7 @@ namespace xUnit_Tests
         }
 
 
-        //      public UserAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType> LoginTestCreateAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType>(UserAccountIdentifier UsernameOrAccountID, string password) where UserAccountIdentifier : IComparable
+        //      public UserAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType> CreateTestAccountAsync<UserAccountIdentifier, LoginAPIType, PasswordPolicyType>(UserAccountIdentifier UsernameOrAccountID, string password) where UserAccountIdentifier : IComparable
         //      {
         //          StopGuessing.UserAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType> Account1 = new StopGuessing.UserAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType>();
         //          //Account1.UsernameOrAccountID = "user1";
@@ -119,7 +119,7 @@ namespace xUnit_Tests
         //    //InitializeData();
         //    string usernameOrAccountId = "user1";
         //    string password = "testabcd1234";
-        //    //UserAccount<byte[], byte[]> Account1 = LoginTestCreateAccount<string, byte[], byte[]>(UsernameOrAccountID,password);
+        //    //UserAccount<byte[], byte[]> Account1 = CreateTestAccountAsync<string, byte[], byte[]>(UsernameOrAccountID,password);
         //    //StopGuessing.BruteDetection<string, byte[], byte[]> BruteDetectionObject = new StopGuessing.BruteDetection<string, byte[], byte[]>();
         //    UserAccountTracker<byte[], byte[]> userAccountTracker =
         //        new UserAccountTracker<byte[], byte[]>();
@@ -172,7 +172,7 @@ namespace xUnit_Tests
         //    //InitializeData();
         //    string usernameOrAccountId = "user1";
         //    string password = "testabcd1234";
-        //    //UserAccount<byte[], byte[]> Account1 = LoginTestCreateAccount<string, byte[], byte[]>(UsernameOrAccountID, password);
+        //    //UserAccount<byte[], byte[]> Account1 = CreateTestAccountAsync<string, byte[], byte[]>(UsernameOrAccountID, password);
         //    UserAccountTracker<byte[], byte[]> userAccountTracker =
         //       new UserAccountTracker<byte[], byte[]>();
         //    UserAccount<byte[], byte[]> account1 = new UserAccount<byte[], byte[]>(usernameOrAccountId, password: password);
@@ -279,7 +279,7 @@ namespace xUnit_Tests
             //InitializeData();
             string UsernameOrAccountID = RandomString();
             string password = RandomString();
-            UserAccount<byte[], byte[]> Account1 = LoginTestCreateAccount<string, byte[], byte[]>(UsernameOrAccountID, password);
+            UserAccount<byte[], byte[]> Account1 = CreateTestAccountAsync<string, byte[], byte[]>(UsernameOrAccountID, password);
             string PasswordProvidedByClient = RandomString();
             //StopGuessing.PasswordPopularityTracker PasswordTracker = new StopGuessing.PasswordPopularityTracker();
             //PasswordTracker.ApproximateOccurrencesOfFailedPassword = new StopGuessing.Sketch(100,100,100);
