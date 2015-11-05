@@ -422,7 +422,7 @@ namespace StopGuessing.Controllers
 
             List<LoginAttempt> copyOfRecentLoginFailures;
             List<LoginAttempt> copyOfRecentLoginSuccessesAtMostOnePerAccount;
-            lock (ip.RecentLoginFailures)
+            //FIXME -- this locok does nothing -- lock (ip.RecentLoginFailures)
             {
                 copyOfRecentLoginFailures = 
                     ip.RecentLoginFailures.MostRecentToOldest.ToList();
@@ -694,7 +694,7 @@ namespace StopGuessing.Controllers
                         timeout: DefaultTimeout,
                         cancellationToken: cancellationToken);
                 }
-
+                
                 // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
                 // as we are most concerned about frequently-guessed passwords.
                 Proportion popularity = _passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(

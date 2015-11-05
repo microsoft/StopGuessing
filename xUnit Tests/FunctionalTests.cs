@@ -127,7 +127,7 @@ namespace xUnit_Tests
         {
             TestConfiguration configuration = InitTest();
 
-            CreateTestAccountAsync(configuration, Username1, Password1);
+            await CreateTestAccountAsync(configuration, Username1, Password1);
 
             LoginAttempt attempt = await AuthenticateAsync(configuration, Username1, Password1);
             
@@ -138,7 +138,7 @@ namespace xUnit_Tests
         public async Task LoginWithInvalidPassword()
         {
             TestConfiguration configuration = InitTest();
-            CreateTestAccountAsync(configuration, Username1, Password1);
+            await CreateTestAccountAsync(configuration, Username1, Password1);
 
             LoginAttempt attempt = await AuthenticateAsync(configuration, Username1, "wrong", cookieProvidedByBrowser: "GimmeCookie");
 
@@ -154,7 +154,7 @@ namespace xUnit_Tests
         public async Task LoginWithInvalidAccount()
         {
             TestConfiguration configuration = InitTest();
-            CreateTestAccountAsync(configuration, Username1, Password1);
+            await CreateTestAccountAsync(configuration, Username1, Password1);
             
             // ClientHelper the right password for user1, for a nonexistent user
             LoginAttempt firstAttempt = await AuthenticateAsync(configuration,"KeyzerSoze", Password1, cookieProvidedByBrowser: "GimmeCookie");
@@ -172,7 +172,7 @@ namespace xUnit_Tests
         {
             TestConfiguration configuration = InitTest();
             string[] usernames = CreateUserAccounts(configuration, 200);
-            CreateTestAccountAsync(configuration, Username1, Password1);
+            await CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             foreach (string username in usernames.Skip(10))
@@ -199,7 +199,7 @@ namespace xUnit_Tests
             TestConfiguration configuration = InitTest();
             //((MemoryOnlyStableStore) configuration.StableStore).Accounts = null;
             string[] usernames = CreateUserAccounts(configuration, 250);
-            CreateTestAccountAsync(configuration, Username1, Password1);
+            await CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             Parallel.ForEach(usernames.Skip(20), async (username) =>
@@ -223,11 +223,41 @@ namespace xUnit_Tests
         }
 
         [Fact]
+        public async Task ScaleTest()
+        {
+            int UserScale = 1000000;
+            TestConfiguration configuration = InitTest();
+            //((MemoryOnlyStableStore) configuration.StableStore).Accounts = null;
+            string[] usernames = CreateUserAccounts(configuration, UserScale);
+            await CreateTestAccountAsync(configuration, Username1, Password1);
+
+            // Have one attacker make the password popular by attempting to login to every account with it.
+            Parallel.ForEach(usernames.Skip(20), async (username) =>
+                await AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp));
+
+            Thread.Sleep(2000);
+
+            LoginAttempt firstAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AttackersIp);
+
+            Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, firstAttackersAttempt.Outcome);
+
+            // Now the second attacker should be flagged after using that password 10 times on different accounts.
+            foreach (string username in usernames.Skip(1).Take(19))
+                await AuthenticateAsync(configuration, username, PopularPassword, AnotherAttackersIp);
+
+            await AuthenticateAsync(configuration, usernames[0], PopularPassword, AnotherAttackersIp);
+
+            LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AnotherAttackersIp);
+
+            Assert.Equal(AuthenticationOutcome.CredentialsValidButBlocked, anotherAttackersAttempt.Outcome);
+        }
+
+        [Fact]
         public async Task LoginWithIpWithMixedReputationAsync()
         {
             TestConfiguration configuration = InitTest();
             string[] usernames = CreateUserAccounts(configuration, 500);
-            CreateTestAccountAsync(configuration, Username1, Password1);
+            await CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             foreach (string username in usernames.Skip(100))
@@ -265,7 +295,7 @@ namespace xUnit_Tests
             TestConfiguration configuration = InitTest(options);
 
             const string userName = "PeterVenkman";
-            CreateTestAccountAsync(configuration, userName, "IRunESPStudies");
+            await CreateTestAccountAsync(configuration, userName, "IRunESPStudies");
 
             // First, make sure we are correctly blocking when the failed login is not a typo.
             

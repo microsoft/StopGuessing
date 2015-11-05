@@ -328,7 +328,7 @@ namespace StopGuessing.Models
             if (saltUniqueToThisAccount == null)
             {
                 saltUniqueToThisAccount = new byte[DefaultSaltLength];
-                RandomNumberGenerator.Create().GetBytes(saltUniqueToThisAccount);
+                StrongRandomNumberGenerator.GetBytes(saltUniqueToThisAccount);
             }
 
             UserAccount newAccount = new UserAccount

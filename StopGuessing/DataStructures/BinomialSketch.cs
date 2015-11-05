@@ -54,6 +54,7 @@ namespace StopGuessing.DataStructures
         // The hash functions used to index into the sketch
         private readonly UniversalHashFunction[] _universalHashFunctions;
 
+
         /// <summary>
         /// Construct a binomial sketch, in which a set of k hash functions (k=NumberOfIndexes) will map any
         /// key to k points with an array of n bits (sizeInBits).
@@ -89,7 +90,7 @@ namespace StopGuessing.DataStructures
             // Initialize the sketch setting ~half the bits randomly to zero by using the
             // cryptographic random number generator.
             byte[] initialSketchValues = new byte[capacityInBytes];
-            RandomNumberGenerator.Create().GetBytes(initialSketchValues);
+            StrongRandomNumberGenerator.GetBytes(initialSketchValues);
             _sketch = new BitArray(initialSketchValues);
 
             // binomialProbability[i] = (n choose k) * (p)^k * (1-p)^(n-k)
@@ -133,10 +134,37 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        private IEnumerable<int> GetUnsetIndexesForKey(string key)
+        public IEnumerable<int> GetIndexesOfZeroElements(string key)
         {
             return GetIndexesForKey(key).Where(index => !_sketch[index]);
         }
+
+
+
+
+        public void SetAZeroElementToOneAndClearAOneElementToZero(
+            int indexOfAZeroElementToSetToOne, int indexOfAOneElementToClearToZero)
+        {
+            // ReSharper disable once RedundantBoolCompare
+            if (_sketch[indexOfAZeroElementToSetToOne] == true || _sketch[indexOfAOneElementToClearToZero] == false)
+                return;
+            _sketch[indexOfAZeroElementToSetToOne] = true;
+            _sketch[indexOfAOneElementToClearToZero] = false;
+        }
+
+        public void SetAZeroElementToOneAndClearARandomOneElementToZero(int indexOfZeroElementToSetToOne)
+        {            
+            int randomIndexToAnElementSetToOneThatWeCanClearToZero;
+            do
+            {
+                // Iterate through random elements until we find one that is set to one (true) and can be cleared
+                randomIndexToAnElementSetToOneThatWeCanClearToZero = (int) (StrongRandomNumberGenerator.Get64Bits((ulong) _sketch.Length));
+            } while (_sketch[randomIndexToAnElementSetToOneThatWeCanClearToZero] == false);
+
+            SetAZeroElementToOneAndClearAOneElementToZero(indexOfZeroElementToSetToOne, 
+                randomIndexToAnElementSetToOneThatWeCanClearToZero);
+        }
+
 
         /// <summary>
         /// When one Adds a key to a binomial sketch, a random bit among the subset of k that are currently 0 (false)
@@ -144,55 +172,30 @@ namespace StopGuessing.DataStructures
         /// To ensure roughly half the bits remain zero at all times, a random index from the subset of all k bits that
         /// are currently 1 (true) will be set to 0 (false).
         /// </summary>
-        /// <param name="key">The key to add to the set.</param>
-        /// <param name="rng">Optionally passing a RandomNumberGenerator should improve performance as it will
-        /// save the Observe operation from having to create one. (RandomNumberGenerators are not thread safe, and
-        /// should not be used between Tasks/Threads.)</param>
+        /// <param name="key">The key to add to the set.</param>       
         /// <returns>Of the bits at the indices for the given key, the number of bits that were set to 1 (true)
         /// before the Observe operation.  The maximum possible value to be returned, if all bits were already
         /// set to 1 (true) would be NumberOfIndexes.  If a key has not been seen before, the expected (average)
         /// result is NumberOfIndexes/2, but will vary with the binomial distribution.</returns>
-        public int Observe(string key, RandomNumberGenerator rng = null)
+        public int Observe(string key)
         {
             // Get a list of indexes that are not yet set
-            List<int> indexesUnset = GetUnsetIndexesForKey(key).ToList();
+            List<int> zeroElementIndexes = GetIndexesOfZeroElements(key).ToList();
 
             // We can only update state to record the observation if there is an unset (0) index that we can set (to 1).
-            if (indexesUnset.Count > 0)
+            if (zeroElementIndexes.Count > 0)
             {
                 NumberOfObservations++;
+                
+                // First, pick an index to a zero element at random.
+                int indexToSet = zeroElementIndexes[ (int) (StrongRandomNumberGenerator.Get32Bits((uint) zeroElementIndexes.Count)) ];
 
-                // Create a random number generator if one was not provided by the caller.
-                rng = rng ?? RandomNumberGenerator.Create();
-
-                // We'll need the randomness to determine which bit to set and which to clear 
-                byte[] randBytes = new byte[8];
-                rng.GetBytes(randBytes);
-
-                // First, pick a random index to set by appling the last of the universal hash functions
-                // to the random bytes
-                int indexToSet = 
-                    indexesUnset[ (int) ( _universalHashFunctions[_universalHashFunctions.Length - 1].Hash(randBytes) %
-                                          (uint) indexesUnset.Count ) ];
-
-                // Next, pick the index to clear by applying hash functions to the random bytes until we reach
-                // an index that is set.  (For any reasonable sized number of indexes (e.g., >= 30), the probability
-                // that we would reach the last hash function used earlier, or run out of hash functions, is so small 
-                // as to be something we can ignore.)
-                int indexToClear = 0;
-                foreach (var hashFunction in _universalHashFunctions)
-                {
-                    indexToClear = (int) ( hashFunction.Hash(randBytes) % (uint) SizeInBits);
-                    if (_sketch[indexToClear])
-                        // We break when we've found an index to a bit that is set and so can be cleared to 0/false.
-                        break;
-                }
-                _sketch[indexToClear] = false;
-                _sketch[indexToSet] = true;
+                // Next, set the zero element associted with the key and clear a random one element from the entire array
+                SetAZeroElementToOneAndClearARandomOneElementToZero(indexToSet);
             }
 
             // The number of bits set to 1/true is the number that were not 0/false.
-            return NumberOfIndexes - indexesUnset.Count;
+            return NumberOfIndexes - zeroElementIndexes.Count;
         }
 
         /// <summary>
@@ -206,7 +209,7 @@ namespace StopGuessing.DataStructures
         /// NumberOfIndexes/2, but will vary with the binomial distribution.</returns>
         public int GetNumberOfIndexesSet(string key)
         {
-            return NumberOfIndexes - GetUnsetIndexesForKey(key).Count();
+            return NumberOfIndexes - GetIndexesOfZeroElements(key).Count();
         }
 
         /// <summary>

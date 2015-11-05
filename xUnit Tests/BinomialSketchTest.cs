@@ -12,13 +12,12 @@ namespace xUnit_Tests
         {
             BinomialSketch sketch = new BinomialSketch(1024*1024*1024, 64, "Louis Tully as played by Rick Moranis");
             string somethingToObserve = "Gosh.  It's a nice day out, isn't it?";
-            RandomNumberGenerator rng = RandomNumberGenerator.Create();
 
             int observationCount = sketch.GetNumberOfIndexesSet(somethingToObserve);
 
             for (int i = 0; i < 20; i++)
             {
-                int lastCount = sketch.Observe(somethingToObserve, rng);
+                int lastCount = sketch.Observe(somethingToObserve);
                 Assert.Equal(observationCount, lastCount);
                 observationCount++;
             }

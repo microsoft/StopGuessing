@@ -29,13 +29,13 @@ namespace xUnit_Tests
         }
 
         static readonly string BigString = new string('*', 10*1024);
-        public void BigFreakinAllocationTestLoop(TestConfiguration config, uint threadIndex, uint levelOfParallelism)
+        public async Task BigFreakinAllocationTestLoop(TestConfiguration config, uint threadIndex, uint levelOfParallelism)
         {
             for (uint i = threadIndex; i < 512 * 1024; i += levelOfParallelism)
             {
                 string username = "User" + i + BigString;
                 System.Threading.Thread.Sleep(10);
-                FunctionalTests.CreateTestAccountAsync(config, username, "passwordfor" + i);
+                await FunctionalTests.CreateTestAccountAsync(config, username, "passwordfor" + i);
             }
         }
     }

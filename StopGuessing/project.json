@@ -1,4 +1,4 @@
-﻿{
+{
   "webroot": "wwwroot",
   "version": "1.0.0-*",
 
@@ -24,6 +24,10 @@
   "frameworks": {
     "dnx451": {
       "dependencies": {
+        "Microsoft.WindowsAzure.Configuration": "1.0.0-*",
+        "Microsoft.WindowsAzure.Diagnostics": "1.0.0-*",
+        "Microsoft.WindowsAzure.ServiceRuntime": "1.0.0-*",
+        "Microsoft.WindowsAzure.Storage": "1.0.0-*"
       },
       "frameworkAssemblies": {
         "System.Linq": "4.0.0",

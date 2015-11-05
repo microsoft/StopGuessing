@@ -85,7 +85,7 @@ namespace StopGuessing.EncryptionPrimitives
             int numberOfPseudoRandomBytesNeeded = SetVectorLengthAndGetNumberOfRandomBytesNeeded(randomKeyVectorLengthInBytes);
             byte[] pseudoRandomBytes = new byte[numberOfPseudoRandomBytesNeeded];
 
-            System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(pseudoRandomBytes);
+            StrongRandomNumberGenerator.GetBytes(pseudoRandomBytes);
 
             // Create the random key vector and fill it with random bytes
             _randomKeyVector = new ulong[randomKeyVectorLengthInBytes/8];
