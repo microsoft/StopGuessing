@@ -137,8 +137,8 @@ namespace Simulator
 
             // Start with the most common password and walk through all the accounts,
             // then move on to the next most common password.
-            int passwordIndex = (int) (breadthFirstAttemptCount%(ulong) BenignAccounts.Count);
-            int accountIndex = (int) (breadthFirstAttemptCount/(ulong) BenignAccounts.Count);
+            int passwordIndex = (int) (breadthFirstAttemptCount/(ulong) BenignAccounts.Count);
+            int accountIndex = (int) (breadthFirstAttemptCount%(ulong) BenignAccounts.Count);
             string password = OrderedListOfMostCommonPasswords[passwordIndex];
             SimulatedAccount targetBenignAccount = BenignAccounts[accountIndex];
 
