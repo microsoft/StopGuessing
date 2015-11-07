@@ -40,6 +40,8 @@ namespace Simulator
         public uint SizeOfNonOverlappingAttackerIpSpace = 300 * (uint)Thousand;
         public double FractionOfMaliciousIPsToOverlapWithBenign = 0.10d;
 
+        public double ProbabilityThatAttackerChoosesAnInvalidAccount = 0.10d;
+
         public uint NumberOfPopularPasswordsForAttackerToExploit = 1*(uint)Thousand;
 
         public readonly BenignUserAccountGroup[] BenignUserGroups = new BenignUserAccountGroup[]

@@ -121,7 +121,7 @@ namespace Simulator
                 SimulatedLoginAttempt simAttempt;
                 if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
                 {
-                    simAttempt = MaliciousLoginAttemptWeighted();
+                    simAttempt = MaliciousLoginAttemptBreadthFirst();
                 }
                 else
                 {

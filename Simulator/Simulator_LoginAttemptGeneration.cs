@@ -24,9 +24,12 @@ namespace Simulator
             DateTimeOffset eventTime
         )
         {
+            string accountId = account != null ? account.UniqueId : StrongRandomNumberGenerator.Get64Bits().ToString();
+            bool isPasswordValid = account != null && account.Password == password;
+
             Attempt = new LoginAttempt
             {
-                UsernameOrAccountId = account.UniqueId,
+                UsernameOrAccountId = accountId,
                 AddressOfClientInitiatingRequest = clientAddress,
                 AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] {127, 1, 1, 1}),
                 TimeOfAttempt = eventTime,
@@ -34,7 +37,7 @@ namespace Simulator
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };
             Password = password;
-            IsPasswordValid = account.Password == password;
+            IsPasswordValid = isPasswordValid;
             IsFromAttacker = isFromAttacker;
             IsGuess = isGuess;
         }
@@ -105,8 +108,12 @@ namespace Simulator
         /// </summary>
         public SimulatedLoginAttempt MaliciousLoginAttemptWeighted()
         {
+            SimulatedAccount targetBenignAccount =
+                (StrongRandomNumberGenerator.GetFraction() <  MyExperimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
+                    ? null : GetBenignAccountAtRandomUniform();
+
             return new SimulatedLoginAttempt(
-                GetBenignAccountAtRandomUniform(),
+                targetBenignAccount,
                 GetPasswordFromWeightedDistribution(),
                 true, true,
                 GetRandomMaliciousIp(),
@@ -116,6 +123,7 @@ namespace Simulator
 
         private readonly Object _breadthFirstLock = new object();
         private ulong _breadthFirstAttemptCounter;
+
         /// <summary>
         /// Attacker issues one guess by picking an benign account at random and picking a password by weighted distribution
         /// </summary>
@@ -129,15 +137,21 @@ namespace Simulator
 
             // Start with the most common password and walk through all the accounts,
             // then move on to the next most common password.
-            int passwordIndex = (int) (breadthFirstAttemptCount % (ulong) BenignAccounts.Count);
-            int accountIndex = (int)(breadthFirstAttemptCount / (ulong)BenignAccounts.Count);
+            int passwordIndex = (int) (breadthFirstAttemptCount%(ulong) BenignAccounts.Count);
+            int accountIndex = (int) (breadthFirstAttemptCount/(ulong) BenignAccounts.Count);
             string password = OrderedListOfMostCommonPasswords[passwordIndex];
             SimulatedAccount targetBenignAccount = BenignAccounts[accountIndex];
-            
+
+            // Sometimes the attacker will miss and generate an invalid account name;
+            if (StrongRandomNumberGenerator.GetFraction() <
+                MyExperimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
+                targetBenignAccount = null;
+
+
             //SimulationTest _simulationtest = new SimulationTest();
             return new SimulatedLoginAttempt(targetBenignAccount, password,
                 true, true,
-                GetRandomMaliciousIp(), 
+                GetRandomMaliciousIp(),
                 StrongRandomNumberGenerator.Get64Bits().ToString(),
                 DateTimeOffset.Now);
         }
