@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0-*",
+  "description": "Simulator Console Application",
+  "authors": [ "Stuart" ],
+  "tags": [ "" ],
+  "projectUrl": "",
+  "licenseUrl": "",
+
+  "dependencies": {
+  },
+
+  "commands": {
+    "Simulator": "Simulator"
+  },
+
+  "frameworks": {
+    "dnx451": {
+      "dependencies": {
+        "StopGuessing": "1.0.0-*"
+      }
+    }
+  }
+}

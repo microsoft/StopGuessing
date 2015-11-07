@@ -8,7 +8,7 @@ namespace StopGuessing.EncryptionPrimitives
     /// (the interface we which .NET provided)
     /// </summary>
     public static class StrongRandomNumberGenerator
-    {        
+    {
         // Pre-allocate a thread-safe random number generator
         private static readonly RNGCryptoServiceProvider LocalRandomNumberGenerator = new RNGCryptoServiceProvider();
 
@@ -17,7 +17,7 @@ namespace StopGuessing.EncryptionPrimitives
             LocalRandomNumberGenerator.GetBytes(bytes);
         }
 
-        public static ulong Get64Bits(ulong? mod)
+        public static ulong Get64Bits(ulong? mod = null)
         {
             // We'll need the randomness to determine which bit to set and which to clear 
             byte[] randBytes = new byte[8];
@@ -29,7 +29,12 @@ namespace StopGuessing.EncryptionPrimitives
             return result;
         }
 
-        public static uint Get32Bits(uint? mod)
+        public static ulong Get64Bits(long mod)
+        {
+            return Get64Bits((ulong)mod);
+        }
+
+        public static uint Get32Bits(uint? mod = null)
         {
             // We'll need the randomness to determine which bit to set and which to clear 
             byte[] randBytes = new byte[4];
@@ -41,6 +46,14 @@ namespace StopGuessing.EncryptionPrimitives
             return result;
         }
 
+        public static uint Get32Bits(int mod)
+        {
+            return Get32Bits((uint)mod);
+        }
 
+        public static double GetFraction()
+        {
+            return 1 / (double)Get64Bits();
+        }
     }
 }
