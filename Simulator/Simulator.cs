@@ -165,8 +165,8 @@ namespace Simulator
             using (System.IO.StreamWriter file =
             new System.IO.StreamWriter(@"result_log.txt"))
             {
-                file.WriteLine("The false postive rate is {0:F20}", falsePositiveRate);
-                file.WriteLine("The false negative rate is {0:F20}", falseNegativeRate);
+                file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", falsePositives, truePositives, falsePositiveRate * 100d);
+                file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", falseNegatives, trueNegatives, falseNegativeRate * 100d);
                 file.WriteLine("Time Elapsed={0}", sw.Elapsed);
             }
         }
