@@ -76,12 +76,12 @@ namespace Simulator
         {            
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
-            GenerateSimulatedAccounts();
 
-            int i = 0;
             //Record the accounts into stable store 
             try
             {
+                GenerateSimulatedAccounts();
+
                 List<SimulatedAccount> allAccounts = new List<SimulatedAccount>(BenignAccounts);
                 allAccounts.AddRange(MaliciousAccounts);
                 Parallel.ForEach(allAccounts, async simAccount =>
@@ -97,15 +97,15 @@ namespace Simulator
                 {
                     file.WriteLine("{0} Exception caught in account creation.", e);
                     file.WriteLine("time is {0}", DateTime.Now.ToString(CultureInfo.InvariantCulture));
-                    file.WriteLine("How many requests? {0}", i);
+//                    file.WriteLine("How many requests? {0}", i);
                 }
             }
 
-            using (StreamWriter file = new StreamWriter(@"account.txt"))
-            {
-                file.WriteLine("time is {0}", DateTime.Now.ToString(CultureInfo.InvariantCulture));
-                file.WriteLine("How many requests? {0}", i);
-            }
+            //using (StreamWriter file = new StreamWriter(@"account.txt"))
+            //{
+            //    file.WriteLine("time is {0}", DateTime.Now.ToString(CultureInfo.InvariantCulture));
+            //    file.WriteLine("How many requests? {0}", i);
+            //}
 
 
             Stopwatch sw = new Stopwatch();
@@ -116,37 +116,46 @@ namespace Simulator
             ulong trueNegatives = 0;
             ulong truePositives = 0;
 
-            for (ulong attemptCount = 0; attemptCount < MyExperimentalConfiguration.TotalLoginAttemptsToIssue; attemptCount++)
+            Parallel.For(0, (int) MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (index, state) =>
             {
-                SimulatedLoginAttempt simAttempt;
-                if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
+                try
                 {
-                    simAttempt = MaliciousLoginAttemptBreadthFirst();
-                }
-                else
-                {
-                    simAttempt = BenignLoginAttempt();
-                }
+                    SimulatedLoginAttempt simAttempt;
+                    if (StrongRandomNumberGenerator.GetFraction() <
+                        MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
+                    {
+                        simAttempt = MaliciousLoginAttemptBreadthFirst();
+                    }
+                    else
+                    {
+                        simAttempt = BenignLoginAttempt();
+                    }
 
-                LoginAttempt attemptWithOutcome = await
-                    MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password, cancellationToken: cancellationToken);
-                AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
-                
-                if (simAttempt.IsGuess)
-                {
-                    if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                        truePositives++;
-                    else if (outcome == AuthenticationOutcome.CredentialsValid)
-                        falseNegatives++;
+                    LoginAttempt attemptWithOutcome = await
+                        MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password,
+                            cancellationToken: cancellationToken);
+                    AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
+
+                    if (simAttempt.IsGuess)
+                    {
+                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                            truePositives++;
+                        else if (outcome == AuthenticationOutcome.CredentialsValid)
+                            falseNegatives++;
+                    }
+                    if (!simAttempt.IsFromAttacker)
+                    {
+                        if (outcome == AuthenticationOutcome.CredentialsValid)
+                            trueNegatives++;
+                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                            falsePositives++;
+                    }
                 }
-                if (!simAttempt.IsFromAttacker)
+                catch (Exception e)
                 {
-                    if (outcome == AuthenticationOutcome.CredentialsValid)
-                        trueNegatives++;
-                    if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                        falsePositives++;
+                    Console.Error.WriteLine(e.ToString());
                 }
-            }
+            });
 
             sw.Stop();
 
