@@ -81,6 +81,28 @@ namespace Simulator
             StableStore.LoginAttempts = null;
         }
 
+
+
+        public static async Task RunWithMaxDegreeOfConcurrency<T>(
+   int maxDegreeOfConcurrency, IEnumerable<T> collection, Func<T, Task> taskFactory)
+        {
+            var activeTasks = new List<Task>(maxDegreeOfConcurrency);
+            foreach (var task in collection.Select(taskFactory))
+            {
+                activeTasks.Add(task);
+                if (activeTasks.Count == maxDegreeOfConcurrency)
+                {
+                    await Task.WhenAny(activeTasks.ToArray());
+                    //observe exceptions here
+                    activeTasks.RemoveAll(t => t.IsCompleted);
+                }
+            }
+            await Task.WhenAll(activeTasks.ToArray()).ContinueWith(t =>
+            {
+                //observe exceptions in a manner consistent with the above   
+            });
+        }
+
         /// <summary>
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
@@ -125,65 +147,126 @@ namespace Simulator
             sw.Start();
 
             Stats stats = new Stats();
+            int count = 0;
+            List<int> Runtime = new List<int>(new int[MyExperimentalConfiguration.TotalLoginAttemptsToIssue]);
 
-            Parallel.For(0, (int) MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (index, state) =>
+            await RunWithMaxDegreeOfConcurrency(1000, Runtime, async i =>
             {
-                try
+                try { 
+                SimulatedLoginAttempt simAttempt;
+                if (StrongRandomNumberGenerator.GetFraction() <
+                    MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
                 {
-                    lock (stats)
+                    simAttempt = MaliciousLoginAttemptBreadthFirst();
+                }
+                else
+                {
+                    simAttempt = BenignLoginAttempt();
+                }
+
+                LoginAttempt attemptWithOutcome = await
+                    MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password,
+                        cancellationToken: cancellationToken);
+                AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
+
+                lock (stats)
+                {
+                    stats.TotalLoopIterationsThatShouldHaveRecordedStats++;
+                    if (simAttempt.IsGuess)
                     {
-                        stats.TotalLoopIterations++;
-                    }
-                    SimulatedLoginAttempt simAttempt;
-                    if (StrongRandomNumberGenerator.GetFraction() <
-                        MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
-                    {
-                        simAttempt = MaliciousLoginAttemptBreadthFirst();
+                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                            stats.TruePositives++;
+                        else if (outcome == AuthenticationOutcome.CredentialsValid)
+                            stats.FalseNegatives++;
+                        else
+                            stats.GuessWasWrong++;
                     }
                     else
                     {
-                        simAttempt = BenignLoginAttempt();
-                    }
-
-                    LoginAttempt attemptWithOutcome = await
-                        MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password,
-                            cancellationToken: cancellationToken);
-                    AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
-
-                    lock (stats)
-                    {
-                        stats. TotalLoopIterationsThatShouldHaveRecordedStats++;
-                        if (simAttempt.IsGuess)
-                        {
-                            if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                                stats.TruePositives++;
-                            else if (outcome == AuthenticationOutcome.CredentialsValid)
-                                stats.FalseNegatives++;
-                            else
-                                stats.GuessWasWrong++;
-                        }
+                        if (outcome == AuthenticationOutcome.CredentialsValid)
+                            stats.TrueNegatives++;
+                        else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                            stats.FalsePositives++;
                         else
-                        {
-                            if (outcome == AuthenticationOutcome.CredentialsValid)
-                                stats.TrueNegatives++;
-                            else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                                stats.FalsePositives++;
-                            else
-                                stats.BenignErrors++;
-                        }
+                            stats.BenignErrors++;
                     }
                 }
+            }
                 catch (Exception e)
+            {
+                lock (stats)
                 {
-                    lock (stats)
-                    {
-                        stats.TotalExceptions++;
-                    }
-                    Console.Error.WriteLine(e.ToString());
+                    stats.TotalExceptions++;
                 }
+                Console.Error.WriteLine(e.ToString());
+            }
+        
+                count++; 
             });
 
+
+
+            //Parallel.For(0, (int) MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (index, state) =>
+            //{
+            //    try
+            //    {
+            //        lock (stats)
+            //        {
+            //            stats.TotalLoopIterations++;
+            //        }
+            //        SimulatedLoginAttempt simAttempt;
+            //        if (StrongRandomNumberGenerator.GetFraction() <
+            //            MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
+            //        {
+            //            simAttempt = MaliciousLoginAttemptBreadthFirst();
+            //        }
+            //        else
+            //        {
+            //            simAttempt = BenignLoginAttempt();
+            //        }
+
+            //        LoginAttempt attemptWithOutcome = await
+            //            MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password,
+            //                cancellationToken: cancellationToken);
+            //        AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
+
+            //        lock (stats)
+            //        {
+            //            stats. TotalLoopIterationsThatShouldHaveRecordedStats++;
+            //            if (simAttempt.IsGuess)
+            //            {
+            //                if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+            //                    stats.TruePositives++;
+            //                else if (outcome == AuthenticationOutcome.CredentialsValid)
+            //                    stats.FalseNegatives++;
+            //                else
+            //                    stats.GuessWasWrong++;
+            //            }
+            //            else
+            //            {
+            //                if (outcome == AuthenticationOutcome.CredentialsValid)
+            //                    stats.TrueNegatives++;
+            //                else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+            //                    stats.FalsePositives++;
+            //                else
+            //                    stats.BenignErrors++;
+            //            }
+            //        }
+            //    }
+            //    catch (Exception e)
+            //    {
+            //        lock (stats)
+            //        {
+            //            stats.TotalExceptions++;
+            //        }
+            //        Console.Error.WriteLine(e.ToString());
+            //    }
+            //});
+
             sw.Stop();
+
+            Console.WriteLine("Time Elapsed={0}", sw.Elapsed);
+            Console.WriteLine("the new count is {0}", count);
 
             double falsePositiveRate = ((double) stats.FalsePositives)/((double)stats.FalsePositives + stats.TruePositives);
             double falseNegativeRate = ((double)stats.FalseNegatives)/((double)stats.FalseNegatives + stats.TrueNegatives);
