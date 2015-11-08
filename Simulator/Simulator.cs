@@ -17,6 +17,19 @@ namespace Simulator
 {
     public partial class Simulator
     {
+        public class Stats
+        {
+            public ulong FalseNegatives = 0;
+            public ulong FalsePositives = 0;
+            public ulong TrueNegatives = 0;
+            public ulong TruePositives = 0;
+            public ulong GuessWasWrong = 0;
+            public ulong BenignErrors = 0;
+            public ulong TotalLoopIterations = 0;
+            public ulong TotalExceptions = 0;
+            public ulong TotalLoopIterationsThatShouldHaveRecordedStats = 0;
+        }
+
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
         public UserAccountController MyUserAccountController;
         public LoginAttemptController MyLoginAttemptController;
@@ -111,15 +124,16 @@ namespace Simulator
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
-            ulong falseNegatives = 0;
-            ulong falsePositives = 0;
-            ulong trueNegatives = 0;
-            ulong truePositives = 0;
+            Stats stats = new Stats();
 
             Parallel.For(0, (int) MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (index, state) =>
             {
                 try
                 {
+                    lock (stats)
+                    {
+                        stats.TotalLoopIterations++;
+                    }
                     SimulatedLoginAttempt simAttempt;
                     if (StrongRandomNumberGenerator.GetFraction() <
                         MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
@@ -136,37 +150,49 @@ namespace Simulator
                             cancellationToken: cancellationToken);
                     AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
 
-                    if (simAttempt.IsGuess)
+                    lock (stats)
                     {
-                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                            truePositives++;
-                        else if (outcome == AuthenticationOutcome.CredentialsValid)
-                            falseNegatives++;
-                    }
-                    if (!simAttempt.IsFromAttacker)
-                    {
-                        if (outcome == AuthenticationOutcome.CredentialsValid)
-                            trueNegatives++;
-                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                            falsePositives++;
+                        stats. TotalLoopIterationsThatShouldHaveRecordedStats++;
+                        if (simAttempt.IsGuess)
+                        {
+                            if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                                stats.TruePositives++;
+                            else if (outcome == AuthenticationOutcome.CredentialsValid)
+                                stats.FalseNegatives++;
+                            else
+                                stats.GuessWasWrong++;
+                        }
+                        else
+                        {
+                            if (outcome == AuthenticationOutcome.CredentialsValid)
+                                stats.TrueNegatives++;
+                            else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                                stats.FalsePositives++;
+                            else
+                                stats.BenignErrors++;
+                        }
                     }
                 }
                 catch (Exception e)
                 {
+                    lock (stats)
+                    {
+                        stats.TotalExceptions++;
+                    }
                     Console.Error.WriteLine(e.ToString());
                 }
             });
 
             sw.Stop();
 
-            double falsePositiveRate = ((double) falsePositives)/((double) falsePositives + truePositives);
-            double falseNegativeRate = ((double) falseNegatives)/((double) falseNegatives + trueNegatives);
+            double falsePositiveRate = ((double) stats.FalsePositives)/((double)stats.FalsePositives + stats.TruePositives);
+            double falseNegativeRate = ((double)stats.FalseNegatives)/((double)stats.FalseNegatives + stats.TrueNegatives);
 
             using (System.IO.StreamWriter file =
             new System.IO.StreamWriter(@"result_log.txt"))
             {
-                file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", falsePositives, truePositives, falsePositiveRate * 100d);
-                file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", falseNegatives, trueNegatives, falseNegativeRate * 100d);
+                file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
+                file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
                 file.WriteLine("Time Elapsed={0}", sw.Elapsed);
             }
         }
