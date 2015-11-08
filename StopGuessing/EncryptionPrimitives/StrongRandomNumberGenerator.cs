@@ -53,7 +53,7 @@ namespace StopGuessing.EncryptionPrimitives
 
         public static double GetFraction()
         {
-            return 1 / (double)Get64Bits();
+            return (double)Get64Bits() / (double)ulong.MaxValue;
         }
     }
 }
