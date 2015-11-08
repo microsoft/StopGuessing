@@ -11,7 +11,7 @@ namespace Simulator
         public void AddItem(T item, ulong weight)
         {
             _items.Add(item);
-            _cumulativeWeight.Add(_cumulativeWeight.Count > 0 ? _cumulativeWeight[_cumulativeWeight.Count-1] : 0);
+            _cumulativeWeight.Add(weight + (_cumulativeWeight.Count > 0 ? _cumulativeWeight[_cumulativeWeight.Count-1] : 0));
         }
 
         public T GetItemByWeightedRandom()

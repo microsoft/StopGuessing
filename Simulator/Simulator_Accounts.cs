@@ -65,7 +65,7 @@ namespace Simulator
         public void GenerateSimulatedAccounts()
         {
             PasswordSelector = new WeightedSelector<string>();
-
+            CommonPasswordSelector = new WeightedSelector<string>();
             uint lineNumber = 0;
             // Created a weighted-random selector for paasswords based on the RockYou database.
             using (System.IO.StreamReader file = 
@@ -78,7 +78,7 @@ namespace Simulator
                         lineWithCountFollowedBySpaceFollowedByPassword.Trim();
                     int indexOfFirstSpace = lineWithCountFollowedBySpaceFollowedByPassword.IndexOf(' ');
                     if (indexOfFirstSpace < 0 ||
-                        indexOfFirstSpace + 1 < lineWithCountFollowedBySpaceFollowedByPassword.Length)
+                        indexOfFirstSpace + 1 >= lineWithCountFollowedBySpaceFollowedByPassword.Length)
                         continue; // The line is invalid as it doesn't have a space with a password after it
                     string countAsString = lineWithCountFollowedBySpaceFollowedByPassword.Substring(0, indexOfFirstSpace);
                     ulong count;
