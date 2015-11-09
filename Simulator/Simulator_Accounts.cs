@@ -2,6 +2,8 @@
 using System.Net;
 using StopGuessing.EncryptionPrimitives;
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 
 namespace Simulator
 {
@@ -11,12 +13,16 @@ namespace Simulator
         public List<SimulatedAccount> BenignAccounts = new List<SimulatedAccount>();
         public List<SimulatedAccount> MaliciousAccounts = new List<SimulatedAccount>();
         public WeightedSelector<string> PasswordSelector;
-        public WeightedSelector<string> CommonPasswordSelector; 
-        public List<string> OrderedListOfMostCommonPasswords = new List<string>(); 
+        public WeightedSelector<string> CommonPasswordSelector;
+        public List<string> OrderedListOfMostCommonPasswords = new List<string>();
         public WeightedSelector<SimulatedAccount> BenignAccountSelector = new WeightedSelector<SimulatedAccount>();
+        private readonly ConcurrentBag<IPAddress> _ipAddresssesInUseByBenignUsers = new ConcurrentBag<IPAddress>();
 
 
-        public SimulatedAccount GetBenignAccountWeightedByLoginFrequency()
+
+
+
+    public SimulatedAccount GetBenignAccountWeightedByLoginFrequency()
         {
             return BenignAccountSelector.GetItemByWeightedRandom();
         }
@@ -39,24 +45,43 @@ namespace Simulator
         /// <summary>
         ///Generate a random benign IP address.
         /// </summary>
-        public IPAddress GetRandomBenignIp()
+        public IPAddress GetNewRandomBenignIp()
         {
-            long v4Address = StrongRandomNumberGenerator.Get32Bits(MyExperimentalConfiguration.SizeOfBenignIpSpace);
-            return new IPAddress(v4Address);
+            long v4Address = StrongRandomNumberGenerator.Get32Bits();
+            IPAddress address = new IPAddress(v4Address);
+            _ipAddresssesInUseByBenignUsers.Add(address);
+            return address;
         }
+
+
+        private readonly List<IPAddress> _maliciousIpAddresses = new List<IPAddress>();
+        public void GenerateMaliciousIps()
+        {
+            List<IPAddress> listOfIpAddressesInUseByBenignUsers = _ipAddresssesInUseByBenignUsers.ToList();
+            uint numberOfOverlappingIps = (uint) 
+                (MyExperimentalConfiguration.NumberOfIpAddressesControlledByAttacker*
+                 MyExperimentalConfiguration.FractionOfMaliciousIPsToOverlapWithBenign);
+            uint i;
+            for (i = 0; i < numberOfOverlappingIps; i++)
+            {
+                int randIndex = (int) StrongRandomNumberGenerator.Get32Bits(listOfIpAddressesInUseByBenignUsers.Count);
+                _maliciousIpAddresses.Add(listOfIpAddressesInUseByBenignUsers[randIndex]);
+                listOfIpAddressesInUseByBenignUsers.RemoveAt(randIndex);
+            }
+            for (i = 0; i < MyExperimentalConfiguration.NumberOfIpAddressesControlledByAttacker; i++)
+            {
+                _maliciousIpAddresses.Add(new IPAddress(StrongRandomNumberGenerator.Get32Bits()));
+            }
+        }
+
 
         /// <summary>
         /// Generate a random malicious IP address
         /// </summary>
         public IPAddress GetRandomMaliciousIp()
         {
-            if (StrongRandomNumberGenerator.GetFraction() <
-                MyExperimentalConfiguration.FractionOfMaliciousIPsToOverlapWithBenign)
-                return GetRandomBenignIp();
-            // Start the non-ovlerlapping malicious address from the top of the IP space so that they don't overlap with benign
-            long v4Address = UInt32.MaxValue - 
-                StrongRandomNumberGenerator.Get32Bits(MyExperimentalConfiguration.SizeOfNonOverlappingAttackerIpSpace);
-            return new IPAddress(v4Address);
+            int randIndex = (int)StrongRandomNumberGenerator.Get32Bits(_maliciousIpAddresses.Count);
+            return _maliciousIpAddresses[randIndex];
         }
 
         /// <summary>
@@ -95,6 +120,8 @@ namespace Simulator
             }
 
             int totalAccounts = 0;
+
+            // Generate benign accounts
             foreach (
                 ExperimentalConfiguration.BenignUserAccountGroup group in MyExperimentalConfiguration.BenignUserGroups)
             {
@@ -103,22 +130,29 @@ namespace Simulator
                     SimulatedAccount account = new SimulatedAccount()
                     {
                         UniqueId = (totalAccounts++).ToString(),
-                        Password = PasswordSelector.GetItemByWeightedRandom(),
-                        PrimaryIp = GetRandomBenignIp()
+                        Password = PasswordSelector.GetItemByWeightedRandom()
                     };
+                    account.ClientAddresses.Add(GetNewRandomBenignIp());
+                    account.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
                     BenignAccounts.Add(account);
                     BenignAccountSelector.AddItem(account, group.LoginsPerYear);
                 }
             }
 
+            // Right after creating benign accounts we can create malicious ones. 
+            // (we'll needed to wait for the the benign IPs to be generated create some overlap)
+            GenerateMaliciousIps();
+
+            // Generate attacker accounts
             for (ulong i = 0; i < MyExperimentalConfiguration.NumberOfAttackerControlledAccounts; i++)
             {
-                MaliciousAccounts.Add(new SimulatedAccount()
+                SimulatedAccount account = new SimulatedAccount()
                 {
                     UniqueId = (totalAccounts++).ToString(),
                     Password = PasswordSelector.GetItemByWeightedRandom(),
-                    PrimaryIp = GetRandomBenignIp()
-                });
+                };
+                account.ClientAddresses.Add(GetRandomMaliciousIp());
+                MaliciousAccounts.Add(account);
             }
         }
     }

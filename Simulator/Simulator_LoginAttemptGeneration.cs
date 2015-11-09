@@ -74,9 +74,19 @@ namespace Simulator
 
             //3. Choose an IP address for the login
             // 1/3 of times login with the primary IP address, otherwise, choose an IP randomly from the benign IP pool
-            IPAddress loginIp = StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfUsingThePrimaryIp ?
-                account.PrimaryIp : GetRandomBenignIp();
-            
+            IPAddress clientIp;
+            if (account.ClientAddresses.Count == 0 ||
+                (account.ClientAddresses.Count < MyExperimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfIpReUse))
+            {
+                // Use a new IP for the user
+                account.ClientAddresses.Add(GetNewRandomBenignIp());
+            }
+            else
+            {
+                // Use one of the user's existing IP Addresses selected at random
+                clientIp = account.ClientAddresses.ToArray()[(int)StrongRandomNumberGenerator.Get32Bits(account.ClientAddresses.Count)];
+            }
+                        
             string password = account.Password;
 
             //
@@ -99,7 +109,7 @@ namespace Simulator
                 account = GetBenignAccountAtRandomUniform();
             }
 
-            return new SimulatedLoginAttempt(account, password, false, false, loginIp, cookie, DateTimeOffset.Now);
+            return new SimulatedLoginAttempt(account, password, false, false, clientIp, cookie, DateTimeOffset.Now);
 
         }
 

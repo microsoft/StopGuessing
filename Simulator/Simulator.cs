@@ -100,9 +100,11 @@ namespace Simulator
                 allAccounts.AddRange(MaliciousAccounts);
                 Parallel.ForEach(allAccounts, async simAccount =>
                 {
-                    await MyUserAccountController.PutAsync(
-                        UserAccount.Create(simAccount.UniqueId, (int)CreditLimits.Last().Limit,
-                            simAccount.Password, "PBKDF2_SHA256", 1), cancellationToken: cancellationToken);
+                    UserAccount account = UserAccount.Create(simAccount.UniqueId, (int)CreditLimits.Last().Limit,
+                            simAccount.Password, "PBKDF2_SHA256", 1);
+                    foreach (string cookie in simAccount.Cookies)
+                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(LoginAttempt.HashCookie(cookie));
+                    await MyUserAccountController.PutAsync(account, cancellationToken: cancellationToken);
                 });
             }
             catch (Exception e)

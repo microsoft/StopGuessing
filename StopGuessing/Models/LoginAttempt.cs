@@ -132,13 +132,16 @@ namespace StopGuessing.Models
         [JsonIgnore]
         public string UniqueKey => ToUniqueKey();
 
+        public static string HashCookie(string plaintextCookie)
+        {
+            return Convert.ToBase64String(SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(plaintextCookie);
+        }
 
         private void SetCookieProvidedByBrowser(string plaintextCookie)
         {
             if (string.IsNullOrEmpty(plaintextCookie))
                 return;
-            HashOfCookieProvidedByBrowser =
-                    Convert.ToBase64String(SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(plaintextCookie)));
+            HashOfCookieProvidedByBrowser = HashCookie(plaintextCookie);
         }
 
         private string ToUniqueKey()
