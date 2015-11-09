@@ -81,6 +81,7 @@ namespace Simulator
             StableStore.LoginAttempts = null;
         }
 
+
         /// <summary>
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
@@ -125,15 +126,11 @@ namespace Simulator
             sw.Start();
 
             Stats stats = new Stats();
+            int count = 0;
+//            List<int> Runtime = new List<int>(new int[MyExperimentalConfiguration.TotalLoginAttemptsToIssue]);
 
-            Parallel.For(0, (int) MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (index, state) =>
+            await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async () =>
             {
-                try
-                {
-                    lock (stats)
-                    {
-                        stats.TotalLoopIterations++;
-                    }
                     SimulatedLoginAttempt simAttempt;
                     if (StrongRandomNumberGenerator.GetFraction() <
                         MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
@@ -152,7 +149,7 @@ namespace Simulator
 
                     lock (stats)
                     {
-                        stats. TotalLoopIterationsThatShouldHaveRecordedStats++;
+                    stats.TotalLoopIterationsThatShouldHaveRecordedStats++;
                         if (simAttempt.IsGuess)
                         {
                             if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
@@ -172,18 +169,21 @@ namespace Simulator
                                 stats.BenignErrors++;
                         }
                     }
-                }
-                catch (Exception e)
-                {
+            },
+            (e) => { 
                     lock (stats)
                     {
                         stats.TotalExceptions++;
                     }
                     Console.Error.WriteLine(e.ToString());
-                }
+                count++; 
             });
 
+
             sw.Stop();
+
+            Console.WriteLine("Time Elapsed={0}", sw.Elapsed);
+            Console.WriteLine("the new count is {0}", count);
 
             double falsePositiveRate = ((double) stats.FalsePositives)/((double)stats.FalsePositives + stats.TruePositives);
             double falseNegativeRate = ((double)stats.FalseNegatives)/((double)stats.FalseNegatives + stats.TrueNegatives);
