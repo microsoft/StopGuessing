@@ -28,6 +28,8 @@ namespace Simulator
             public ulong TotalLoopIterations = 0;
             public ulong TotalExceptions = 0;
             public ulong TotalLoopIterationsThatShouldHaveRecordedStats = 0;
+            public ulong MaliciousCount = 0;
+            public ulong BenignCount = 0;
         }
 
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
@@ -38,11 +40,6 @@ namespace Simulator
         public LimitPerTimePeriod[] CreditLimits;
         public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();
         public ExperimentalConfiguration MyExperimentalConfiguration;
-
-
-
-
-
 
         public Simulator(ExperimentalConfiguration myExperimentalConfiguration, BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
         {
@@ -91,7 +88,7 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task Run(BlockingAlgorithmOptions options,CancellationToken cancellationToken = default(CancellationToken))
+        public async Task Run(BlockingAlgorithmOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {            
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
@@ -105,9 +102,11 @@ namespace Simulator
                 allAccounts.AddRange(MaliciousAccounts);
                 Parallel.ForEach(allAccounts, async simAccount =>
                 {
-                    await MyUserAccountController.PutAsync(
-                        UserAccount.Create(simAccount.UniqueId, (int)CreditLimits.Last().Limit,
-                            simAccount.Password, "PBKDF2_SHA256", 1), cancellationToken: cancellationToken);
+                    UserAccount account = UserAccount.Create(simAccount.UniqueId, (int)CreditLimits.Last().Limit,
+                            simAccount.Password, "PBKDF2_SHA256", 1);
+                    foreach (string cookie in simAccount.Cookies)
+                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(LoginAttempt.HashCookie(cookie));
+                    await MyUserAccountController.PutAsync(account, cancellationToken: cancellationToken);
                 });
             }
             catch (Exception e)
@@ -132,7 +131,8 @@ namespace Simulator
 
             Stats stats = new Stats();
 
-            ulong count = 0;
+            //ulong maliciouscount = 0;
+            //ulong benigncount = 0;
             double falsePositiveRate = 0;
             double falseNegativeRate = 0;
             //The percentage of malicious attempts get caught (over all malicious attempts)
@@ -141,68 +141,74 @@ namespace Simulator
             double falseDetectionRate = 0;
             ulong bootstrapall = 0;
             ulong bootstrapsuccess = 0;
+
+
             //            List<int> Runtime = new List<int>(new int[MyExperimentalConfiguration.TotalLoginAttemptsToIssue]);
 
-            for (int bigi = 0; bigi <(int) (MyExperimentalConfiguration.TotalLoginAttemptsToIssue/MyExperimentalConfiguration.RecordUnitAttempts); bigi++)
+            for (int bigi = 0; bigi < (int)(MyExperimentalConfiguration.TotalLoginAttemptsToIssue / MyExperimentalConfiguration.RecordUnitAttempts); bigi++)
             {
-
-
 
                 await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async () =>
             {
-                SimulatedLoginAttempt simAttempt;
-                if (StrongRandomNumberGenerator.GetFraction() <
-                    MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
-                {
-                    simAttempt = MaliciousLoginAttemptBreadthFirst();
-                }
-                else
-                {
-                    simAttempt = BenignLoginAttempt();
-                }
-
-                LoginAttempt attemptWithOutcome = await
-                    MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password);//,
-                                                                                                    // cancellationToken: cancellationToken);
-                AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
-
-                lock (stats)
-                {
-                    stats.TotalLoopIterationsThatShouldHaveRecordedStats++;
-                    if (simAttempt.IsGuess)
+                    SimulatedLoginAttempt simAttempt;
+                    if (StrongRandomNumberGenerator.GetFraction() <
+                        MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
                     {
-                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                            stats.TruePositives++;
-                        else if (outcome == AuthenticationOutcome.CredentialsValid)
-                            stats.FalseNegatives++;
-                        else
-                            stats.GuessWasWrong++;
+                        simAttempt = MaliciousLoginAttemptBreadthFirst();
                     }
                     else
                     {
-                        if (outcome == AuthenticationOutcome.CredentialsValid)
-                            stats.TrueNegatives++;
-                        else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                            stats.FalsePositives++;
-                        else
-                            stats.BenignErrors++;
+                        simAttempt = BenignLoginAttempt();
                     }
-                }
-            },
-            (e) =>
-            {
-                lock (stats)
-                {
-                    stats.TotalExceptions++;
-                }
-                Console.Error.WriteLine(e.ToString());
-                count++;
-            });
 
+                    LoginAttempt attemptWithOutcome = await
+                        MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password);//,
+                           // cancellationToken: cancellationToken);
+                    AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
+
+                    lock (stats)
+                    {
+                        stats.TotalLoopIterationsThatShouldHaveRecordedStats++;
+                        if(stats.TruePositives == 1)
+                       {
+                           bootstrapsuccess = stats.FalseNegatives;
+                        bootstrapall = stats.MaliciousCount;
+
+                        }
+                        if (simAttempt.IsGuess)
+                        {
+                            stats.MaliciousCount++;
+                            if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                                stats.TruePositives++;
+                            else if (outcome == AuthenticationOutcome.CredentialsValid)
+                                stats.FalseNegatives++;
+                            else
+                                stats.GuessWasWrong++;
+                        }
+                        else
+                        {
+                            stats.BenignCount++;
+                            if (outcome == AuthenticationOutcome.CredentialsValid)
+                                stats.TrueNegatives++;
+                            else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                                stats.FalsePositives++;
+                            else
+                                stats.BenignErrors++;
+                        }
+                    }
+            },
+            (e) => { 
+                    lock (stats)
+                    {
+                        stats.TotalExceptions++;
+                    }
+                    Console.Error.WriteLine(e.ToString());
+                //count++; 
+            });
                 falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
                 falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
-                detectionRate = ((double)stats.TruePositives) / ((double)stats.TruePositives + stats.FalseNegatives);
-                falseDetectionRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TrueNegatives);
+                detectionRate = ((double)stats.TruePositives) / ((double)stats.MaliciousCount);
+                falseDetectionRate = ((double)stats.FalsePositives) / ((double)stats.BenignCount);
                 using (StringWriter filename = new StringWriter())
                 {
                     filename.Write("Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword);
@@ -212,8 +218,8 @@ namespace Simulator
                     {
                         detailed.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
                         detailed.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
-                        detailed.WriteLine("The detection rate is {0}/({0}+{1}) ({2:F20}%)", stats.TruePositives, stats.FalseNegatives, detectionRate * 100d);
-                        detailed.WriteLine("The false detection rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TrueNegatives, falseDetectionRate * 100d);
+                        detailed.WriteLine("The detection rate is {0}/({1}) ({2:F20}%)", stats.TruePositives, stats.MaliciousCount, detectionRate * 100d);
+                        detailed.WriteLine("The false detection rate is {0}/({1}) ({2:F20}%)", stats.FalsePositives, stats.BenignCount, falseDetectionRate * 100d);
                     }
                 }
 
@@ -224,10 +230,10 @@ namespace Simulator
             sw.Stop();
 
             Console.WriteLine("Time Elapsed={0}", sw.Elapsed);
-            Console.WriteLine("the new count is {0}", count);
+            Console.WriteLine("the new count is {0}", stats.MaliciousCount+stats.BenignCount);
 
-            falsePositiveRate = ((double) stats.FalsePositives)/((double)stats.FalsePositives + stats.TruePositives);
-            falseNegativeRate = ((double)stats.FalseNegatives)/((double)stats.FalseNegatives + stats.TrueNegatives);
+             falsePositiveRate = ((double) stats.FalsePositives)/((double)stats.FalsePositives + stats.TruePositives);
+             falseNegativeRate = ((double)stats.FalseNegatives)/((double)stats.FalseNegatives + stats.TrueNegatives);
 
             using (System.IO.StreamWriter file =
             new System.IO.StreamWriter(@"result_log.txt"))

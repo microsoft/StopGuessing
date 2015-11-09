@@ -22,16 +22,15 @@ namespace Simulator
 
         public string PasswordFrequencyFile = @"rockyou-withcount.txt";
 
-        public ulong TotalLoginAttemptsToIssue = 1 * Million;
-        public ulong RecordUnitAttempts = 100*Thousand;
-
- 
+        public ulong TotalLoginAttemptsToIssue = 1*Million;
+        public ulong RecordUnitAttempts = 100 * Thousand;
 
         public double ChanceOfCoookieReUse = 0.90d;
         public int MaxCookiesPerUserAccount = 10;
 
         public double ChanceOfIpReUse = 0.80d;
         public int MaxIpPerUserAccount = 20;
+
 
         public double ChanceOfBenignPasswordTypo = 0.02d;
         public double ChanceOfBenignAccountNameTypoResultingInAValidUserName = 0.02d;
@@ -42,11 +41,9 @@ namespace Simulator
         public double FractionOfLoginAttemptsFromAttacker = 0.5d;
 
         public ulong NumberOfAttackerControlledAccounts = 1*Thousand;
-
+        
         public uint NumberOfIpAddressesControlledByAttacker = 100;// * (uint)Thousand;
         public double FractionOfMaliciousIPsToOverlapWithBenign = 0.1;
-
-        
 
         public double ProbabilityThatAttackerChoosesAnInvalidAccount = 0.10d;
 
