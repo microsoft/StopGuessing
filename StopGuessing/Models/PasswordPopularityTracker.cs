@@ -79,6 +79,10 @@ namespace StopGuessing.Models
         public const uint DefaultFactorOfGrowthBetweenHistoricalPeriods = 10;
         public const int DefaultNumberOfHistoricalPeriods = 4;
 
+        public const int HeightOfBinomialLadder = 96;
+        public const int SizeOfBinomialLadder = 1024*1024*1024;
+        public const int HeightOfLadderDeemedPopular = 79;
+
         public uint[] LengthOfHistoricalPeriods;
 
 
@@ -116,7 +120,7 @@ namespace StopGuessing.Models
 
             SketchForTestingIfNonexistentAccountIpPasswordHasBeenSeenBefore =
                 new AgingMembershipSketch(DefaultNumberOfSketchColumns, conservativelyHighEstimateOfRowsNeeded);
-            BinomialSketchOfFailedPasswords = new BinomialSketch(1024*1024*1024, 64, keyToPreventAlgorithmicComplexityAttacks); // FIXME configuration parameters
+            BinomialSketchOfFailedPasswords = new BinomialSketch(SizeOfBinomialLadder, HeightOfBinomialLadder, keyToPreventAlgorithmicComplexityAttacks); // FIXME configuration parameters
 
             MapOfHighlyPopularUnsaltedHashedPasswordsToPlaintextPasswords =
                 new Dictionary<string, string>();
@@ -178,8 +182,9 @@ namespace StopGuessing.Models
             // in the binomial sketch that we're confident it's common enough to to be a very
             // good secret, we'll continue to track the unsalted hash
             if (PasswordFrequencyEstimatesForDifferentPeriods[0].Get(passwordHash).Numerator > 0 ||
-                BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, 0.000001d) >
-                _minCountRequiredToTrackPreciseOccurrences)
+                sketchBitsSet >= HeightOfLadderDeemedPopular)
+                // FIXME BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, 0.000001d) >
+                //_minCountRequiredToTrackPreciseOccurrences)
             {
                 foreach (var passwordTrackerForThisPeriod in PasswordFrequencyEstimatesForDifferentPeriods)
                 {
