@@ -47,7 +47,7 @@ namespace StopGuessing.Controllers
             _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
                 (id, cancellationToken) =>
                 {
-                    return Task.Run(() => new IpHistory(id), cancellationToken);
+                    return Task.Run(() => new IpHistory(id, _options.NumberOfSuccessesToTrackPerIp, _options.NumberOfFailuresToTrackPerIp), cancellationToken);
                     // FUTURE -- option to load from stable store
                 });
             _loginAttemptClient = loginAttemptClient;
