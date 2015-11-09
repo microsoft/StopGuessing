@@ -15,6 +15,8 @@ namespace StopGuessing.Models
     public class BlockingAlgorithmOptions
     {
         //FIXME
+        public bool FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE = false;
+
         public int NumberOfRedundentHostsToCacheIPs = 3;
         public int NumberOfRedundentHostsToCachePasswordPopularity = 3;
 

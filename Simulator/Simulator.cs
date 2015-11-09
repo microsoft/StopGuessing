@@ -146,8 +146,8 @@ namespace Simulator
                     }
 
                     LoginAttempt attemptWithOutcome = await
-                        MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password,
-                            cancellationToken: cancellationToken);
+                        MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password);//,
+                           // cancellationToken: cancellationToken);
                     AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
 
                     lock (stats)

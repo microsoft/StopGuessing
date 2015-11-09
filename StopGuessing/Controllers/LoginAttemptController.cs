@@ -384,7 +384,8 @@ namespace StopGuessing.Controllers
             // Always allow a login if there's a valid device cookie associate with this account
             // FUTURE -- we probably want to do something at the account level to track targetted attacks
             //          against individual accounts and lock them out
-            if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+            if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount && 
+                !_options.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE)
                 return;
 
             // Choose a block threshold based on whether the provided password was popular or not.
@@ -422,7 +423,7 @@ namespace StopGuessing.Controllers
 
             List<LoginAttempt> copyOfRecentLoginFailures;
             List<LoginAttempt> copyOfRecentLoginSuccessesAtMostOnePerAccount;
-            //FIXME -- this locok does nothing -- lock (ip.RecentLoginFailures)
+            //FIXME -- this lock does nothing -- lock (ip.RecentLoginFailures)
             {
                 copyOfRecentLoginFailures = 
                     ip.RecentLoginFailures.MostRecentToOldest.ToList();
@@ -660,7 +661,7 @@ namespace StopGuessing.Controllers
                     // tiny LRU cache of recent failed passwords for this account.  We'll check both.
 
                     // The triple sketch will automatically record that we saw this triple when we check to see if we've seen it before.
-                    bool repeatFailureIdentifiedBySketch =
+                    bool repeatFailureIdentifiedBySketch = 
                         _passwordPopularityTracker.HasNonexistentAccountIpPasswordTripleBeenSeenBefore(
                             loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.UsernameOrAccountId,
                             passwordProvidedByClient);
@@ -669,7 +670,8 @@ namespace StopGuessing.Controllers
                         account.PasswordVerificationFailures.Count(failedAttempt =>
                             failedAttempt.Phase2HashOfIncorrectPassword == phase2HashOfProvidedPassword) > 0;
 
-                    loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes || repeatFailureIdentifiedBySketch)
+                    loginAttempt.Outcome = (!_options.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE &&
+                                            (repeatFailureIdentifiedByAccountHashes || repeatFailureIdentifiedBySketch))
                         ? AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword
                         : AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
                 }
