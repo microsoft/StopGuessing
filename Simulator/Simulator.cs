@@ -135,6 +135,10 @@ namespace Simulator
             ulong count = 0;
             double falsePositiveRate = 0;
             double falseNegativeRate = 0;
+            //The percentage of malicious attempts get caught (over all malicious attempts)
+            double detectionRate = 0;
+            //The percentage of benign attempts get labeled as malicious (over all benign attempts)
+            double falseDetectionRate = 0;
             ulong bootstrapall = 0;
             ulong bootstrapsuccess = 0;
             //            List<int> Runtime = new List<int>(new int[MyExperimentalConfiguration.TotalLoginAttemptsToIssue]);
@@ -197,6 +201,8 @@ namespace Simulator
 
                 falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
                 falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
+                detectionRate = ((double)stats.TruePositives) / ((double)stats.TruePositives + stats.FalseNegatives);
+                falseDetectionRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TrueNegatives);
                 using (StringWriter filename = new StringWriter())
                 {
                     filename.Write("Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword);
@@ -206,7 +212,8 @@ namespace Simulator
                     {
                         detailed.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
                         detailed.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
-
+                        detailed.WriteLine("The detection rate is {0}/({0}+{1}) ({2:F20}%)", stats.TruePositives, stats.FalseNegatives, detectionRate * 100d);
+                        detailed.WriteLine("The false detection rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TrueNegatives, falseDetectionRate * 100d);
                     }
                 }
 
