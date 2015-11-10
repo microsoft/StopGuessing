@@ -42,14 +42,32 @@ namespace Simulator
             return PasswordSelector.GetItemByWeightedRandom();
         }
 
+        private readonly Object _proxyAddressLock = new object();
+        private IPAddress _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+        private int _numberOfClientsBehindTheCurrentProxy = 0;
         /// <summary>
         ///Generate a random benign IP address.
         /// </summary>
         public IPAddress GetNewRandomBenignIp()
         {
-            long v4Address = StrongRandomNumberGenerator.Get32Bits();
-            IPAddress address = new IPAddress(v4Address);
-            _ipAddresssesInUseByBenignUsers.Add(address);
+            IPAddress address;
+            if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.FractionOfBenignIPsBehindProxies)
+            {
+                // Use the most recent proxy IP
+                lock (_proxyAddressLock)
+                {
+                    address = _currentProxyAddress;
+                    if (++_numberOfClientsBehindTheCurrentProxy >=
+                        MyExperimentalConfiguration.ProxySizeInUniqueClientIPs)
+                        _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+                }
+            }
+            else
+            {
+                // Just pick a random address
+                address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+                _ipAddresssesInUseByBenignUsers.Add(address);
+            }
             return address;
         }
 

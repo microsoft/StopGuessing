@@ -27,15 +27,13 @@ namespace Simulator
         public double ChanceOfCoookieReUse = 0.90d;
         public int MaxCookiesPerUserAccount = 10;
 
-        public double ChanceOfIpReUse = 0.80d;
-        public int MaxIpPerUserAccount = 20;
+        public double ChanceOfIpReUse = 0.85d;
+        public int MaxIpPerUserAccount = 5;
 
 
         public double ChanceOfBenignPasswordTypo = 0.02d;
         public double ChanceOfBenignAccountNameTypoResultingInAValidUserName = 0.02d;
         public double ChanceOfAccidentallyUsingAnotherAccountPassword = 0.02d;
-
-        public double ChanceOfUsingThePrimaryIp = 2d / 3d;
 
         public double FractionOfLoginAttemptsFromAttacker = 0.5d;
 
@@ -43,6 +41,9 @@ namespace Simulator
         
         public uint NumberOfIpAddressesControlledByAttacker = 100;// * (uint)Thousand;
         public double FractionOfMaliciousIPsToOverlapWithBenign = 0.1;
+
+        public uint ProxySizeInUniqueClientIPs = 1000;
+        public double FractionOfBenignIPsBehindProxies = 0.20d; 
 
         public double ProbabilityThatAttackerChoosesAnInvalidAccount = 0.10d;
 
