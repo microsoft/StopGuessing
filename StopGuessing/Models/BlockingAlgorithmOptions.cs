@@ -24,9 +24,9 @@ namespace StopGuessing.Models
         public int NumberOfFailuresToTrackPerIp = 200;
 
         public float MaxEditDistanceConsideredATypo { get; set; } = 2f;
-        public double PenaltyForInvalidAccount { get; set; } = 10d;
-        public double PenaltyForInvalidPasswordPerLoginTypo { get; set; } = .25d;
-        public double PenaltyForInvalidPasswordPerLoginRarePassword { get; set; } = 1d;
+        public double PenaltyMulitiplierForTypo { get; set; } = .25d;
+        public double BasePenaltyForInvalidPassword { get; set; } = 1d;
+        public double PenaltyForInvalidAccount { get; set; } = 2d; // 2 * BasePenaltyForInvalidPassword;
 
         public double RewardForCorrectPasswordPerAccount { get; set; } = -30d;
 
