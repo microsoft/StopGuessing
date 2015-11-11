@@ -454,11 +454,11 @@ namespace StopGuessing.Controllers
                                                 PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
                         break;
                     case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
-                        bruteLikelihoodScore += _options.PenaltyForInvalidPasswordPerLoginTypo;
+                        bruteLikelihoodScore += _options.BasePenaltyForInvalidPassword * _options.PenaltyMulitiplierForTypo;
                         break;
                     case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                     case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
-                        bruteLikelihoodScore += _options.PenaltyForInvalidPasswordPerLoginRarePassword *
+                        bruteLikelihoodScore += _options.BasePenaltyForInvalidPassword *
                                                 PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
                         break;
                     case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
