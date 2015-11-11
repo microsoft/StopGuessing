@@ -51,63 +51,132 @@ namespace Simulator
         /// <returns></returns>
         public SimulatedLoginAttempt BenignLoginAttempt()
         {
+
+
             //1. Pick a user at random
             SimulatedAccount account = BenignAccountSelector.GetItemByWeightedRandom();
-
-            //2. Deal with cookies
+            //If the user is from Group 5 , 100/101 of chance a client log in on behalf of the user, 1/101 of chance the user log in
             string cookie;
-            // Add a new cookie if there are no cookies, or with if we haven't reached the max number of cookies and lose a roll of the dice
-            if (account.Cookies.Count == 0 ||
-                (account.Cookies.Count < MyExperimentalConfiguration.MaxCookiesPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfCoookieReUse))
-            {
-                // We'll use the decimal represenation of a 64-bit unsigned integer as our cookie 
-                cookie = StrongRandomNumberGenerator.Get64Bits().ToString();
-                account.Cookies.Add(cookie);
-            }
-            else
-            {
-                // Use one of the user's existing cookies selected at random
-                cookie = account.Cookies.ToArray()[(int)StrongRandomNumberGenerator.Get32Bits(account.Cookies.Count)];
-            }
-
-            //Console.WriteLine("The user currently has " + account.Cookies.Count + " cookies.  Using: " + cookie);
-
-            //3. Choose an IP address for the login
-            // 1/3 of times login with the primary IP address, otherwise, choose an IP randomly from the benign IP pool
             IPAddress clientIp;
-            if (account.ClientAddresses.Count == 0 ||
-                (account.ClientAddresses.Count < MyExperimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfIpReUse))
-            {
-                // Use a new IP for the user
-                account.ClientAddresses.Add(clientIp = GetNewRandomBenignIp());
-            }
-            else
-            {
-                // Use one of the user's existing IP Addresses selected at random
-                clientIp = account.ClientAddresses.ToArray()[(int)StrongRandomNumberGenerator.Get32Bits(account.ClientAddresses.Count)];
-            }
-                        
             string password = account.Password;
 
-            //
-            // Add benign failures
+            if (Int32.Parse(account.UniqueId)>90*1000 && StrongRandomNumberGenerator.GetFraction()<=0.99)
+            {
+                //Everytime the client log in, it has 2% of chance to become a miconfigured client
 
-            // The benign user may mistype her password causing a typo (Adding a z will meet the edit distance def. of typo)
-            if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignPasswordTypo)
+                if (StrongRandomNumberGenerator.GetFraction()<=0.02)
+                {
+                    account.CorrectClient = false;
+                }
+                //2. For cookies, the client always use a specific cookie once the cookie is added, here we assume it's always the first cookie
+                if(account.Cookies.Count==0)
+                {
+                    // We'll use the decimal represenation of a 64-bit unsigned integer as our cookie 
+                    cookie = StrongRandomNumberGenerator.Get64Bits().ToString();
+                    account.Cookies.Add(cookie);
+                }
+                else
+                {
+                    cookie = account.Cookies.ToArray()[0];
+
+                }
+
+                //3. Choose an IP address for the login
+                // 1/3 of times login with the primary IP address, otherwise, choose an IP randomly from the benign IP pool
+     
+                if (account.ClientAddresses.Count == 0 ||
+                    (account.ClientAddresses.Count < MyExperimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfIpReUse))
+                {
+                    // Use a new IP for the user
+                    account.ClientAddresses.Add(clientIp = GetNewRandomBenignIp());
+                }
+                else
+                {
+                    // Use one of the user's existing IP Addresses selected at random
+                    clientIp = account.ClientAddresses.ToArray()[(int)StrongRandomNumberGenerator.Get32Bits(account.ClientAddresses.Count)];
+                }
+
+
+                if (account.CorrectClient == false)
+                {
+                    //here we want the password to be the same wrong password all the time, there might be a better way to do it
+                    password = "oldpasswordoldpasswordoldpassword";
+                }
+                else 
+                {
+                    password = account.Password;
+                }
+
+            }
+
+
+
+
+
+
+            else
             {
-                password += "z";
+                //2. Deal with cookies
+                //string cookie;
+                // Add a new cookie if there are no cookies, or with if we haven't reached the max number of cookies and lose a roll of the dice
+                if (account.Cookies.Count == 0 ||
+                    (account.Cookies.Count < MyExperimentalConfiguration.MaxCookiesPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfCoookieReUse))
+                {
+                    // We'll use the decimal represenation of a 64-bit unsigned integer as our cookie 
+                    cookie = StrongRandomNumberGenerator.Get64Bits().ToString();
+                    account.Cookies.Add(cookie);
+                }
+                else
+                {
+                    // Use one of the user's existing cookies selected at random
+                    cookie = account.Cookies.ToArray()[(int)StrongRandomNumberGenerator.Get32Bits(account.Cookies.Count)];
+                }
+
+                //Console.WriteLine("The user currently has " + account.Cookies.Count + " cookies.  Using: " + cookie);
+
+                //3. Choose an IP address for the login
+                // 1/3 of times login with the primary IP address, otherwise, choose an IP randomly from the benign IP pool
+                //IPAddress clientIp;
+                if (account.ClientAddresses.Count == 0 ||
+                    (account.ClientAddresses.Count < MyExperimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfIpReUse))
+                {
+                    // Use a new IP for the user
+                    account.ClientAddresses.Add(clientIp = GetNewRandomBenignIp());
+                }
+                else
+                {
+                    // Use one of the user's existing IP Addresses selected at random
+                    clientIp = account.ClientAddresses.ToArray()[(int)StrongRandomNumberGenerator.Get32Bits(account.ClientAddresses.Count)];
+                }
+
+                //string password = account.Password;
+
+                //
+                // Add benign failures
+
+                // The benign user may mistype her password causing a typo (Adding a z will meet the edit distance def. of typo)
+                if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignPasswordTypo)
+                {
+                    password += "z";
+                }
+                // The benign user may mistakenly use a password for another of her accounts, which we draw from same distribution
+                // we used to generate user account passwords
+                if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfAccidentallyUsingAnotherAccountPassword)
+                {
+                    password = GetPasswordFromWeightedDistribution();
+                }
+                // The benign user may mistype her account name, and land on someone else's account name
+                if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignAccountNameTypoResultingInAValidUserName)
+                { //2% username typo
+                    account = GetBenignAccountAtRandomUniform();
+                }
+
             }
-            // The benign user may mistakenly use a password for another of her accounts, which we draw from same distribution
-            // we used to generate user account passwords
-            if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfAccidentallyUsingAnotherAccountPassword)
-            {
-                password = GetPasswordFromWeightedDistribution();
-            }
-            // The benign user may mistype her account name, and land on someone else's account name
-            if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignAccountNameTypoResultingInAValidUserName)
-            { //2% username typo
-                account = GetBenignAccountAtRandomUniform();
-            }
+
+
+
+
+
 
             return new SimulatedLoginAttempt(account, password, false, false, clientIp, cookie, DateTimeOffset.Now);
 

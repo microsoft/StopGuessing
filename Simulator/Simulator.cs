@@ -28,6 +28,10 @@ namespace Simulator
             public ulong TotalLoopIterations = 0;
             public ulong TotalExceptions = 0;
             public ulong TotalLoopIterationsThatShouldHaveRecordedStats = 0;
+            public ulong MaliciousCount = 0;
+            public ulong BenignCount = 0;
+            public ulong bootstrapall = 0;
+            public ulong bootstrapsuccess = 0;
         }
 
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
@@ -86,8 +90,8 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task Run(CancellationToken cancellationToken = default(CancellationToken))
-        {            
+        public async Task Run(BlockingAlgorithmOptions options, string ParameterSweep, CancellationToken cancellationToken = default(CancellationToken))
+        {
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
 
@@ -113,7 +117,7 @@ namespace Simulator
                 {
                     file.WriteLine("{0} Exception caught in account creation.", e);
                     file.WriteLine("time is {0}", DateTime.Now.ToString(CultureInfo.InvariantCulture));
-//                    file.WriteLine("How many requests? {0}", i);
+                    //                    file.WriteLine("How many requests? {0}", i);
                 }
             }
 
@@ -128,11 +132,25 @@ namespace Simulator
             sw.Start();
 
             Stats stats = new Stats();
-            int count = 0;
-//            List<int> Runtime = new List<int>(new int[MyExperimentalConfiguration.TotalLoginAttemptsToIssue]);
 
-            await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async () =>
+            //ulong maliciouscount = 0;
+            //ulong benigncount = 0;
+            double falsePositiveRate = 0;
+            double falseNegativeRate = 0;
+            //The percentage of malicious attempts get caught (over all malicious attempts)
+            double detectionRate = 0;
+            //The percentage of benign attempts get labeled as malicious (over all benign attempts)
+            double falseDetectionRate = 0;
+
+
+
+            //            List<int> Runtime = new List<int>(new int[MyExperimentalConfiguration.TotalLoginAttemptsToIssue]);
+
+            for (int bigi = 0; bigi < (int)(MyExperimentalConfiguration.TotalLoginAttemptsToIssue / MyExperimentalConfiguration.RecordUnitAttempts); bigi++)
             {
+
+                await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.RecordUnitAttempts, async () =>
+                {
                     SimulatedLoginAttempt simAttempt;
                     if (StrongRandomNumberGenerator.GetFraction() <
                         MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
@@ -146,14 +164,21 @@ namespace Simulator
 
                     LoginAttempt attemptWithOutcome = await
                         MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password);//,
-                           // cancellationToken: cancellationToken);
+                                                                                                        // cancellationToken: cancellationToken);
                     AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
 
                     lock (stats)
                     {
-                    stats.TotalLoopIterationsThatShouldHaveRecordedStats++;
+                        stats.TotalLoopIterationsThatShouldHaveRecordedStats++;
+                        if (stats.TruePositives == 1)
+                        {
+                            stats.bootstrapsuccess = stats.FalseNegatives;
+                            stats.bootstrapall = stats.MaliciousCount;
+
+                        }
                         if (simAttempt.IsGuess)
                         {
+                            stats.MaliciousCount++;
                             if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
                                 stats.TruePositives++;
                             else if (outcome == AuthenticationOutcome.CredentialsValid)
@@ -163,6 +188,7 @@ namespace Simulator
                         }
                         else
                         {
+                            stats.BenignCount++;
                             if (outcome == AuthenticationOutcome.CredentialsValid)
                                 stats.TrueNegatives++;
                             else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
@@ -171,31 +197,134 @@ namespace Simulator
                                 stats.BenignErrors++;
                         }
                     }
-            },
-            (e) => { 
-                    lock (stats)
-                    {
-                        stats.TotalExceptions++;
-                    }
-                    Console.Error.WriteLine(e.ToString());
-                count++; 
+                },
+            (e) => {
+                lock (stats)
+                {
+                    stats.TotalExceptions++;
+                }
+                Console.Error.WriteLine(e.ToString());
+                //count++; 
             });
+                if (((double)stats.FalsePositives + stats.TruePositives) != 0)
+                {
+                    falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
+
+
+                }
+                if (((double)stats.FalseNegatives + stats.TrueNegatives) != 0)
+                    falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
+                if (((double)stats.TruePositives + stats.FalseNegatives) != 0)
+                    detectionRate = ((double)stats.TruePositives) / ((double)stats.TruePositives + stats.FalseNegatives);
+                if (((double)stats.FalsePositives + stats.TrueNegatives) != 0)
+                    falseDetectionRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TrueNegatives);
+                //using (StringWriter filename = new StringWriter())
+                //{
+                //    filename.Write("Detailed_PenaltyForReachingAPopularityThreshold{0}.txt", options.PenaltyForReachingEachPopularityThreshold[0]);
+
+                //    //string filename = "Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword;
+                //    using (StreamWriter detailed = File.AppendText(@filename.ToString()))
+                //    {
+                //        detailed.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
+                //        detailed.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
+                //        detailed.WriteLine("The detection rate is {0}/({0}+{1}) ({2:F20}%)", stats.TruePositives, stats.FalseNegatives, detectionRate * 100d);
+                //        detailed.WriteLine("The false detection rate is {0}/{0}+({1}) ({2:F20}%)", stats.FalsePositives, stats.TrueNegatives, falseDetectionRate * 100d);
+                //        detailed.WriteLine("Start to catch attacker after {0} requests and attackers have login {1} times into users accounts successfully.", stats.bootstrapall, stats.bootstrapsuccess);
+                //    }
+                //}
+                //using (StringWriter filename = new StringWriter())
+                //{
+                //    // filename.Write("Result.csv", options.BlockThresholdUnpopularPassword);
+
+                //    //string filename = "Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword;
+                //    using (StreamWriter CSV = File.AppendText(@"ResultDetail.csv"))
+                //    {
+                //        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6}, {7}", options.PenaltyForInvalidAccount, falsePositiveRate * 100d,
+                //            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                //    }
+                //}
+
+            }
+
 
 
             sw.Stop();
 
             Console.WriteLine("Time Elapsed={0}", sw.Elapsed);
-            Console.WriteLine("the new count is {0}", count);
+            Console.WriteLine("the new count is {0}", stats.MaliciousCount + stats.BenignCount);
 
-            double falsePositiveRate = ((double) stats.FalsePositives)/((double)stats.FalsePositives + stats.TruePositives);
-            double falseNegativeRate = ((double)stats.FalseNegatives)/((double)stats.FalseNegatives + stats.TrueNegatives);
+            //falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
+            //falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
 
-            using (System.IO.StreamWriter file =
-            new System.IO.StreamWriter(@"result_log.txt"))
+            //using (System.IO.StreamWriter file =
+            //new System.IO.StreamWriter(@"result_log.txt"))
+            //{
+            //    file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
+            //    file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
+            //    file.WriteLine("Time Elapsed={0}", sw.Elapsed);
+            //}
+
+            using (StringWriter filename = new StringWriter())
             {
-                file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
-                file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
-                file.WriteLine("Time Elapsed={0}", sw.Elapsed);
+                // filename.Write("Result.csv", options.BlockThresholdUnpopularPassword);
+
+                if (ParameterSweep == "BlockThresholdUnpopularPassword")
+                {
+                    string csvname = "Log_BlockThresholdUnpopularPassword.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.BlockThresholdUnpopularPassword, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+
+
+                }
+                else if (ParameterSweep == "BlockThresholdPopularPassword")
+                {
+                    string csvname = "Log_BlockThresholdPopularPassword.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.BlockThresholdPopularPassword, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+
+
+                }
+                else if (ParameterSweep == "PenaltyForInvalidAccount")
+                {
+                    string csvname = "Log_PenaltyForInvalidAccount.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.PenaltyForInvalidAccount, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+                }
+                else if (ParameterSweep == "RewardForCorrectPasswordPerAccount")
+                {
+                    string csvname = "RewardForCorrectPasswordPerAccount.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.RewardForCorrectPasswordPerAccount, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+                }
+                else if (ParameterSweep == "PenaltyForReachingEachPopularityThreshold")
+                {
+                    string csvname = "PenaltyForReachingEachPopularityThreshold.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", 1, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+                }
+
+
             }
         }
     }

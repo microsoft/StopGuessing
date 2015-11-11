@@ -23,6 +23,7 @@ namespace Simulator
         public string PasswordFrequencyFile = @"rockyou-withcount.txt";
 
         public ulong TotalLoginAttemptsToIssue = 10*Thousand;
+        public ulong RecordUnitAttempts = Thousand;
 
         public double ChanceOfCoookieReUse = 0.90d;
         public int MaxCookiesPerUserAccount = 10;
@@ -49,18 +50,35 @@ namespace Simulator
 
         public uint NumberOfPopularPasswordsForAttackerToExploit = 1*(uint)Thousand;
 
+        //public readonly BenignUserAccountGroup[] BenignUserGroups = new BenignUserAccountGroup[]
+        //{
+        //    // Group 0 logs in 5 times per day
+        //    new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = DaysPerYear*5},
+        //    // Group 1 logs in once per day
+        //    new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = DaysPerYear},
+        //    // Group 2 logs in once per week
+        //    new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = WeeksPerYear},
+        //    // Group 3 logs in once per month
+        //    new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = MonthsPerYear},
+        //    // Group 4 logs in once per year
+        //    new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = 1}
+        //};
+
+            //Add clients behaviors
         public readonly BenignUserAccountGroup[] BenignUserGroups = new BenignUserAccountGroup[]
         {
             // Group 0 logs in 5 times per day
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = DaysPerYear*5},
+            new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = DaysPerYear*5},
             // Group 1 logs in once per day
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = DaysPerYear},
+            new BenignUserAccountGroup() {GroupSize = 10*Thousand, LoginsPerYear = DaysPerYear},
             // Group 2 logs in once per week
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = WeeksPerYear},
+            new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = WeeksPerYear},
             // Group 3 logs in once per month
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = MonthsPerYear},
+            new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = MonthsPerYear},
             // Group 4 logs in once per year
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = 1}
+            new BenignUserAccountGroup() {GroupSize = 20*Thousand, LoginsPerYear = 1},
+            //Group 5 use logs in 1 time a day, but they use clients that log in 100 times a day
+            new BenignUserAccountGroup() {GroupSize = 10*Thousand, LoginsPerYear = DaysPerYear*101 }
         };
     }
 }
