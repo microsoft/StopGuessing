@@ -10,5 +10,6 @@ namespace Simulator
 //        public IPAddress PrimaryIp;
         public ConcurrentBag<string> Cookies = new ConcurrentBag<string>();
         public ConcurrentBag<IPAddress> ClientAddresses = new ConcurrentBag<IPAddress>();
+        public bool CorrectClient = true;
     }
 }

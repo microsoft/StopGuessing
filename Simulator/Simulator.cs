@@ -90,7 +90,7 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task Run(BlockingAlgorithmOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task Run(BlockingAlgorithmOptions options, string ParameterSweep, CancellationToken cancellationToken = default(CancellationToken))
         {
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
@@ -206,24 +206,44 @@ namespace Simulator
                 Console.Error.WriteLine(e.ToString());
                 //count++; 
             });
-                falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
-                falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
-                detectionRate = ((double)stats.TruePositives) / ((double)stats.TruePositives + stats.FalseNegatives);
-                falseDetectionRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TrueNegatives);
-                using (StringWriter filename = new StringWriter())
+                if (((double)stats.FalsePositives + stats.TruePositives) != 0)
                 {
-                    filename.Write("Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword);
+                    falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
 
-                    //string filename = "Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword;
-                    using (StreamWriter detailed = File.AppendText(@filename.ToString()))
-                    {
-                        detailed.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
-                        detailed.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
-                        detailed.WriteLine("The detection rate is {0}/({0}+{1}) ({2:F20}%)", stats.TruePositives, stats.FalseNegatives, detectionRate * 100d);
-                        detailed.WriteLine("The false detection rate is {0}/{0}+({1}) ({2:F20}%)", stats.FalsePositives, stats.TrueNegatives, falseDetectionRate * 100d);
-                        detailed.WriteLine("Start to catch attacker after {0} requests and attackers have login {1} times into users accounts successfully.", stats.bootstrapall, stats.bootstrapsuccess);
-                    }
+
                 }
+                if (((double)stats.FalseNegatives + stats.TrueNegatives) != 0)
+                    falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
+                if (((double)stats.TruePositives + stats.FalseNegatives) != 0)
+                    detectionRate = ((double)stats.TruePositives) / ((double)stats.TruePositives + stats.FalseNegatives);
+                if (((double)stats.FalsePositives + stats.TrueNegatives) != 0)
+                    falseDetectionRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TrueNegatives);
+                //using (StringWriter filename = new StringWriter())
+                //{
+                //    filename.Write("Detailed_PenaltyForReachingAPopularityThreshold{0}.txt", options.PenaltyForReachingEachPopularityThreshold[0]);
+
+                //    //string filename = "Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword;
+                //    using (StreamWriter detailed = File.AppendText(@filename.ToString()))
+                //    {
+                //        detailed.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
+                //        detailed.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
+                //        detailed.WriteLine("The detection rate is {0}/({0}+{1}) ({2:F20}%)", stats.TruePositives, stats.FalseNegatives, detectionRate * 100d);
+                //        detailed.WriteLine("The false detection rate is {0}/{0}+({1}) ({2:F20}%)", stats.FalsePositives, stats.TrueNegatives, falseDetectionRate * 100d);
+                //        detailed.WriteLine("Start to catch attacker after {0} requests and attackers have login {1} times into users accounts successfully.", stats.bootstrapall, stats.bootstrapsuccess);
+                //    }
+                //}
+                //using (StringWriter filename = new StringWriter())
+                //{
+                //    // filename.Write("Result.csv", options.BlockThresholdUnpopularPassword);
+
+                //    //string filename = "Detailed_Log_Unpopular{0}.txt", options.BlockThresholdUnpopularPassword;
+                //    using (StreamWriter CSV = File.AppendText(@"ResultDetail.csv"))
+                //    {
+                //        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6}, {7}", options.PenaltyForInvalidAccount, falsePositiveRate * 100d,
+                //            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                //    }
+                //}
 
             }
 
@@ -234,15 +254,77 @@ namespace Simulator
             Console.WriteLine("Time Elapsed={0}", sw.Elapsed);
             Console.WriteLine("the new count is {0}", stats.MaliciousCount + stats.BenignCount);
 
-            falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
-            falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
+            //falsePositiveRate = ((double)stats.FalsePositives) / ((double)stats.FalsePositives + stats.TruePositives);
+            //falseNegativeRate = ((double)stats.FalseNegatives) / ((double)stats.FalseNegatives + stats.TrueNegatives);
 
-            using (System.IO.StreamWriter file =
-            new System.IO.StreamWriter(@"result_log.txt"))
+            //using (System.IO.StreamWriter file =
+            //new System.IO.StreamWriter(@"result_log.txt"))
+            //{
+            //    file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
+            //    file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
+            //    file.WriteLine("Time Elapsed={0}", sw.Elapsed);
+            //}
+
+            using (StringWriter filename = new StringWriter())
             {
-                file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
-                file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
-                file.WriteLine("Time Elapsed={0}", sw.Elapsed);
+                // filename.Write("Result.csv", options.BlockThresholdUnpopularPassword);
+
+                if (ParameterSweep == "BlockThresholdUnpopularPassword")
+                {
+                    string csvname = "Log_BlockThresholdUnpopularPassword.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.BlockThresholdUnpopularPassword, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+
+
+                }
+                else if (ParameterSweep == "BlockThresholdPopularPassword")
+                {
+                    string csvname = "Log_BlockThresholdPopularPassword.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.BlockThresholdPopularPassword, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+
+
+                }
+                else if (ParameterSweep == "PenaltyForInvalidAccount")
+                {
+                    string csvname = "Log_PenaltyForInvalidAccount.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.PenaltyForInvalidAccount, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+                }
+                else if (ParameterSweep == "RewardForCorrectPasswordPerAccount")
+                {
+                    string csvname = "RewardForCorrectPasswordPerAccount.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", options.RewardForCorrectPasswordPerAccount, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+                }
+                else if (ParameterSweep == "PenaltyForReachingEachPopularityThreshold")
+                {
+                    string csvname = "PenaltyForReachingEachPopularityThreshold.csv";
+                    using (StreamWriter CSV = File.AppendText(@csvname))
+                    {
+                        CSV.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7}", 1, falsePositiveRate * 100d,
+                            falseNegativeRate * 100d, detectionRate * 100d, falseDetectionRate * 100d, stats.bootstrapall, stats.bootstrapsuccess, falsePositiveRate * 10000d);
+
+                    }
+                }
+
+
             }
         }
     }
