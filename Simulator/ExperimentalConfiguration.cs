@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using StopGuessing.Models;
 
 namespace Simulator
 {
@@ -19,6 +20,8 @@ namespace Simulator
             public ulong GroupSize;
             public ulong LoginsPerYear;
         }
+
+        public BlockingAlgorithmOptions BlockingOptions = new BlockingAlgorithmOptions();
 
         public string PasswordFrequencyFile = @"rockyou-withcount.txt";
 
@@ -49,7 +52,7 @@ namespace Simulator
 
         public uint NumberOfPopularPasswordsForAttackerToExploit = 1*(uint)Thousand;
 
-        public readonly BenignUserAccountGroup[] BenignUserGroups = new BenignUserAccountGroup[]
+        public BenignUserAccountGroup[] BenignUserGroups = new BenignUserAccountGroup[]
         {
             // Group 0 logs in 5 times per day
             new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = DaysPerYear*5},

@@ -79,7 +79,7 @@ namespace Simulator
                 (account.ClientAddresses.Count < MyExperimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfIpReUse))
             {
                 // Use a new IP for the user
-                account.ClientAddresses.Add(clientIp = GetNewRandomBenignIp());
+                account.ClientAddresses.Add(clientIp = GetNewRandomBenignIp(account.UniqueId));
             }
             else
             {

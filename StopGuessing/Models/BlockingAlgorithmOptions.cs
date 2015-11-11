@@ -20,8 +20,8 @@ namespace StopGuessing.Models
         public int NumberOfRedundentHostsToCacheIPs = 3;
         public int NumberOfRedundentHostsToCachePasswordPopularity = 3;
 
-        public int NumberOfSuccessesToTrackPerIp = 16;
-        public int NumberOfFailuresToTrackPerIp = 200;
+        public int NumberOfSuccessesToTrackPerIp = 1000;
+        public int NumberOfFailuresToTrackPerIp = 1000;
 
         public float MaxEditDistanceConsideredATypo { get; set; } = 2f;
         public double PenaltyMulitiplierForTypo { get; set; } = .25d;
@@ -31,7 +31,7 @@ namespace StopGuessing.Models
         public double RewardForCorrectPasswordPerAccount { get; set; } = -30d;
 
         public double BlockThresholdPopularPassword { get; set; } = 50d;
-        public double BlockThresholdUnpopularPassword { get; set; } = 200d;
+        public double BlockThresholdMultiplierForUnpopularPasswords { get; set; } = 20d;
         public TimeSpan ExpireFailuresAfter { get; set; } = new TimeSpan(24, 0, 0); // 24 hours
 
         /// <summary>

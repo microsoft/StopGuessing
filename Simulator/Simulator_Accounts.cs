@@ -4,6 +4,7 @@ using StopGuessing.EncryptionPrimitives;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Runtime.Serialization;
 
 namespace Simulator
 {
@@ -42,15 +43,43 @@ namespace Simulator
             return PasswordSelector.GetItemByWeightedRandom();
         }
 
+        [DataContract]
+        public class IPAddressDebugInfo
+        {
+            [DataMember]
+            public HashSet<string> UserIdsOfBenignUsers = new HashSet<string>();
+            [DataMember]
+            public bool IsPartOfProxy;
+            [DataMember]
+            public bool IsInAttackersIpPool;
+        }
+
+        private readonly Dictionary<IPAddress,IPAddressDebugInfo> _debugInformationAboutIpAddresses = new Dictionary<IPAddress, IPAddressDebugInfo>();
+
+        public IPAddressDebugInfo GetIpAddressDebugInfo(IPAddress address)
+        {
+            lock (_debugInformationAboutIpAddresses)
+            {
+                if (!_debugInformationAboutIpAddresses.ContainsKey(address))
+                {
+                    _debugInformationAboutIpAddresses[address] = new IPAddressDebugInfo();
+                }
+                return _debugInformationAboutIpAddresses[address];
+            }
+        }
+
+
+
         private readonly Object _proxyAddressLock = new object();
         private IPAddress _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
         private int _numberOfClientsBehindTheCurrentProxy = 0;
         /// <summary>
         ///Generate a random benign IP address.
         /// </summary>
-        public IPAddress GetNewRandomBenignIp()
+        public IPAddress GetNewRandomBenignIp(string forUserId)
         {
             IPAddress address;
+            IPAddressDebugInfo debugInfo;
             if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.FractionOfBenignIPsBehindProxies)
             {
                 // Use the most recent proxy IP
@@ -60,6 +89,8 @@ namespace Simulator
                     if (++_numberOfClientsBehindTheCurrentProxy >=
                         MyExperimentalConfiguration.ProxySizeInUniqueClientIPs)
                         _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+                    debugInfo = GetIpAddressDebugInfo(_currentProxyAddress);
+                    debugInfo.IsPartOfProxy = true;
                 }
             }
             else
@@ -67,6 +98,11 @@ namespace Simulator
                 // Just pick a random address
                 address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
                 _ipAddresssesInUseByBenignUsers.Add(address);
+                debugInfo = GetIpAddressDebugInfo(address);
+            }
+            lock (debugInfo)
+            {
+                debugInfo.UserIdsOfBenignUsers.Add(forUserId);
             }
             return address;
         }
@@ -83,12 +119,18 @@ namespace Simulator
             for (i = 0; i < numberOfOverlappingIps; i++)
             {
                 int randIndex = (int) StrongRandomNumberGenerator.Get32Bits(listOfIpAddressesInUseByBenignUsers.Count);
-                _maliciousIpAddresses.Add(listOfIpAddressesInUseByBenignUsers[randIndex]);
+                IPAddress address = listOfIpAddressesInUseByBenignUsers[randIndex];
+                IPAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
+                debugInfo.IsInAttackersIpPool = true;
+                _maliciousIpAddresses.Add(address);
                 listOfIpAddressesInUseByBenignUsers.RemoveAt(randIndex);
             }
             for (i = 0; i < MyExperimentalConfiguration.NumberOfIpAddressesControlledByAttacker; i++)
             {
-                _maliciousIpAddresses.Add(new IPAddress(StrongRandomNumberGenerator.Get32Bits()));
+                IPAddress address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+                IPAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
+                debugInfo.IsInAttackersIpPool = true;
+                _maliciousIpAddresses.Add(address);
             }
         }
 
@@ -137,6 +179,7 @@ namespace Simulator
                 }
             }
 
+
             int totalAccounts = 0;
 
             // Generate benign accounts
@@ -150,7 +193,7 @@ namespace Simulator
                         UniqueId = (totalAccounts++).ToString(),
                         Password = PasswordSelector.GetItemByWeightedRandom()
                     };
-                    account.ClientAddresses.Add(GetNewRandomBenignIp());
+                    account.ClientAddresses.Add(GetNewRandomBenignIp(account.UniqueId));
                     account.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
                     BenignAccounts.Add(account);
                     BenignAccountSelector.AddItem(account, group.LoginsPerYear);

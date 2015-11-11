@@ -4,8 +4,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using StopGuessing;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
@@ -17,7 +19,7 @@ namespace Simulator
 {
     public partial class Simulator
     {
-        public class Stats
+        public class ResultStatistics
         {
             public ulong FalseNegatives = 0;
             public ulong FalsePositives = 0;
@@ -27,7 +29,6 @@ namespace Simulator
             public ulong BenignErrors = 0;
             public ulong TotalLoopIterations = 0;
             public ulong TotalExceptions = 0;
-            public ulong TotalLoopIterationsThatShouldHaveRecordedStats = 0;
         }
 
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
@@ -39,11 +40,148 @@ namespace Simulator
         public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();
         public ExperimentalConfiguration MyExperimentalConfiguration;
 
-        public Simulator(ExperimentalConfiguration myExperimentalConfiguration, BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
+        public delegate void ExperimentalConfigurationFunction(ExperimentalConfiguration config);
+        public delegate void StatisticsWritingFunction(ResultStatistics resultStatistics);
+        public delegate void ParameterSettingFunction<in T>(ExperimentalConfiguration config, T iterationParameter);
+
+
+
+        public enum SystemMode
+        {
+            // ReSharper disable once InconsistentNaming
+            SSH,
+            Basic,
+            StopGuessing
+        };
+
+        public static void SetSystemMode(ExperimentalConfiguration config, SystemMode mode)
+        {
+            if (mode == SystemMode.Basic || mode == SystemMode.SSH)
+            {
+                //
+                // Industrial-best-practice baseline
+                //
+                // Use the same threshold regardless of the popularity of the account password
+                config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 1d;
+                // Make all failures increase the count towards the threshold by one
+                config.BlockingOptions.PenaltyMulitiplierForTypo = 1d;
+                config.BlockingOptions.PenaltyForInvalidAccount = config.BlockingOptions.BasePenaltyForInvalidPassword;
+                // If the below is empty, the multiplier for any popularity level will be 1.
+                config.BlockingOptions.PenaltyForReachingEachPopularityThreshold = new List<PenaltyForReachingAPopularityThreshold>();
+                // Correct passwords shouldn't help
+                config.BlockingOptions.RewardForCorrectPasswordPerAccount = 0;
+            }
+            if (mode == SystemMode.SSH)
+            {
+                // SSH mode doesn't discard the repeat <password/account> pairs
+                config.BlockingOptions.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE = true;
+            }
+        }
+
+
+        public interface IParameterSweeper
+        {
+            int GetParameterCount();
+            void SetParameter(ExperimentalConfiguration config, int parameterIndex);
+            string GetParameterString(int parameterIndex);
+        }
+
+        public class ParameterSweeper<T> : IParameterSweeper
+        {
+            public string Name;
+            public T[] Parameters;
+            public ParameterSettingFunction<T> ParameterSetter;
+
+            public int GetParameterCount()
+            {
+                return Parameters.Length;
+            }
+
+            public void SetParameter(ExperimentalConfiguration config, int parameterIndex)
+            {
+                ParameterSetter(config, Parameters[parameterIndex]);
+            }
+
+            public string GetParameterString(int parameterIndex)
+            {
+                return Parameters[parameterIndex].ToString();
+            }
+        }
+
+        private static string Fraction(ulong numerator, ulong denominmator)
+        {
+            if (denominmator == 0)
+                return "NaN";
+            else
+                return (((double)numerator)/(double)denominmator).ToString(CultureInfo.InvariantCulture);
+        }
+
+        public static async Task RunExperimentalSweep(
+            ExperimentalConfigurationFunction configurationDelegate,
+            IParameterSweeper[] parameterSweeps,
+            int startingTest = 0)
+        {
+            int totalTests =
+                // Get the legnths of each dimension of the multi-dimensional parameter sweep
+                parameterSweeps.Select(ps => ps.GetParameterCount())
+                    // Calculates the product of the number of parameters in each dimension
+                    .Aggregate((runningProduct, nextFactor) => runningProduct*nextFactor);
+
+            DateTime now = DateTime.Now;
+            string dirName = @"..\Experiment_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
+            Directory.CreateDirectory(dirName);
+            StreamWriter statsWriter = new StreamWriter(dirName + "\\" + "ResultStatistics.csv");
+                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}", new string(',', parameterSweeps.Length),
+                "FalsePositives", "TruePositives", "FalsePositiveRate",
+                "FalseNegatives", "TrueNegatives", "FalseNegativeRate",
+                "BenignErrors",
+                "GuessWasWrong",
+                "TotalExceptions",
+                "TotalLoopIterations");
+            for (int testIndex = startingTest; testIndex < totalTests; testIndex++)
+            {
+                string statisticsCsvLine = testIndex.ToString();
+
+                // Start with the default configuration from the provided configuration factory
+                ExperimentalConfiguration config = new ExperimentalConfiguration();
+                configurationDelegate(config);
+
+                // Next set the parameters for this test in the swwep
+                string path = dirName + "\\Exp" + testIndex.ToString();
+                int parameterIndexer = testIndex;
+                for (int dimension = parameterSweeps.Length - 1; dimension >= 0; dimension--)
+                {
+                    IParameterSweeper sweep = parameterSweeps[dimension];
+                    int parameterIndex = parameterIndexer%sweep.GetParameterCount();
+                    parameterIndexer /= sweep.GetParameterCount();
+                    sweep.SetParameter(config, parameterIndex);
+                    path += "_" + sweep.GetParameterString(parameterIndex).Replace(".", "_");
+                    statisticsCsvLine += "," +
+                                         sweep.GetParameterString(parameterIndex).Replace(",", "_");
+                }
+
+                // Now that all of the parameters of the sweep have been set, run the simulation
+                StreamWriter errorWriter = new StreamWriter(path + ".txt");
+                Simulator simulator = new Simulator(config);
+                ResultStatistics stats = await simulator.Run(errorWriter);
+                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}", statisticsCsvLine,
+                    stats.FalsePositives, stats.TruePositives,
+                    Fraction(stats.FalsePositives, stats.TruePositives),
+                    stats.FalseNegatives, stats.TrueNegatives,
+                    Fraction(stats.FalseNegatives, stats.TrueNegatives),
+                    stats.BenignErrors,
+                    stats.GuessWasWrong,
+                    stats.TotalExceptions,
+                    stats.TotalLoopIterations
+                    );
+                statsWriter.Flush();
+            }
+        }
+
+
+        public Simulator(ExperimentalConfiguration myExperimentalConfiguration)
         {
             MyExperimentalConfiguration = myExperimentalConfiguration;
-            if (options == null)
-                options = new BlockingAlgorithmOptions();
             CreditLimits = new[]
             {
                 // 3 per hour
@@ -67,10 +205,10 @@ namespace Simulator
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
             MyUserAccountController = new UserAccountController(MyUserAccountClient,
-                MyLoginAttemptClient, memoryUsageLimiter, options, StableStore,
+                MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore,
                 CreditLimits);
             MyLoginAttemptController = new LoginAttemptController(MyLoginAttemptClient, MyUserAccountClient,
-                memoryUsageLimiter, options, StableStore);
+                memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
 
             MyUserAccountController.SetLoginAttemptClient(MyLoginAttemptClient);
             MyUserAccountClient.SetLocalUserAccountController(MyUserAccountController);
@@ -86,7 +224,7 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task Run(CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<ResultStatistics> Run(StreamWriter errorWriter, CancellationToken cancellationToken = default(CancellationToken))
         {            
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
@@ -127,9 +265,7 @@ namespace Simulator
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
-            Stats stats = new Stats();
-            int count = 0;
-//            List<int> Runtime = new List<int>(new int[MyExperimentalConfiguration.TotalLoginAttemptsToIssue]);
+            ResultStatistics resultStatistics = new ResultStatistics();
 
             await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async () =>
             {
@@ -149,54 +285,53 @@ namespace Simulator
                            // cancellationToken: cancellationToken);
                     AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
 
-                    lock (stats)
+                    lock (resultStatistics)
                     {
-                    stats.TotalLoopIterationsThatShouldHaveRecordedStats++;
+                    resultStatistics.TotalLoopIterations++;
                         if (simAttempt.IsGuess)
                         {
                             if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                                stats.TruePositives++;
+                                resultStatistics.TruePositives++;
                             else if (outcome == AuthenticationOutcome.CredentialsValid)
-                                stats.FalseNegatives++;
+                            {
+                                resultStatistics.FalseNegatives++;
+                                errorWriter.WriteLine("False Negative\r\n{0}\r\n{1}\r\n{2}\r\n\r\n", 
+                                    simAttempt.Password,
+                                    JsonConvert.SerializeObject(GetIpAddressDebugInfo(attemptWithOutcome.AddressOfClientInitiatingRequest)), 
+                                    JsonConvert.SerializeObject(attemptWithOutcome) );
+                            }
                             else
-                                stats.GuessWasWrong++;
+                                resultStatistics.GuessWasWrong++;
                         }
                         else
                         {
                             if (outcome == AuthenticationOutcome.CredentialsValid)
-                                stats.TrueNegatives++;
+                                resultStatistics.TrueNegatives++;
                             else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                                stats.FalsePositives++;
+                            {
+                                string jsonOfIp =
+                                    JsonConvert.SerializeObject(
+                                        GetIpAddressDebugInfo(attemptWithOutcome.AddressOfClientInitiatingRequest));
+                                string jsonOfattempt =
+                                    JsonConvert.SerializeObject(attemptWithOutcome);
+                                resultStatistics.FalsePositives++;
+                                errorWriter.WriteLine("False Positive\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
+                                    simAttempt.Password, jsonOfIp, jsonOfattempt);
+                        }
                             else
-                                stats.BenignErrors++;
+                                resultStatistics.BenignErrors++;
                         }
                     }
             },
             (e) => { 
-                    lock (stats)
+                    lock (resultStatistics)
                     {
-                        stats.TotalExceptions++;
+                        resultStatistics.TotalExceptions++;
                     }
                     Console.Error.WriteLine(e.ToString());
-                count++; 
             });
 
-
-            sw.Stop();
-
-            Console.WriteLine("Time Elapsed={0}", sw.Elapsed);
-            Console.WriteLine("the new count is {0}", count);
-
-            double falsePositiveRate = ((double) stats.FalsePositives)/((double)stats.FalsePositives + stats.TruePositives);
-            double falseNegativeRate = ((double)stats.FalseNegatives)/((double)stats.FalseNegatives + stats.TrueNegatives);
-
-            using (System.IO.StreamWriter file =
-            new System.IO.StreamWriter(@"result_log.txt"))
-            {
-                file.WriteLine("The false postive rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalsePositives, stats.TruePositives, falsePositiveRate * 100d);
-                file.WriteLine("The false negative rate is {0}/({0}+{1}) ({2:F20}%)", stats.FalseNegatives, stats.TrueNegatives, falseNegativeRate * 100d);
-                file.WriteLine("Time Elapsed={0}", sw.Elapsed);
-            }
+            return resultStatistics;
         }
     }
 }

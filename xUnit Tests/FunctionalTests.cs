@@ -116,7 +116,7 @@ namespace xUnit_Tests
 
 
         const string Username1 = "user1";
-        const string Password1 = "testabcd1234";
+        const string Password1 = "123456";
         private const string PopularPassword = "p@ssword";
         protected IPAddress ClientsIp = new IPAddress(new byte[] { 42, 42, 42, 42 });
         protected IPAddress AttackersIp = new IPAddress(new byte[] { 66, 66, 66, 66 });
@@ -176,7 +176,7 @@ namespace xUnit_Tests
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             foreach (string username in usernames.Skip(10))
-                await AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp);
+                await AuthenticateAsync(configuration, username, Password1, clientAddress: AttackersIp);
 
             LoginAttempt firstAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AttackersIp);
 
@@ -184,9 +184,9 @@ namespace xUnit_Tests
 
             // Now the second attacker should be flagged after using that password 10 times on different accounts.
             foreach (string username in usernames.Skip(1).Take(9))
-                await AuthenticateAsync(configuration, username, PopularPassword, AnotherAttackersIp);
+                await AuthenticateAsync(configuration, username, Password1, AnotherAttackersIp);
         
-            await AuthenticateAsync(configuration, usernames[0], PopularPassword, AnotherAttackersIp);
+            await AuthenticateAsync(configuration, usernames[0], Password1, AnotherAttackersIp);
 
             LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AnotherAttackersIp);
 
@@ -203,7 +203,7 @@ namespace xUnit_Tests
 
             // Have one attacker make the password popular by attempting to login to every account with it.
             Parallel.ForEach(usernames.Skip(20), async (username) =>
-                await AuthenticateAsync(configuration, username, PopularPassword, clientAddress: AttackersIp));
+                await AuthenticateAsync(configuration, username, Password1, clientAddress: AttackersIp));
 
             Thread.Sleep(2000);
             
@@ -213,9 +213,9 @@ namespace xUnit_Tests
 
             // Now the second attacker should be flagged after using that password 10 times on different accounts.
             foreach (string username in usernames.Skip(1).Take(19))
-                await AuthenticateAsync(configuration, username, PopularPassword, AnotherAttackersIp);
+                await AuthenticateAsync(configuration, username, Password1, AnotherAttackersIp);
 
-            await AuthenticateAsync(configuration, usernames[0], PopularPassword, AnotherAttackersIp);
+            await AuthenticateAsync(configuration, usernames[0], Password1, AnotherAttackersIp);
 
             LoginAttempt anotherAttackersAttempt = await AuthenticateAsync(configuration, Username1, Password1, clientAddress: AnotherAttackersIp);
 
@@ -283,7 +283,7 @@ namespace xUnit_Tests
             {
                 BasePenaltyForInvalidPassword = 1,
                 BlockThresholdPopularPassword = 1,
-                BlockThresholdUnpopularPassword = 1,
+                BlockThresholdMultiplierForUnpopularPasswords = 1,
                 PenaltyMulitiplierForTypo = .25d
             };
 

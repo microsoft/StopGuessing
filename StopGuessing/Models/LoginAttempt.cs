@@ -23,7 +23,7 @@ namespace StopGuessing.Models
         /// <summary>
         /// The IP address of the client that was attempting to login to.  This is
         /// </summary>
-        [DataMember]
+        //FIXMEIMMEDIATELY[DataMember]
         public System.Net.IPAddress AddressOfClientInitiatingRequest { get; set; }
 
         /// <summary>
@@ -31,7 +31,7 @@ namespace StopGuessing.Models
         /// ID for each request without requiring coordination between servers to ensure they are
         /// generating numbers that other servers are not generating.
         /// </summary>
-        [DataMember]
+        //FIXMEIMMEDIATELY[DataMember]
         public System.Net.IPAddress AddressOfServerThatInitiallyReceivedLoginAttempt { get; set; }
 
         /// <summary>
