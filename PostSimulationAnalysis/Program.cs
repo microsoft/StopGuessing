@@ -136,17 +136,18 @@ namespace PostSimulationAnalysis
             {
                 using (StreamWriter writer = new StreamWriter(path + mode.ToString() + ".csv"))
                 {
-                    trialsUsersCorrectPassword.Sort((a, b) => -a.CompareTo(b, mode));
-                    trialsGuessesCorrectPassword.Sort((a, b) => -a.CompareTo(b, mode));
-
                     List<Trial> originalMalicious = trialsGuessesCorrectPassword;
                     List<Trial> originalBenign = trialsUsersCorrectPassword;
+                    originalMalicious.Sort((a, b) => -a.CompareTo(b, mode));
+                    originalBenign.Sort((a, b) => -a.CompareTo(b, mode));
 
                     Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
                     Queue<Trial> benign = new Queue<Trial>(originalBenign);
 
-                    List<ROCPoint> rocPoints = new List<ROCPoint>();
-                    rocPoints.Add(new ROCPoint(0,0, originalMalicious.Count, originalBenign.Count));
+                    List<ROCPoint> rocPoints = new List<ROCPoint>
+                    {
+                        new ROCPoint(0, 0, originalMalicious.Count, originalBenign.Count)
+                    };
                     double blockThreshold = malicious.Peek().GetScoreForMode(mode);
                     while (malicious.Count > 0)
                     {
@@ -186,6 +187,7 @@ namespace PostSimulationAnalysis
                             point.FalsePositiveRate, point.TruePositiveRate, point.Precision, point.Recall
                             );
                     }
+                    writer.Flush();
 
 
                 }
