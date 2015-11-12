@@ -277,6 +277,8 @@ namespace Simulator
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
+                "IsIpInAttackersPool",
+                "IsClientAProxyIP",
                 "TypeOfMistake",
                 "OurBlockScore",
                 "IndustryBlockScore",
@@ -312,10 +314,13 @@ namespace Simulator
 
                 lock (outcomeWriter)
                 {
+                    var ipInfo = GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
                     outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                         simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                         simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                         simAttempt.IsGuess ? "IsGuess" : "NotGuess",
+                        ipInfo.IsInAttackersIpPool ? "InAttackersIpPool" : "NotUsedByAttacker",
+                        ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                         string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
                         blockingScoresForEachAlgorithm.Ours,
                         blockingScoresForEachAlgorithm.Industry,
@@ -323,6 +328,7 @@ namespace Simulator
                         simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
                         simAttempt.Password
                         );
+                    outcomeWriter.Flush();
                 }
 
                 lock (resultStatistics)
