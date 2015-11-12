@@ -1,0 +1,19 @@
+﻿{
+  "version": "1.0.0-*",
+  "description": "PostSimulationAnalysis Console Application",
+  "authors": [ "stus" ],
+  "tags": [ "" ],
+  "projectUrl": "",
+  "licenseUrl": "",
+
+  "dependencies": {
+  },
+
+  "commands": {
+    "PostSimulationAnalysis": "PostSimulationAnalysis"
+  },
+
+  "frameworks": {
+    "dnx451": { }
+  }
+}
