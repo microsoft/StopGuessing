@@ -52,18 +52,6 @@ namespace Simulator
 
         public uint NumberOfPopularPasswordsForAttackerToExploit = 1*(uint)Thousand;
 
-        public BenignUserAccountGroup[] BenignUserGroups = new BenignUserAccountGroup[]
-        {
-            // Group 0 logs in 5 times per day
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = DaysPerYear*5},
-            // Group 1 logs in once per day
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = DaysPerYear},
-            // Group 2 logs in once per week
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = WeeksPerYear},
-            // Group 3 logs in once per month
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = MonthsPerYear},
-            // Group 4 logs in once per year
-            new BenignUserAccountGroup() {GroupSize = 2*Thousand, LoginsPerYear = 1}
-        };
+        public uint NumberOfBenignAccounts = 10*(uint)Thousand;
     }
 }

@@ -183,22 +183,25 @@ namespace Simulator
             int totalAccounts = 0;
 
             // Generate benign accounts
-            foreach (
-                ExperimentalConfiguration.BenignUserAccountGroup group in MyExperimentalConfiguration.BenignUserGroups)
+            for (uint i = 0; i < MyExperimentalConfiguration.NumberOfBenignAccounts; i++)
             {
-                for (ulong i = 0; i < group.GroupSize; i++)
+                SimulatedAccount account = new SimulatedAccount()
                 {
-                    SimulatedAccount account = new SimulatedAccount()
-                    {
-                        UniqueId = (totalAccounts++).ToString(),
-                        Password = PasswordSelector.GetItemByWeightedRandom()
-                    };
-                    account.ClientAddresses.Add(GetNewRandomBenignIp(account.UniqueId));
-                    account.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
-                    BenignAccounts.Add(account);
-                    BenignAccountSelector.AddItem(account, group.LoginsPerYear);
-                }
+                    UniqueId = (totalAccounts++).ToString(),
+                    Password = PasswordSelector.GetItemByWeightedRandom()
+                };
+                account.ClientAddresses.Add(GetNewRandomBenignIp(account.UniqueId));
+                account.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
+                BenignAccounts.Add(account);
+                double inverseFrequency = Distributions.GetLogNormal(0, 1);
+                if (inverseFrequency < 0.01d)
+                    inverseFrequency = 0.01d;
+                if (inverseFrequency > 50d)
+                    inverseFrequency = 50d;
+                double frequency = 1/inverseFrequency;
+                BenignAccountSelector.AddItem(account, frequency);
             }
+
 
             // Right after creating benign accounts we can create malicious ones. 
             // (we'll needed to wait for the the benign IPs to be generated create some overlap)

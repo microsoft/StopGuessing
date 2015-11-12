@@ -35,15 +35,39 @@ namespace Simulator
 
             await Simulator.RunExperimentalSweep((config) =>
             {
+                // Scale of test
+                ulong totalLoginAttempts = 10 * Thousand;
+                double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
+                double meanNumberOfLoginsPerAttackerControlledIP = 100d;
+
+                double fractionOfLoginAttemptsFromAttacker = 0.5d;
+                double fractionOfLoginAttemptsFromBenign = 1d - fractionOfLoginAttemptsFromAttacker;
+
+                double expectedNumberOfBenignAttempts = totalLoginAttempts*fractionOfLoginAttemptsFromBenign;
+                double numberOfBenignAccounts = expectedNumberOfBenignAttempts/
+                                                meanNumberOfLoginsPerBenignAccountDuringExperiment;
+
+                double expectedNumberOfAttackAttempts = totalLoginAttempts*fractionOfLoginAttemptsFromAttacker;
+                double numberOfAttackerIps = expectedNumberOfAttackAttempts/
+                                             meanNumberOfLoginsPerAttackerControlledIP;
+
                 // Make any changes to the config or the config.BlockingOptions within config here
-                config.TotalLoginAttemptsToIssue = 1*Thousand;
-                config.FractionOfBenignIPsBehindProxies = 0.5d;
-                config.NumberOfIpAddressesControlledByAttacker = 10;
-                config.BenignUserGroups = new ExperimentalConfiguration.BenignUserAccountGroup[]
-                {
-                    // Group 0 logs in 5 times per day
-                    new ExperimentalConfiguration.BenignUserAccountGroup() {GroupSize = 200, LoginsPerYear = 1},
-                };
+                config.TotalLoginAttemptsToIssue = totalLoginAttempts;
+
+                config.FractionOfLoginAttemptsFromAttacker = fractionOfLoginAttemptsFromAttacker;
+                config.NumberOfBenignAccounts = (uint) numberOfBenignAccounts;
+
+                // Scale of attackers resources
+                config.NumberOfIpAddressesControlledByAttacker = (uint)numberOfAttackerIps;
+                config.NumberOfAttackerControlledAccounts = (uint)numberOfAttackerIps;
+
+                // Additional sources of false positives/negatives
+                config.FractionOfBenignIPsBehindProxies = 0.1d;
+                config.ProxySizeInUniqueClientIPs = 1000;
+
+                // Blocking parameters
+                // Make typos almost entirely ignored
+                config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
             }, new Simulator.IParameterSweeper[]
             {
                 new Simulator.ParameterSweeper<Simulator.SystemMode>

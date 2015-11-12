@@ -6,9 +6,9 @@ namespace Simulator
     public class WeightedSelector<T>
     {
         private readonly List<T> _items = new List<T>();
-        private readonly List<ulong> _cumulativeWeight = new List<ulong>();
+        private readonly List<double> _cumulativeWeight = new List<double>();
 
-        public void AddItem(T item, ulong weight)
+        public void AddItem(T item, double weight)
         {
             _items.Add(item);
             _cumulativeWeight.Add(weight + (_cumulativeWeight.Count > 0 ? _cumulativeWeight[_cumulativeWeight.Count-1] : 0));
@@ -18,8 +18,8 @@ namespace Simulator
         {
             if (_cumulativeWeight.Count == 0)
                 return default(T);
-            ulong randomValueLessThanWeight =
-                StrongRandomNumberGenerator.Get64Bits(_cumulativeWeight[_cumulativeWeight.Count - 1]);
+            double randomValueLessThanWeight =
+                StrongRandomNumberGenerator.GetFraction() *_cumulativeWeight[_cumulativeWeight.Count - 1];
 
             // Binary search to find the correct index
             int minIndex = 0;
@@ -27,7 +27,7 @@ namespace Simulator
             while (maxIndex > minIndex)
             {
                 int midPointIndex = (maxIndex + minIndex) / 2;
-                ulong midPointValue = _cumulativeWeight[midPointIndex];
+                double midPointValue = _cumulativeWeight[midPointIndex];
                 if (midPointValue < randomValueLessThanWeight)
                 {
                     // The midpoint has a value that is smaller than point to find, and so 

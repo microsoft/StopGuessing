@@ -131,9 +131,9 @@ namespace Simulator
             string dirName = @"..\Experiment_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
             Directory.CreateDirectory(dirName);
             StreamWriter statsWriter = new StreamWriter(dirName + "\\" + "ResultStatistics.csv");
-                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}", new string(',', parameterSweeps.Length),
-                "FalsePositives", "TruePositives", "FalsePositiveRate",
-                "FalseNegatives", "TrueNegatives", "FalseNegativeRate",
+                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", new string(',', parameterSweeps.Length),
+                "FalsePositives", "TruePositives", "FalsePositiveRate", "TruePositiveRate",
+                "FalseNegatives", "TrueNegatives", "FalseNegativeRate", "TrueNegativeRate",
                 "BenignErrors",
                 "GuessWasWrong",
                 "TotalExceptions",
@@ -164,11 +164,13 @@ namespace Simulator
                 StreamWriter errorWriter = new StreamWriter(path + ".txt");
                 Simulator simulator = new Simulator(config);
                 ResultStatistics stats = await simulator.Run(errorWriter);
-                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}", statisticsCsvLine,
+                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", statisticsCsvLine,
                     stats.FalsePositives, stats.TruePositives,
-                    Fraction(stats.FalsePositives, stats.TruePositives),
+                    Fraction(stats.FalsePositives, stats.FalsePositives + stats.TruePositives),
+                    Fraction(stats.TruePositives, stats.FalsePositives + stats.TruePositives),
                     stats.FalseNegatives, stats.TrueNegatives,
-                    Fraction(stats.FalseNegatives, stats.TrueNegatives),
+                    Fraction(stats.FalseNegatives, stats.FalseNegatives + stats.TrueNegatives),
+                    Fraction(stats.TrueNegatives, stats.FalseNegatives + stats.TrueNegatives),
                     stats.BenignErrors,
                     stats.GuessWasWrong,
                     stats.TotalExceptions,
@@ -251,15 +253,8 @@ namespace Simulator
                 {
                     file.WriteLine("{0} Exception caught in account creation.", e);
                     file.WriteLine("time is {0}", DateTime.Now.ToString(CultureInfo.InvariantCulture));
-//                    file.WriteLine("How many requests? {0}", i);
                 }
             }
-
-            //using (StreamWriter file = new StreamWriter(@"account.txt"))
-            //{
-            //    file.WriteLine("time is {0}", DateTime.Now.ToString(CultureInfo.InvariantCulture));
-            //    file.WriteLine("How many requests? {0}", i);
-            //}
 
 
             Stopwatch sw = new Stopwatch();
