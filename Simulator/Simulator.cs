@@ -273,7 +273,7 @@ namespace Simulator
                     await MyUserAccountController.PutAsync(account, cancellationToken: cancellationToken);
                 });
 
-            outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+            outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
@@ -315,7 +315,7 @@ namespace Simulator
                 lock (outcomeWriter)
                 {
                     var ipInfo = GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                    outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+                    outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
                         simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                         simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                         simAttempt.IsGuess ? "IsGuess" : "NotGuess",
