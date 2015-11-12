@@ -134,6 +134,7 @@ namespace Simulator
                 statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", new string(',', parameterSweeps.Length),
                 "FalsePositives", "TruePositives", "FalsePositiveRate", "TruePositiveRate",
                 "FalseNegatives", "TrueNegatives", "FalseNegativeRate", "TrueNegativeRate",
+                "DetectionRate",
                 "BenignErrors",
                 "GuessWasWrong",
                 "TotalExceptions",
@@ -162,21 +163,36 @@ namespace Simulator
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
                 StreamWriter errorWriter = new StreamWriter(path + ".txt");
-                Simulator simulator = new Simulator(config);
-                ResultStatistics stats = await simulator.Run(errorWriter);
-                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", statisticsCsvLine,
-                    stats.FalsePositives, stats.TruePositives,
-                    Fraction(stats.FalsePositives, stats.FalsePositives + stats.TruePositives),
-                    Fraction(stats.TruePositives, stats.FalsePositives + stats.TruePositives),
-                    stats.FalseNegatives, stats.TrueNegatives,
-                    Fraction(stats.FalseNegatives, stats.FalseNegatives + stats.TrueNegatives),
-                    Fraction(stats.TrueNegatives, stats.FalseNegatives + stats.TrueNegatives),
-                    stats.BenignErrors,
-                    stats.GuessWasWrong,
-                    stats.TotalExceptions,
-                    stats.TotalLoopIterations
-                    );
-                statsWriter.Flush();
+                try
+                {
+                    Simulator simulator = new Simulator(config);
+                    ResultStatistics stats = await simulator.Run(errorWriter);
+                    statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", statisticsCsvLine,
+                        stats.FalsePositives, stats.TruePositives,
+                        Fraction(stats.FalsePositives, stats.FalsePositives + stats.TruePositives),
+                        Fraction(stats.TruePositives, stats.FalsePositives + stats.TruePositives),
+                        stats.FalseNegatives, stats.TrueNegatives,
+                        Fraction(stats.FalseNegatives, stats.FalseNegatives + stats.TrueNegatives),
+                        Fraction(stats.TrueNegatives, stats.FalseNegatives + stats.TrueNegatives),
+                        Fraction(stats.TruePositives, stats.TruePositives + stats.FalseNegatives),
+                        stats.BenignErrors,
+                        stats.GuessWasWrong,
+                        stats.TotalExceptions,
+                        stats.TotalLoopIterations
+                        );
+                    statsWriter.Flush();
+                }
+                catch (Exception e)
+                {
+                    while (e != null)
+                    {
+                        errorWriter.WriteLine(e.Message);
+                        errorWriter.WriteLine(e.StackTrace);
+                        errorWriter.WriteLine(e);
+                        e = e.InnerException;
+                    }
+                    errorWriter.Flush();
+                }
             }
         }
 
@@ -294,6 +310,7 @@ namespace Simulator
                                     simAttempt.Password,
                                     JsonConvert.SerializeObject(GetIpAddressDebugInfo(attemptWithOutcome.AddressOfClientInitiatingRequest)), 
                                     JsonConvert.SerializeObject(attemptWithOutcome) );
+                                errorWriter.Flush();
                             }
                             else
                                 resultStatistics.GuessWasWrong++;
@@ -312,6 +329,7 @@ namespace Simulator
                                 resultStatistics.FalsePositives++;
                                 errorWriter.WriteLine("False Positive\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
                                     simAttempt.Password, jsonOfIp, jsonOfattempt);
+                                errorWriter.Flush();
                         }
                             else
                                 resultStatistics.BenignErrors++;

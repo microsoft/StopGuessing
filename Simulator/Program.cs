@@ -36,7 +36,7 @@ namespace Simulator
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test
-                ulong totalLoginAttempts = 10 * Thousand;
+                ulong totalLoginAttempts = 20 * Thousand;
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
@@ -77,7 +77,7 @@ namespace Simulator
                     {
                         Simulator.SystemMode.StopGuessing,
                         Simulator.SystemMode.Basic,
-                        //Simulator.SystemMode.SSH
+                        Simulator.SystemMode.SSH
                     },
                     ParameterSetter =
                         (config, modeForThisExp) => Simulator.SetSystemMode(config, modeForThisExp)
@@ -87,12 +87,14 @@ namespace Simulator
                     Name = "BlockThresholdPopularPassword",
                     Parameters = new double[] {
                         3,
-                        //5,
-                        10,
-                        //20,
-                        //30,
-                        50,
-                        //75,
+                        5,
+                        8,
+                        12,
+                        18,
+                        28,
+                        40,
+                        60,
+                        80,
                         100 },
                     ParameterSetter =
                         (config, thresholdForThisExp) => config.BlockingOptions.BlockThresholdPopularPassword = thresholdForThisExp

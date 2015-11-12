@@ -35,7 +35,7 @@ namespace Simulator
 
         public SimulatedAccount GetMaliciousAccountAtRandomUniform()
         {
-            return BenignAccounts[(int) StrongRandomNumberGenerator.Get32Bits(BenignAccounts.Count)];
+            return MaliciousAccounts[(int) StrongRandomNumberGenerator.Get32Bits(MaliciousAccounts.Count)];
         }
 
         public string GetPasswordFromWeightedDistribution()
@@ -141,6 +141,12 @@ namespace Simulator
         public IPAddress GetRandomMaliciousIp()
         {
             int randIndex = (int)StrongRandomNumberGenerator.Get32Bits(_maliciousIpAddresses.Count);
+            IPAddress address = _maliciousIpAddresses[randIndex];
+            var debugInfo = GetIpAddressDebugInfo(address);
+            if (debugInfo.IsInAttackersIpPool != true)
+            {
+                debugInfo.IsInAttackersIpPool = true;
+            }
             return _maliciousIpAddresses[randIndex];
         }
 
