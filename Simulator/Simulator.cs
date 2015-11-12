@@ -134,7 +134,8 @@ namespace Simulator
                 statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", new string(',', parameterSweeps.Length),
                 "FalsePositives", "TruePositives", "FalsePositiveRate", "TruePositiveRate",
                 "FalseNegatives", "TrueNegatives", "FalseNegativeRate", "TrueNegativeRate",
-                "DetectionRate",
+                "Precision",
+                "Recall",
                 "BenignErrors",
                 "GuessWasWrong",
                 "TotalExceptions",
@@ -174,6 +175,9 @@ namespace Simulator
                         stats.FalseNegatives, stats.TrueNegatives,
                         Fraction(stats.FalseNegatives, stats.FalseNegatives + stats.TrueNegatives),
                         Fraction(stats.TrueNegatives, stats.FalseNegatives + stats.TrueNegatives),
+                        // Precision
+                        Fraction(stats.TruePositives, stats.TruePositives + stats.FalsePositives),
+                        // Recall
                         Fraction(stats.TruePositives, stats.TruePositives + stats.FalseNegatives),
                         stats.BenignErrors,
                         stats.GuessWasWrong,

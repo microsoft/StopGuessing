@@ -7,21 +7,6 @@ using System.IO;
 
 namespace Simulator
 {
-    public class StatsWriter
-    {
-        private StreamWriter _writer;
-        public StatsWriter(StreamWriter whereToWrite)
-        {
-            _writer = whereToWrite;
-        }
-
-        public void Write(Simulator.ResultStatistics resultStatistics)
-        {
-            _writer.WriteLine("{0},{1},{2},{3}", resultStatistics.FalsePositives, resultStatistics.TruePositives, resultStatistics.FalseNegatives, resultStatistics.TrueNegatives);
-            _writer.Flush();
-        }
-
-    }
 
 
     public class Program
