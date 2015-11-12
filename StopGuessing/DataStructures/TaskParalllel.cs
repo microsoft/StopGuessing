@@ -101,9 +101,11 @@ namespace StopGuessing.DataStructures
                         callExceptionHandler = false;
                     }
                 }
-                Task replacementTask = callExceptionHandler
-                    ? Task.Run(() => callOnException(completedTask.Exception))
-                    : Task.Run(actionToRun);
+                Task replacementTask;
+                if (callExceptionHandler)
+                    replacementTask = Task.Run(() => callOnException(completedTask.Exception));
+                else
+                    replacementTask = Task.Run(actionToRun);
                 // Track exception handling tasks so that we can make sure we don't call the exception handler
                 // on a failed exception handler.
                 if (callExceptionHandler)

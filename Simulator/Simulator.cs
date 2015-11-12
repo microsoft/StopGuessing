@@ -253,14 +253,13 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task<ResultStatistics> Run(StreamWriter errorWriter, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<ResultStatistics> Run(StreamWriter outcomeWriter, CancellationToken cancellationToken = default(CancellationToken))
         {            
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
 
             //Record the accounts into stable store 
-            try
-            {
+
                 GenerateSimulatedAccounts();
 
                 List<SimulatedAccount> allAccounts = new List<SimulatedAccount>(BenignAccounts);
@@ -273,15 +272,17 @@ namespace Simulator
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(LoginAttempt.HashCookie(cookie));
                     await MyUserAccountController.PutAsync(account, cancellationToken: cancellationToken);
                 });
-            }
-            catch (Exception e)
-            {
-                using (StreamWriter file = new StreamWriter(@"account_error.txt"))
-                {
-                    file.WriteLine("{0} Exception caught in account creation.", e);
-                    file.WriteLine("time is {0}", DateTime.Now.ToString(CultureInfo.InvariantCulture));
-                }
-            }
+
+            outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+                "IsPasswordCorrect",
+                "IsFromAttackAttacker",
+                "IsAGuess",
+                "TypeOfMistake",
+                "OurBlockScore",
+                "IndustryBlockScore",
+                "SSHBlockScore",
+                "UserID",
+                "Password");
 
 
             Stopwatch sw = new Stopwatch();
@@ -291,75 +292,92 @@ namespace Simulator
 
             await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async () =>
             {
-                    SimulatedLoginAttempt simAttempt;
-                    if (StrongRandomNumberGenerator.GetFraction() <
-                        MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
+                SimulatedLoginAttempt simAttempt;
+                if (StrongRandomNumberGenerator.GetFraction() <
+                    MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
+                {
+                    simAttempt = MaliciousLoginAttemptBreadthFirst();
+                }
+                else
+                {
+                    simAttempt = BenignLoginAttempt();
+                }
+
+                var dlaoResult = await
+                    MyLoginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
+                        cancellationToken);
+                LoginAttempt attemptWithOutcome = dlaoResult.Item1;
+                BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = dlaoResult.Item2;
+                AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
+
+                lock (outcomeWriter)
+                {
+                    outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+                        simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
+                        simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
+                        simAttempt.IsGuess ? "IsGuess" : "NotGuess",
+                        string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
+                        blockingScoresForEachAlgorithm.Ours,
+                        blockingScoresForEachAlgorithm.Industry,
+                        blockingScoresForEachAlgorithm.SSH,
+                        simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
+                        simAttempt.Password
+                        );
+                }
+
+                lock (resultStatistics)
+                {
+                    resultStatistics.TotalLoopIterations++;
+                    if (simAttempt.IsGuess)
                     {
-                        simAttempt = MaliciousLoginAttemptBreadthFirst();
+                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+                            resultStatistics.TruePositives++;
+                        else if (outcome == AuthenticationOutcome.CredentialsValid)
+                        {
+                            resultStatistics.FalseNegatives++;
+                            //var addressDebugInfo =
+                            //    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
+                            //string jsonOfIp;
+                            //lock (addressDebugInfo)
+                            //{
+                            //    jsonOfIp =
+                            //        JsonConvert.SerializeObject(addressDebugInfo);
+                            //}
+                            //errorWriter.WriteLine("False Negative\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
+                            //    simAttempt.Password,
+                            //    jsonOfIp,
+                            //    JsonConvert.SerializeObject(attemptWithOutcome));
+                            //errorWriter.Flush();
+                        }
+                        else
+                            resultStatistics.GuessWasWrong++;
                     }
                     else
                     {
-                        simAttempt = BenignLoginAttempt();
-                    }
-
-                    LoginAttempt attemptWithOutcome = await
-                        MyLoginAttemptController.LocalPutAsync(simAttempt.Attempt, simAttempt.Password);//,
-                           // cancellationToken: cancellationToken);
-                    AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
-
-                    lock (resultStatistics)
-                    {
-                    resultStatistics.TotalLoopIterations++;
-                        if (simAttempt.IsGuess)
+                        if (outcome == AuthenticationOutcome.CredentialsValid)
+                            resultStatistics.TrueNegatives++;
+                        else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
                         {
-                            if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                                resultStatistics.TruePositives++;
-                            else if (outcome == AuthenticationOutcome.CredentialsValid)
-                            {
-                                resultStatistics.FalseNegatives++;
-                                var addressDebugInfo =
-                                    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                                string jsonOfIp;
-                                lock (addressDebugInfo)
-                                {
-                                    jsonOfIp =
-                                        JsonConvert.SerializeObject(addressDebugInfo);
-                                }
-                                errorWriter.WriteLine("False Negative\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
-                                    simAttempt.Password,
-                                    jsonOfIp,
-                                    JsonConvert.SerializeObject(attemptWithOutcome));
-                                errorWriter.Flush();
-                            }
-                            else
-                                resultStatistics.GuessWasWrong++;
+                            //resultStatistics.FalsePositives++;
+                            //var addressDebugInfo =
+                            //    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
+                            //string jsonOfIp;
+                            //lock (addressDebugInfo)
+                            //{
+                            //    jsonOfIp =
+                            //        JsonConvert.SerializeObject(addressDebugInfo);
+                            //}
+                            //string jsonOfattempt =
+                            //    JsonConvert.SerializeObject(attemptWithOutcome);
+                            //errorWriter.WriteLine("False Positive\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
+                            //    simAttempt.Password,
+                            //    jsonOfIp, jsonOfattempt);
+                            //errorWriter.Flush();
                         }
                         else
-                        {
-                            if (outcome == AuthenticationOutcome.CredentialsValid)
-                                resultStatistics.TrueNegatives++;
-                            else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                            {
-                                var addressDebugInfo =
-                                    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                                string jsonOfIp;
-                                lock (addressDebugInfo)
-                                {
-                                    jsonOfIp =
-                                        JsonConvert.SerializeObject(addressDebugInfo);
-                                }
-                                string jsonOfattempt =
-                                    JsonConvert.SerializeObject(attemptWithOutcome);
-                                resultStatistics.FalsePositives++;
-                                errorWriter.WriteLine("False Positive\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
-                                    simAttempt.Password,
-                                    jsonOfIp, jsonOfattempt);
-                                errorWriter.Flush();
-                        }
-                            else
-                                resultStatistics.BenignErrors++;
-                        }
+                            resultStatistics.BenignErrors++;
                     }
+                }
             },
             (e) => { 
                     lock (resultStatistics)

@@ -243,6 +243,8 @@ namespace StopGuessing.Controllers
             else
             {
                 account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
+                if (account == null)
+                    return new HttpOkResult(); // FIXME?
             }
 
             bool accountHasBeenModified = false;

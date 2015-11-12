@@ -14,6 +14,7 @@ namespace Simulator
         public bool IsPasswordValid;
         public bool IsFromAttacker;
         public bool IsGuess;
+        public string MistakeType;
 
         public SimulatedLoginAttempt(SimulatedAccount account,
             string password,
@@ -21,6 +22,7 @@ namespace Simulator
             bool isGuess,
             IPAddress clientAddress,
             string cookieProvidedByBrowser,
+            string mistakeType,
             DateTimeOffset eventTime
         )
         {
@@ -40,6 +42,7 @@ namespace Simulator
             IsPasswordValid = isPasswordValid;
             IsFromAttacker = isFromAttacker;
             IsGuess = isGuess;
+            MistakeType = mistakeType;
         }
     }
 
@@ -51,6 +54,7 @@ namespace Simulator
         /// <returns></returns>
         public SimulatedLoginAttempt BenignLoginAttempt()
         {
+            string mistake = "";
             //1. Pick a user at random
             SimulatedAccount account = BenignAccountSelector.GetItemByWeightedRandom();
 
@@ -96,20 +100,23 @@ namespace Simulator
             if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignPasswordTypo)
             {
                 password += "z";
+                mistake += "Typo";
             }
             // The benign user may mistakenly use a password for another of her accounts, which we draw from same distribution
             // we used to generate user account passwords
             if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfAccidentallyUsingAnotherAccountPassword)
             {
                 password = GetPasswordFromWeightedDistribution();
+                mistake = "WrongPassword";
             }
             // The benign user may mistype her account name, and land on someone else's account name
             if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignAccountNameTypoResultingInAValidUserName)
-            { //2% username typo
+            {
                 account = GetBenignAccountAtRandomUniform();
+                mistake += "WrongAccountName";
             }
 
-            return new SimulatedLoginAttempt(account, password, false, false, clientIp, cookie, DateTimeOffset.Now);
+            return new SimulatedLoginAttempt(account, password, false, false, clientIp, cookie, mistake, DateTimeOffset.Now);
 
         }
 
@@ -128,6 +135,7 @@ namespace Simulator
                 true, true,
                 GetRandomMaliciousIp(),
                 StrongRandomNumberGenerator.Get64Bits().ToString(),
+                "",
                 DateTimeOffset.Now);
         }
 
@@ -139,6 +147,7 @@ namespace Simulator
         /// </summary>
         public SimulatedLoginAttempt MaliciousLoginAttemptBreadthFirst()
         {
+            string mistake = "";
             ulong breadthFirstAttemptCount;
             lock (_breadthFirstLock)
             {
@@ -155,7 +164,10 @@ namespace Simulator
             // Sometimes the attacker will miss and generate an invalid account name;
             if (StrongRandomNumberGenerator.GetFraction() <
                 MyExperimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
+            {
                 targetBenignAccount = null;
+                mistake = "BadAccount";
+            }
 
 
             //SimulationTest _simulationtest = new SimulationTest();
@@ -163,6 +175,7 @@ namespace Simulator
                 true, true,
                 GetRandomMaliciousIp(),
                 StrongRandomNumberGenerator.Get64Bits().ToString(),
+                mistake,
                 DateTimeOffset.Now);
         }
 
@@ -176,7 +189,7 @@ namespace Simulator
 
             return new SimulatedLoginAttempt(simAccount, simAccount.Password,
                 true, false,
-                ipAddressToSanitizeThroughLogin, StrongRandomNumberGenerator.Get64Bits().ToString(),
+                ipAddressToSanitizeThroughLogin, StrongRandomNumberGenerator.Get64Bits().ToString(), "",
                 DateTimeOffset.Now);
         }
 
