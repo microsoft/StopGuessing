@@ -20,7 +20,7 @@ namespace StopGuessing.Controllers
     {
         private readonly IStableStore _stableStore;
         private readonly BlockingAlgorithmOptions _options;
-        private readonly PasswordPopularityTracker _passwordPopularityTracker;
+        public readonly PasswordPopularityTracker _passwordPopularityTracker;
         private readonly FixedSizeLruCache<string, LoginAttempt> _loginAttemptCache;
         private readonly Dictionary<string, Task<LoginAttempt>> _loginAttemptsInProgress;
         private UserAccountClient _userAccountClient;

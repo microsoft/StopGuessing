@@ -162,17 +162,43 @@ namespace Simulator
             return _maliciousIpAddresses[randIndex];
         }
 
-        /// <summary>
-        /// Create accounts, generating passwords, primary IP
-        /// </summary>
-        public void GenerateSimulatedAccounts()
+
+        public static List<string> GetKnownPopularPasswords(string pathToPreviouslyKnownPopularPasswordFile)
         {
-            PasswordSelector = new WeightedSelector<string>();
-            CommonPasswordSelector = new WeightedSelector<string>();
-            uint lineNumber = 0;
+            List<string> knownPopularPasswords = new List<string>();
+            using (System.IO.StreamReader file =
+                new System.IO.StreamReader(pathToPreviouslyKnownPopularPasswordFile))
+            {
+
+                string line;
+                while ((line = file.ReadLine()) != null)
+                {
+                    line = line.Trim();
+                    if (!string.IsNullOrEmpty(line))
+                        knownPopularPasswords.Add(line);
+                }
+            }
+            return knownPopularPasswords;
+        }
+
+        public void PrimeWithKnownPasswords(IEnumerable<string> knownPopularPasswords)
+        {
+            foreach (string password in knownPopularPasswords)
+            {
+                for (int i = 0; i < 100; i++)
+                {
+                    MyLoginAttemptController._passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(
+                        password, false);
+                }
+            }
+        }
+
+        public static WeightedSelector<string> GetPasswordSelector(string PathToWeightedFrequencyFile)
+        {
+            WeightedSelector<string> passwordSelector = new WeightedSelector<string>();
             // Created a weighted-random selector for paasswords based on the RockYou database.
-            using (System.IO.StreamReader file = 
-                new System.IO.StreamReader(MyExperimentalConfiguration.PasswordFrequencyFile))
+            using (System.IO.StreamReader file =
+                new System.IO.StreamReader(PathToWeightedFrequencyFile))
             {
                 string lineWithCountFollowedBySpaceFollowedByPassword;
                 while ((lineWithCountFollowedBySpaceFollowedByPassword = file.ReadLine()) != null)
@@ -188,15 +214,24 @@ namespace Simulator
                     if (!ulong.TryParse(countAsString, out count))
                         continue; // The count field is invalid as it doesn't parse to an unsigned number
                     string password = lineWithCountFollowedBySpaceFollowedByPassword.Substring(indexOfFirstSpace + 1);
-                    PasswordSelector.AddItem(password, count);
-                    if (lineNumber++ < MyExperimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit)
-                    {
-                        CommonPasswordSelector.AddItem(password, count);
-                        OrderedListOfMostCommonPasswords.Add(password);
-                    }
+                    passwordSelector.AddItem(password, count);
                 }
             }
+            return passwordSelector;
+        }
 
+
+
+        /// <summary>
+        /// Create accounts, generating passwords, primary IP
+        /// </summary>
+        public void GenerateSimulatedAccounts()
+        {
+            CommonPasswordSelector =
+                PasswordSelector.TrimToInitialItems(
+                    (int) MyExperimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
+            OrderedListOfMostCommonPasswords =
+                PasswordSelector.GetItems((int) MyExperimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
 
             int totalAccounts = 0;
 

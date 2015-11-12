@@ -17,7 +17,6 @@ namespace Simulator
 
         public async Task Main(string[] args)
         {
-
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test

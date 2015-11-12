@@ -126,6 +126,11 @@ namespace Simulator
                 parameterSweeps.Select(ps => ps.GetParameterCount())
                     // Calculates the product of the number of parameters in each dimension
                     .Aggregate((runningProduct, nextFactor) => runningProduct*nextFactor);
+             
+            ExperimentalConfiguration baseConfig = new ExperimentalConfiguration();
+            configurationDelegate(baseConfig);
+            WeightedSelector <string> passwordSelector = Simulator.GetPasswordSelector(baseConfig.PasswordFrequencyFile);
+            List<string> passwordsAlreadyKnownToBePopular = Simulator.GetKnownPopularPasswords(baseConfig.PreviouslyKnownPopularPasswordFile);
 
             DateTime now = DateTime.Now;
             string dirName = @"..\Experiment_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
@@ -166,7 +171,8 @@ namespace Simulator
                 StreamWriter errorWriter = new StreamWriter(path + ".txt");
                 try
                 {
-                    Simulator simulator = new Simulator(config);
+                    Simulator simulator = new Simulator(config, passwordSelector);
+                    simulator.PrimeWithKnownPasswords(passwordsAlreadyKnownToBePopular);
                     ResultStatistics stats = await simulator.Run(errorWriter);
                     statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", statisticsCsvLine,
                         stats.FalsePositives, stats.TruePositives,
@@ -201,9 +207,10 @@ namespace Simulator
         }
 
 
-        public Simulator(ExperimentalConfiguration myExperimentalConfiguration)
+        public Simulator(ExperimentalConfiguration myExperimentalConfiguration, WeightedSelector<string> passwordSelector)
         {
             MyExperimentalConfiguration = myExperimentalConfiguration;
+            PasswordSelector = passwordSelector;
             CreditLimits = new[]
             {
                 // 3 per hour

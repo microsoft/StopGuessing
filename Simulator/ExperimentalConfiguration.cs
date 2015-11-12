@@ -24,6 +24,7 @@ namespace Simulator
         public BlockingAlgorithmOptions BlockingOptions = new BlockingAlgorithmOptions();
 
         public string PasswordFrequencyFile = @"rockyou-withcount.txt";
+        public string PreviouslyKnownPopularPasswordFile = @"phpbb.txt";
 
         public ulong TotalLoginAttemptsToIssue = 10*Thousand;
 
