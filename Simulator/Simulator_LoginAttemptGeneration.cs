@@ -181,32 +181,32 @@ namespace Simulator
         }
 
 
-        /// <summary>
-        /// Send login requests to the stopguessing service
-        /// </summary>
-        /// <param name="username"></param>
-        /// <param name="password"></param>
-        /// <param name="clientAddress"></param>
-        /// <param name="cookieProvidedByBrowser"></param>
-        /// <param name="eventTime"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public Tuple<LoginAttempt,string> CreateLoginAttempt(string username, string password,
-            IPAddress clientAddress,
-            string cookieProvidedByBrowser,
-            DateTimeOffset eventTime,
-            CancellationToken cancellationToken = default(CancellationToken)
-            )
-        {
-            return new Tuple<LoginAttempt, string>(new LoginAttempt
-            {
-                UsernameOrAccountId = username,
-                AddressOfClientInitiatingRequest = clientAddress,
-                AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] { 127, 1, 1, 1 }),
-                TimeOfAttempt = eventTime,
-                Api = "web",
-                CookieProvidedByBrowser = cookieProvidedByBrowser
-            }, password);
-        }
+        ///// <summary>
+        ///// Send login requests to the stopguessing service
+        ///// </summary>
+        ///// <param name="username"></param>
+        ///// <param name="password"></param>
+        ///// <param name="clientAddress"></param>
+        ///// <param name="cookieProvidedByBrowser"></param>
+        ///// <param name="eventTime"></param>
+        ///// <param name="cancellationToken"></param>
+        ///// <returns></returns>
+        //public Tuple<LoginAttempt,string> CreateLoginAttempt(string username, string password,
+        //    IPAddress clientAddress,
+        //    string cookieProvidedByBrowser,
+        //    DateTimeOffset eventTime,
+        //    CancellationToken cancellationToken = default(CancellationToken)
+        //    )
+        //{
+        //    return new Tuple<LoginAttempt, string>(new LoginAttempt
+        //    {
+        //        UsernameOrAccountId = username,
+        //        AddressOfClientInitiatingRequest = clientAddress,
+        //        AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] { 127, 1, 1, 1 }),
+        //        TimeOfAttempt = eventTime,
+        //        Api = "web",
+        //        CookieProvidedByBrowser = cookieProvidedByBrowser
+        //    }, password);
+        //}
     }
 }

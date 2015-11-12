@@ -306,10 +306,18 @@ namespace Simulator
                             else if (outcome == AuthenticationOutcome.CredentialsValid)
                             {
                                 resultStatistics.FalseNegatives++;
-                                errorWriter.WriteLine("False Negative\r\n{0}\r\n{1}\r\n{2}\r\n\r\n", 
+                                var addressDebugInfo =
+                                    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
+                                string jsonOfIp;
+                                lock (addressDebugInfo)
+                                {
+                                    jsonOfIp =
+                                        JsonConvert.SerializeObject(addressDebugInfo);
+                                }
+                                errorWriter.WriteLine("False Negative\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
                                     simAttempt.Password,
-                                    JsonConvert.SerializeObject(GetIpAddressDebugInfo(attemptWithOutcome.AddressOfClientInitiatingRequest)), 
-                                    JsonConvert.SerializeObject(attemptWithOutcome) );
+                                    jsonOfIp,
+                                    JsonConvert.SerializeObject(attemptWithOutcome));
                                 errorWriter.Flush();
                             }
                             else
@@ -321,14 +329,20 @@ namespace Simulator
                                 resultStatistics.TrueNegatives++;
                             else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
                             {
-                                string jsonOfIp =
-                                    JsonConvert.SerializeObject(
-                                        GetIpAddressDebugInfo(attemptWithOutcome.AddressOfClientInitiatingRequest));
+                                var addressDebugInfo =
+                                    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
+                                string jsonOfIp;
+                                lock (addressDebugInfo)
+                                {
+                                    jsonOfIp =
+                                        JsonConvert.SerializeObject(addressDebugInfo);
+                                }
                                 string jsonOfattempt =
                                     JsonConvert.SerializeObject(attemptWithOutcome);
                                 resultStatistics.FalsePositives++;
                                 errorWriter.WriteLine("False Positive\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
-                                    simAttempt.Password, jsonOfIp, jsonOfattempt);
+                                    simAttempt.Password,
+                                    jsonOfIp, jsonOfattempt);
                                 errorWriter.Flush();
                         }
                             else

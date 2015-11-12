@@ -90,7 +90,10 @@ namespace Simulator
                         MyExperimentalConfiguration.ProxySizeInUniqueClientIPs)
                         _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
                     debugInfo = GetIpAddressDebugInfo(_currentProxyAddress);
-                    debugInfo.IsPartOfProxy = true;
+                    lock (debugInfo)
+                    {
+                        debugInfo.IsPartOfProxy = true;
+                    }
                 }
             }
             else
@@ -121,7 +124,10 @@ namespace Simulator
                 int randIndex = (int) StrongRandomNumberGenerator.Get32Bits(listOfIpAddressesInUseByBenignUsers.Count);
                 IPAddress address = listOfIpAddressesInUseByBenignUsers[randIndex];
                 IPAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
-                debugInfo.IsInAttackersIpPool = true;
+                lock (debugInfo)
+                {
+                    debugInfo.IsInAttackersIpPool = true;
+                }
                 _maliciousIpAddresses.Add(address);
                 listOfIpAddressesInUseByBenignUsers.RemoveAt(randIndex);
             }
@@ -129,7 +135,10 @@ namespace Simulator
             {
                 IPAddress address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
                 IPAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
-                debugInfo.IsInAttackersIpPool = true;
+                lock (debugInfo)
+                {
+                    debugInfo.IsInAttackersIpPool = true;
+                }
                 _maliciousIpAddresses.Add(address);
             }
         }
@@ -143,9 +152,12 @@ namespace Simulator
             int randIndex = (int)StrongRandomNumberGenerator.Get32Bits(_maliciousIpAddresses.Count);
             IPAddress address = _maliciousIpAddresses[randIndex];
             var debugInfo = GetIpAddressDebugInfo(address);
-            if (debugInfo.IsInAttackersIpPool != true)
+            lock (debugInfo)
             {
-                debugInfo.IsInAttackersIpPool = true;
+                if (debugInfo.IsInAttackersIpPool != true)
+                {
+                    debugInfo.IsInAttackersIpPool = true;
+                }
             }
             return _maliciousIpAddresses[randIndex];
         }
