@@ -7,6 +7,58 @@ namespace StopGuessing.DataStructures
 {
     public static class TaskParalllel
     {
+        public static async Task ForEach<T>(
+            IEnumerable<T> items,
+            Action<T> actionToRun,
+            Action<Exception> callOnException = null,
+            uint waveSize = 500)
+        {
+            Queue<T> itemQueue = new Queue<T>(items);
+            int firstWaveSize = (int)Math.Min((ulong)waveSize, (ulong)itemQueue.LongCount());
+            Task[] currentWave = new Task[firstWaveSize];
+            Task[] nextWave = null;
+
+            ulong tasksStarted = 0;
+            // Start first wave
+            for (int i = 0; i < firstWaveSize; i++)
+                currentWave[tasksStarted++] = Task.Run( () => actionToRun(itemQueue.Dequeue()));
+
+            while (currentWave != null)
+            {
+                // Invariant entering this loop: the nextWave has no tasks left to run
+
+                // Fill the next wave
+                if (itemQueue.LongCount() > 0)
+                {
+                    int nextWaveSize = (int)Math.Min((ulong)waveSize, (ulong) itemQueue.LongCount());
+                    if (nextWave == null || nextWaveSize != nextWave.Length)
+                        nextWave = new Task[nextWaveSize];
+                    for (int i = 0; i < nextWaveSize; i++)
+                        currentWave[tasksStarted++] = Task.Run(() => actionToRun(itemQueue.Dequeue()));
+                }
+                else
+                {
+                    nextWave = null;
+                }
+
+                // Wait for the current wave to finish
+                await Task.WhenAll(currentWave);
+
+                // Trigger exception handlers for any tasks that resulted in exceptions
+                if (callOnException != null)
+                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                        Task.Run(() => callOnException(exceptionTask.Exception));
+
+                // The next wave becomes the current wave...
+                Task[] tempWave = currentWave;
+                nextWave = currentWave;
+                // ... and the buffer for what had been the current wave can now be
+                // used for the next wave (if it is the right size)
+                currentWave = nextWave;
+            }
+        }
+
         public static async Task ParallelRepeatUsingWaves(
             ulong numberOfTimesToRepeat,
             Action actionToRun,

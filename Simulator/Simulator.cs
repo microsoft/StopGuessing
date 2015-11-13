@@ -231,7 +231,7 @@ namespace Simulator
             MyUserAccountClient = new UserAccountClient(MyResponsibleHosts, localHost);
             MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts, localHost);
 
-            MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
+            MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter(hardMemoryLimit: 80L *1024L *1024L *1024L);
             StableStore.LoginAttempts = null;
             MyUserAccountController = new UserAccountController(MyUserAccountClient,
                 MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore,
@@ -253,25 +253,29 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task<ResultStatistics> Run(StreamWriter outcomeWriter, CancellationToken cancellationToken = default(CancellationToken))
-        {            
+        public async Task<ResultStatistics> Run(StreamWriter outcomeWriter,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
 
             //Record the accounts into stable store 
 
-                GenerateSimulatedAccounts();
+            GenerateSimulatedAccounts();
 
-                List<SimulatedAccount> allAccounts = new List<SimulatedAccount>(BenignAccounts);
-                allAccounts.AddRange(MaliciousAccounts);
-                Parallel.ForEach(allAccounts, async simAccount =>
+            List<SimulatedAccount> allAccounts = new List<SimulatedAccount>(BenignAccounts);
+            allAccounts.AddRange(MaliciousAccounts);
+            await TaskParalllel.ForEach(allAccounts,
+                async (simAccount) =>
                 {
-                    UserAccount account = UserAccount.Create(simAccount.UniqueId, (int)CreditLimits.Last().Limit,
-                            simAccount.Password, "PBKDF2_SHA256", 1);
+                    UserAccount account = UserAccount.Create(simAccount.UniqueId, (int) CreditLimits.Last().Limit,
+                        simAccount.Password, "PBKDF2_SHA256", 1);
                     foreach (string cookie in simAccount.Cookies)
-                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(LoginAttempt.HashCookie(cookie));
+                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
+                            LoginAttempt.HashCookie(cookie));
                     await MyUserAccountController.PutAsync(account, cancellationToken: cancellationToken);
                 });
+        
 
             outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
                 "IsPasswordCorrect",
