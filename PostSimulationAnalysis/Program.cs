@@ -139,8 +139,8 @@ namespace PostSimulationAnalysis
             {
                 using (StreamWriter writer = new StreamWriter(path + mode.ToString() + ".csv"))
                 {
-                    List<Trial> originalMalicious = trialsGuessesCorrectPassword;
-                    List<Trial> originalBenign = trialsUsersCorrectPassword;
+                    List<Trial> originalMalicious = new List<Trial>(trialsGuessesCorrectPassword);
+                    List<Trial> originalBenign = new List<Trial>(trialsUsersCorrectPassword);
                     originalMalicious.Sort((a, b) => -a.CompareTo(b, mode));
                     originalBenign.Sort((a, b) => -a.CompareTo(b, mode));
 
