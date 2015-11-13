@@ -32,7 +32,7 @@ namespace StopGuessing.DataStructures
                     int nextWaveSize = (int)Math.Min((ulong)waveSize, (ulong) itemQueue.Count);
                     if (nextWave == null || nextWaveSize != nextWave.Length)
                         nextWave = new Task[nextWaveSize];
-                    for (int i = 0; i < nextWaveSize; i++)
+                    for (int i = 0; i < nextWave.Length; i++)
                         currentWave[i] = Task.Run(() => actionToRun(itemQueue.Dequeue()));
                 }
                 else
@@ -49,68 +49,68 @@ namespace StopGuessing.DataStructures
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                         Task.Run(() => callOnException(exceptionTask.Exception));
 
-                // The next wave becomes the current wave...
+                // The current wave becomes the next wave...
                 Task[] tempWave = currentWave;
-                nextWave = currentWave;
+                currentWave = nextWave;
                 // ... and the buffer for what had been the current wave can now be
                 // used for the next wave (if it is the right size)
-                currentWave = nextWave;
+                nextWave = tempWave;
             }
         }
 
-        public static async Task ParallelRepeatUsingWaves(
-            ulong numberOfTimesToRepeat,
-            Action actionToRun,
-            Action<Exception> callOnException = null,
-            uint waveSize = 500)
-        {
-            int firstWaveSize = (int) Math.Min((ulong) waveSize, numberOfTimesToRepeat);
-            Task[] currentWave = new Task[firstWaveSize];
-            Task[] nextWave = null;
+//        public static async Task ParallelRepeatUsingWaves(
+//            ulong numberOfTimesToRepeat,
+//            Action actionToRun,
+//            Action<Exception> callOnException = null,
+//            uint waveSize = 500)
+//        {
+//            int firstWaveSize = (int) Math.Min((ulong) waveSize, numberOfTimesToRepeat);
+//            Task[] currentWave = new Task[firstWaveSize];
+//            Task[] nextWave = null;
 
-            ulong tasksStarted = 0;
-            // Start first wave
-            for (int i = 0; i < firstWaveSize; i++)
-                currentWave[tasksStarted++] = Task.Run(actionToRun);
+//            ulong tasksStarted = 0;
+//            // Start first wave
+//            for (int i = 0; i < firstWaveSize; i++)
+//                currentWave[tasksStarted++] = Task.Run(actionToRun);
 
-            while (currentWave != null)
-            {
-                // Invariant entering this loop: the nextWave has no tasks left to run
+//            while (currentWave != null)
+//            {
+//                // Invariant entering this loop: the nextWave has no tasks left to run
 
-                // Fill the next wave
-                if (tasksStarted < numberOfTimesToRepeat)
-                {
-                    int nextWaveSize = (int) Math.Min((ulong) waveSize, numberOfTimesToRepeat - tasksStarted);
-                    if (nextWave == null || nextWaveSize != nextWave.Length)
-                        nextWave = new Task[nextWaveSize];
-                    for (int i = 0; i < nextWaveSize; i++)
-                    {
-                        currentWave[i] = Task.Run(actionToRun);
-                        tasksStarted++;
-                    }
-                }
-                else
-                {
-                    nextWave = null;
-                }
+//                // Fill the next wave
+//                if (tasksStarted < numberOfTimesToRepeat)
+//                {
+//                    int nextWaveSize = (int) Math.Min((ulong) waveSize, numberOfTimesToRepeat - tasksStarted);
+//                    if (nextWave == null || nextWaveSize != nextWave.Length)
+//                        nextWave = new Task[nextWaveSize];
+//                    for (int i = 0; i < nextWaveSize; i++)
+//                    {
+//                        currentWave[i] = Task.Run(actionToRun);
+//                        tasksStarted++;
+//                    }
+//                }
+//                else
+//                {
+//                    nextWave = null;
+//                }
 
-                // Wait for the current wave to finish
-                await Task.WhenAll(currentWave);
+//                // Wait for the current wave to finish
+//                await Task.WhenAll(currentWave);
 
-                // Trigger exception handlers for any tasks that resulted in exceptions
-                if (callOnException != null)
-                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                        Task.Run(() => callOnException(exceptionTask.Exception));
+//                // Trigger exception handlers for any tasks that resulted in exceptions
+//                if (callOnException != null)
+//                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
+//#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+//                        Task.Run(() => callOnException(exceptionTask.Exception));
 
-                // The next wave becomes the current wave...
-                Task[] tempWave = currentWave;
-                nextWave = currentWave;
-                // ... and the buffer for what had been the current wave can now be
-                // used for the next wave (if it is the right size)
-                currentWave = nextWave;
-            }
-        }
+//                // The next wave becomes the current wave...
+//                Task[] tempWave = currentWave;
+//                nextWave = currentWave;
+//                // ... and the buffer for what had been the current wave can now be
+//                // used for the next wave (if it is the right size)
+//                currentWave = nextWave;
+//            }
+//        }
 
         public static async Task ParallelRepeat(
             ulong numberOfTimesToRepeat,
