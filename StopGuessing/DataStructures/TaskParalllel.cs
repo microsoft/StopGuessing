@@ -20,7 +20,10 @@ namespace StopGuessing.DataStructures
             
             // Start first wave
             for (int i = 0; i < firstWaveSize; i++)
-                currentWave[i] = Task.Run( () => actionToRun(itemQueue.Dequeue()));
+            {
+                T item = itemQueue.Dequeue();
+                currentWave[i] = Task.Run(() => actionToRun(item));
+            }
 
             while (currentWave != null)
             {
@@ -33,7 +36,10 @@ namespace StopGuessing.DataStructures
                     if (nextWave == null || nextWaveSize != nextWave.Length)
                         nextWave = new Task[nextWaveSize];
                     for (int i = 0; i < nextWave.Length; i++)
-                        currentWave[i] = Task.Run(() => actionToRun(itemQueue.Dequeue()));
+                    {
+                        T item = itemQueue.Dequeue();
+                        currentWave[i] = Task.Run(() => actionToRun(item));
+                    }
                 }
                 else
                 {
