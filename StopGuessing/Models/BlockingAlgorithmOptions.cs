@@ -20,7 +20,7 @@ namespace StopGuessing.Models
         public int NumberOfRedundentHostsToCacheIPs = 3;
         public int NumberOfRedundentHostsToCachePasswordPopularity = 3;
 
-        public int NumberOfSuccessesToTrackPerIp = 200;
+        public int NumberOfSuccessesToTrackPerIp = 20;
         public int NumberOfFailuresToTrackPerIp = 200;
 
         public float MaxEditDistanceConsideredATypo { get; set; } = 2f;

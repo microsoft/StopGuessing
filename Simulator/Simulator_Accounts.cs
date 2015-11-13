@@ -119,7 +119,7 @@ namespace Simulator
                 (MyExperimentalConfiguration.NumberOfIpAddressesControlledByAttacker*
                  MyExperimentalConfiguration.FractionOfMaliciousIPsToOverlapWithBenign);
             uint i;
-            for (i = 0; i < numberOfOverlappingIps; i++)
+            for (i = 0; i < numberOfOverlappingIps && listOfIpAddressesInUseByBenignUsers.Count > 0; i++)
             {
                 int randIndex = (int) StrongRandomNumberGenerator.Get32Bits(listOfIpAddressesInUseByBenignUsers.Count);
                 IPAddress address = listOfIpAddressesInUseByBenignUsers[randIndex];
