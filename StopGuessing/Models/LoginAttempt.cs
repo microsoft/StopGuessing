@@ -134,7 +134,7 @@ namespace StopGuessing.Models
 
         public static string HashCookie(string plaintextCookie)
         {
-            return Convert.ToBase64String(SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(plaintextCookie)));
+            return Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(plaintextCookie)));
         }
 
         private void SetCookieProvidedByBrowser(string plaintextCookie)

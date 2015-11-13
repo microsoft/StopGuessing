@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.Framework.WebEncoders;
 using StopGuessing.DataStructures;
+using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
@@ -67,7 +68,7 @@ namespace StopGuessing.Models
 
         private static byte[] SimplePasswordHash(string password)
         {
-            return System.Security.Cryptography.SHA256.Create().ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+            return ManagedSHA256.Hash(System.Text.Encoding.UTF8.GetBytes(password));
         }
 
 

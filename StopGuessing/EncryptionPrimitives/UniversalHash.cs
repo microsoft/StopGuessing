@@ -149,8 +149,7 @@ namespace StopGuessing.EncryptionPrimitives
         /// <param name="randomKeyVectorLengthInBytes">The number of random bytes to generate, which should be equal
         /// to half the maximum allowable length, in bytes, of any value to be hashed.</param>
         public UniversalHashFunction(string key, int randomKeyVectorLengthInBytes = 256)
-            : this(System.Security.Cryptography.SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(key)),
-                   randomKeyVectorLengthInBytes)
+            : this(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(key)), randomKeyVectorLengthInBytes)
         {
         }
 

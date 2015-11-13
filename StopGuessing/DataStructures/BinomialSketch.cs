@@ -119,7 +119,7 @@ namespace StopGuessing.DataStructures
         /// <returns></returns>        /// 
         private IEnumerable<int> GetIndexesForKey(byte[] key)
         {
-            byte[] sha256HashOfKey = SHA256.Create().ComputeHash(key);
+            byte[] sha256HashOfKey = ManagedSHA256.Hash(key);
 
             return _universalHashFunctions.Select(f => (int) (f.Hash(sha256HashOfKey) % (uint)SizeInBits));
         }

@@ -9,6 +9,7 @@ using StopGuessing.Models;
 using System.Security.Cryptography;
 using System.Threading;
 using StopGuessing.Clients;
+using StopGuessing.EncryptionPrimitives;
 
 // For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -646,7 +647,7 @@ namespace StopGuessing.Controllers
                 // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
                 // hash of the phase1 hash.
                 string phase2HashOfProvidedPassword =
-                    Convert.ToBase64String(SHA256.Create().ComputeHash((phase1HashOfProvidedPassword)));
+                    Convert.ToBase64String(ManagedSHA256.Hash((phase1HashOfProvidedPassword)));
 
                 // To determine if the password is correct, compare the phase2 has we just generated (phase2HashOfProvidedPassword)
                 // with the one generated from the correct password when the user chose their password (account.PasswordHashPhase2).  

@@ -113,7 +113,7 @@ namespace StopGuessing.Models
 
         public static string ComputerPhase2HashFromPhase1Hash(byte[] phase1Hash)
         {
-            return Convert.ToBase64String(SHA256.Create().ComputeHash(phase1Hash));
+            return Convert.ToBase64String(ManagedSHA256.Hash(phase1Hash));
         }
 
         /// <summary>

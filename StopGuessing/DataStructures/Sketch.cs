@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Security.Cryptography;
 using System.Text;
+using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.DataStructures
 {
@@ -155,9 +156,6 @@ namespace StopGuessing.DataStructures
         /// </param>
         /// <returns>An array (size=numberOfColumns) containing indexes into each column of the sketch</returns>
         protected long[] GetIndexesForString(string s) {
-            // We use SHA256 hashes to generate indexes
-            SHA256 hashFn = SHA256.Create();
-
             // Allocate an array to hold the return value 
             long[] indexes = new long[NumberOfColumns];
 
@@ -168,7 +166,7 @@ namespace StopGuessing.DataStructures
             // where n is the string representation of the number of hashes generated before.
             // So, s="example", the first set of 256 bits will be the SHA256 hash of "0example" (UTF8)
             // and the second will be the hash of "1example".
-            byte[] hashBytes = hashFn.ComputeHash(Encoding.UTF8.GetBytes((hashCount++).ToString() + s));
+            byte[] hashBytes = ManagedSHA256.Hash(Encoding.UTF8.GetBytes((hashCount++).ToString() + s));
 
             // Track the number of bytes we've consumed from the current hash so we know when we need to generate another
             int hashBytesConsumed = 0;
@@ -183,7 +181,7 @@ namespace StopGuessing.DataStructures
                     if (hashBytesConsumed >= hashBytes.Length)
                     {
                         // We need to compute another hash in order to Get another byte to use
-                        hashBytes = hashFn.ComputeHash(Encoding.UTF8.GetBytes((hashCount++).ToString() + s));
+                        hashBytes = ManagedSHA256.Hash(Encoding.UTF8.GetBytes((hashCount++).ToString() + s));
                         hashBytesConsumed = 0;
                     }
                     // Build the number by shifting the bytes we have eight bits to the left and then placing
