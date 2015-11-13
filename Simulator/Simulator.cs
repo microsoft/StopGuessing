@@ -174,7 +174,7 @@ namespace Simulator
                     Simulator simulator = new Simulator(config, passwordSelector);
                     simulator.PrimeWithKnownPasswords(passwordsAlreadyKnownToBePopular);
                     ResultStatistics stats = await simulator.Run(errorWriter);
-                    statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", statisticsCsvLine,
+                    statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}", statisticsCsvLine,
                         stats.FalsePositives, stats.TruePositives,
                         Fraction(stats.FalsePositives, stats.FalsePositives + stats.TruePositives),
                         Fraction(stats.TruePositives, stats.FalsePositives + stats.TruePositives),
