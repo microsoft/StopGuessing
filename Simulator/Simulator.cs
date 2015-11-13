@@ -37,7 +37,7 @@ namespace Simulator
         public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
         public LimitPerTimePeriod[] CreditLimits;
-        public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();
+        public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
         public ExperimentalConfiguration MyExperimentalConfiguration;
 
         public delegate void ExperimentalConfigurationFunction(ExperimentalConfiguration config);
@@ -232,7 +232,7 @@ namespace Simulator
             MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts, localHost);
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
-
+            StableStore.LoginAttempts = null;
             MyUserAccountController = new UserAccountController(MyUserAccountClient,
                 MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore,
                 CreditLimits);
