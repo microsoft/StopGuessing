@@ -101,13 +101,16 @@ namespace PostSimulationAnalysis
             public int TruePositives;
             public int FalseNegatives;
             public int TrueNegatives;
+            public double BlockingThreshold;
 
-            public ROCPoint(int falsePositives, int truePositives, int falseNegatives, int trueNegatives)
+            public ROCPoint(int falsePositives, int truePositives, int falseNegatives, int trueNegatives,
+                double blockingThreshold)
             {
                 FalsePositives = falsePositives;
                 TruePositives = truePositives;
                 FalseNegatives = falseNegatives;
                 TrueNegatives = trueNegatives;
+                BlockingThreshold = blockingThreshold;
             }
 
             public static double fraction(int numerator, int denominator)
@@ -144,11 +147,11 @@ namespace PostSimulationAnalysis
                     Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
                     Queue<Trial> benign = new Queue<Trial>(originalBenign);
 
+                    double blockThreshold = malicious.Peek().GetScoreForMode(mode);
                     List<ROCPoint> rocPoints = new List<ROCPoint>
                     {
-                        new ROCPoint(0, 0, originalMalicious.Count, originalBenign.Count)
+                        new ROCPoint(0, 0, originalMalicious.Count, originalBenign.Count, blockThreshold)
                     };
-                    double blockThreshold = malicious.Peek().GetScoreForMode(mode);
                     while (malicious.Count > 0)
                     {
                         // Remove all malicious requests above this new threshold
@@ -164,7 +167,7 @@ namespace PostSimulationAnalysis
                         }
 
                         rocPoints.Add(new ROCPoint(originalBenign.Count - benign.Count, originalMalicious.Count - malicious.Count,
-                            malicious.Count, benign.Count));
+                            malicious.Count, benign.Count, blockThreshold));
 
                         // Identify next threshold
                         if (malicious.Count > 0)
@@ -182,10 +185,10 @@ namespace PostSimulationAnalysis
 
                     foreach (ROCPoint point in finalROCPoints)
                     {
-                        writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},",
+                        writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                             point.FalsePositives, point.FalseNegatives, point.TruePositives, point.TrueNegatives,
-                            point.FalsePositiveRate, point.TruePositiveRate, point.Precision, point.Recall
-                            );
+                            point.FalsePositiveRate, point.TruePositiveRate, point.Precision, point.Recall,
+                            point.BlockingThreshold);
                     }
                     writer.Flush();
 
