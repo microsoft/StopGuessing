@@ -14,7 +14,7 @@ namespace StopGuessing.DataStructures
             uint waveSize = 500)
         {
             Queue<T> itemQueue = new Queue<T>(items);
-            int firstWaveSize = (int)Math.Min((ulong)waveSize, (ulong)itemQueue.LongCount());
+            int firstWaveSize = (int)Math.Min((ulong)waveSize, (ulong)itemQueue.Count);
             Task[] currentWave = new Task[firstWaveSize];
             Task[] nextWave = null;
 
@@ -28,9 +28,9 @@ namespace StopGuessing.DataStructures
                 // Invariant entering this loop: the nextWave has no tasks left to run
 
                 // Fill the next wave
-                if (itemQueue.LongCount() > 0)
+                if (itemQueue.Count > 0)
                 {
-                    int nextWaveSize = (int)Math.Min((ulong)waveSize, (ulong) itemQueue.LongCount());
+                    int nextWaveSize = (int)Math.Min((ulong)waveSize, (ulong) itemQueue.Count);
                     if (nextWave == null || nextWaveSize != nextWave.Length)
                         nextWave = new Task[nextWaveSize];
                     for (int i = 0; i < nextWaveSize; i++)
