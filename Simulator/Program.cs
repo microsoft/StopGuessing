@@ -20,7 +20,7 @@ namespace Simulator
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test
-                ulong totalLoginAttempts = 100 * Million;
+                ulong totalLoginAttempts = 5 * Million;
 
                 // Figure out parameters from scale
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
@@ -50,10 +50,14 @@ namespace Simulator
                 // Additional sources of false positives/negatives
                 config.FractionOfBenignIPsBehindProxies = 0.1d;
                 config.ProxySizeInUniqueClientIPs = 1000;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.1;
 
-                // Blocking parameters
-                // Make typos almost entirely ignored
-                config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
+                //config.BlockingOptions.NumberOfSuccessesToTrackPerIp = 15;
+                //config.BlockingOptions.NumberOfFailuresToTrackPerIp = 50;
+
+        // Blocking parameters
+        // Make typos almost entirely ignored
+        config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
             }, new Simulator.IParameterSweeper[]
             {
                 new Simulator.ParameterSweeper<Simulator.SystemMode>
