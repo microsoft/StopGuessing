@@ -20,13 +20,13 @@ namespace StopGuessing.Models
         public int NumberOfRedundentHostsToCacheIPs = 3;
         public int NumberOfRedundentHostsToCachePasswordPopularity = 3;
 
-        public int NumberOfSuccessesToTrackPerIp = 20;
-        public int NumberOfFailuresToTrackPerIp = 200;
+//        public int NumberOfSuccessesToTrackPerIp = 20;
+        public int NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos = 8;
 
         public float MaxEditDistanceConsideredATypo { get; set; } = 2f;
         public double PenaltyMulitiplierForTypo { get; set; } = .1d;
-        public double BasePenaltyForInvalidPassword { get; set; } = 1d;
-        public double PenaltyForInvalidAccount { get; set; } = 2d; // 2 * BasePenaltyForInvalidPassword;
+        public double PenaltyForInvalidPassword_Beta { get; set; } = 1d;
+        public double PenaltyForInvalidAccount_Alpha { get; set; } = 2d; // 2 * PenaltyForInvalidPassword_Beta;
 
         public double RewardForCorrectPasswordPerAccount { get; set; } = -30d;
 

@@ -29,7 +29,10 @@ namespace StopGuessing.Controllers
         private readonly BlockingAlgorithmOptions _options;
         public readonly PasswordPopularityTracker _passwordPopularityTracker;
         private readonly FixedSizeLruCache<string, LoginAttempt> _loginAttemptCache;
-        private readonly Dictionary<string, Task<Tuple<LoginAttempt,BlockingScoresForEachAlgorithm>>> _loginAttemptsInProgress;
+
+        private readonly Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>
+            _loginAttemptsInProgress;
+
         private UserAccountClient _userAccountClient;
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
         private readonly LoginAttemptClient _loginAttemptClient;
@@ -43,22 +46,27 @@ namespace StopGuessing.Controllers
             BlockingAlgorithmOptions blockingOptions,
             IStableStore stableStore)
         {
-            _options = blockingOptions;//optionsAccessor.Options;
+            _options = blockingOptions; //optionsAccessor.Options;
             _stableStore = stableStore;
             _passwordPopularityTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig"
                 //FIXME -- use configuration to get options here"FIXME-uniquekeyfromconfig", thresholdRequiredToTrackPreciseOccurrences: 10);
                 );
-            
-            _loginAttemptCache = new FixedSizeLruCache<string, LoginAttempt>(80000);  // FIXME -- use configuration file for size
-            _loginAttemptsInProgress = new Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>();
+
+            _loginAttemptCache = new FixedSizeLruCache<string, LoginAttempt>(80000);
+                // FIXME -- use configuration file for size
+            _loginAttemptsInProgress =
+                new Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>();
             _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
                 (id, cancellationToken) =>
                 {
-                    return Task.Run(() => new IpHistory(id, _options.NumberOfSuccessesToTrackPerIp, _options.NumberOfFailuresToTrackPerIp), cancellationToken);
+                    return
+                        Task.Run(
+                            () => new IpHistory(id, _options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos),
+                            cancellationToken);
                     // FUTURE -- option to load from stable store
                 });
             _loginAttemptClient = loginAttemptClient;
-            _loginAttemptClient.SetLocalLoginAttemptController(this);     
+            _loginAttemptClient.SetLocalLoginAttemptController(this);
             SetUserAccountClient(userAccountClient);
             memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }
@@ -83,7 +91,7 @@ namespace StopGuessing.Controllers
             CancellationToken cancellationToken = default(CancellationToken))
         {
             LoginAttempt result = await LocalGetAsync(id, serversResponsibleForCachingALoginAttempt, cancellationToken);
-            return (result == null) ? (IActionResult)(new HttpNotFoundResult()) : (new ObjectResult(result));            
+            return (result == null) ? (IActionResult) (new HttpNotFoundResult()) : (new ObjectResult(result));
         }
 
         public async Task<LoginAttempt> LocalGetAsync(
@@ -116,10 +124,10 @@ namespace StopGuessing.Controllers
         // POST api/LoginAttempt/
         [HttpPost]
         public async Task<IActionResult> UpdateLoginAttemptOutcomesAsync(
-            [FromBody]List<LoginAttempt> loginAttemptsWithUpdatedOutcomes, 
+            [FromBody] List<LoginAttempt> loginAttemptsWithUpdatedOutcomes,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            await new Task( () =>
+            await new Task(() =>
             {
                 Parallel.ForEach(
                     loginAttemptsWithUpdatedOutcomes.ToLookup(attempt => attempt.AddressOfClientInitiatingRequest),
@@ -172,7 +180,7 @@ namespace StopGuessing.Controllers
             CancellationToken cancellationToken = default(CancellationToken))
         {
             string key = loginAttempt.UniqueKey;
-            
+
             bool updateTheLocalCache = true;
             bool updateRemoteCaches = !onlyUpdateTheInMemoryCacheOfTheLoginAttempt;
             bool updateStableStore = !onlyUpdateTheInMemoryCacheOfTheLoginAttempt;
@@ -180,7 +188,7 @@ namespace StopGuessing.Controllers
             if (loginAttempt.Outcome == AuthenticationOutcome.Undetermined)
             {
                 // The outcome of the loginAttempt is not known.  We need to calculate it
-                Task<Tuple<LoginAttempt,BlockingScoresForEachAlgorithm>> outcomeCalculationTask = null;
+                Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>> outcomeCalculationTask = null;
 
                 lock (_loginAttemptsInProgress)
                 {
@@ -208,9 +216,9 @@ namespace StopGuessing.Controllers
                         // the lock on _loginAttemptsInProgress so that we can release the lock.
                         LoginAttempt attemptToDetermineOutcomeOf = loginAttempt;
                         _loginAttemptsInProgress[key] = outcomeCalculationTask =
-                            Task.Run( () => DetermineLoginAttemptOutcomeAsync(
+                            Task.Run(() => DetermineLoginAttemptOutcomeAsync(
                                 attemptToDetermineOutcomeOf, passwordProvidedByClient, cancellationToken),
-                                cancellationToken );
+                                cancellationToken);
                         // The above call will update the local cache and remove _loginAttemptsInProgress[key]
                         // It's best to do add the LoginAttempt to the local cache there, and not below,
                         // because we want to ensure the value is in the cache before we remove the signal
@@ -238,7 +246,7 @@ namespace StopGuessing.Controllers
                     cancellationToken: cancellationToken);
             }
 
-            return loginAttempt;            
+            return loginAttempt;
         }
 
         // DELETE api/LoginAttempt/<key>
@@ -317,7 +325,7 @@ namespace StopGuessing.Controllers
             bool updateStableStore = true,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            Task.Run( () => WriteLoginAttemptAsync(attempt, 
+            Task.Run(() => WriteLoginAttemptAsync(attempt,
                 serversResponsibleForCachingThisLoginAttempt,
                 updateTheLocalCache,
                 updateRemoteCaches,
@@ -348,14 +356,14 @@ namespace StopGuessing.Controllers
                 return;
 
             List<LoginAttempt> loginAttemptsWithOutcompesUpdatedDueToTypoAnalysis =
-            account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(correctPassword,
-                phase1HashOfCorrectPassword,
-                _options.MaxEditDistanceConsideredATypo,
-                clientsIpHistory.RecentLoginFailures.MostRecentToOldest.Where(
-                    attempt => attempt.UsernameOrAccountId == account.UsernameOrAccountId &&
-                               attempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
-                               !string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword))
-                );
+                account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(correctPassword,
+                    phase1HashOfCorrectPassword,
+                    _options.MaxEditDistanceConsideredATypo,
+                    clientsIpHistory.RecentLoginFailures.MostRecentToOldest.Where(
+                        attempt => attempt.UsernameOrAccountId == account.UsernameOrAccountId &&
+                                   attempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
+                                   !string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword))
+                    );
 
             foreach (LoginAttempt updatedLoginAttempt in loginAttemptsWithOutcompesUpdatedDueToTypoAnalysis)
             {
@@ -372,7 +380,9 @@ namespace StopGuessing.Controllers
         private double PopularityPenaltyMultiplier(double popularityLevel)
         {
             double penalty = 1d;
-            foreach (PenaltyForReachingAPopularityThreshold penaltyForReachingAPopularityThreshold in _options.PenaltyForReachingEachPopularityThreshold)
+            foreach (
+                PenaltyForReachingAPopularityThreshold penaltyForReachingAPopularityThreshold in
+                    _options.PenaltyForReachingEachPopularityThreshold)
             {
                 if (penalty < penaltyForReachingAPopularityThreshold.Penalty &&
                     popularityLevel >= penaltyForReachingAPopularityThreshold.PopularityThreshold)
@@ -381,8 +391,42 @@ namespace StopGuessing.Controllers
             return penalty;
         }
 
+        public async Task UpdateBlockingScore(
+            LoginAttempt loginAttempt,
+            IpHistory ip,
+            List<RemoteHost> serversResponsibleForCachingTheAccount,
+            CancellationToken cancellationToke
+            )
+        {
+            double penalty = 0d;
+            double passwordsPopularityAmongGuesses = loginAttempt.PasswordsPopularityAmongFailedGuesses;
+            double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses);;
+            switch (loginAttempt.Outcome)
+            {
+                case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
+                    penalty = _options.PenaltyForInvalidAccount_Alpha * popularityMultiplier;
+                    break;
+                case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
+                    penalty = _options.PenaltyForInvalidPassword_Beta * popularityMultiplier;
+                    break;
+                case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
+                    // We ignore repeats of incorrect passwords we've already accounted for
+                    // No penalty
+                    penalty = 0;
+                    break;
+                case AuthenticationOutcome.CredentialsValid:
+                break;
+                case AuthenticationOutcome.CredentialsValidButBlocked:
+                break;
+                    // case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
+                    //    penalty = _options.PenaltyForInvalidPassword_Beta * _options.PenaltyMulitiplierForTypo;
+                    //    break;
+                    // case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
+            }
+        }
 
-        /// <returns></returns>
+
+    /// <returns></returns>
         public async Task<BlockingScoresForEachAlgorithm> UpdateOutcomeIfIpShouldBeBlockedAsync(
             LoginAttempt loginAttempt,
             IpHistory ip,
@@ -395,7 +439,7 @@ namespace StopGuessing.Controllers
             if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount && 
                 !_options.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE)
                 return new BlockingScoresForEachAlgorithm { Ours = 0d, Industry =  0d,
-                    SSH = ip.RecentLoginFailures.Count * _options.BasePenaltyForInvalidPassword};
+                    SSH = ip.RecentLoginFailures.Count * _options.PenaltyForInvalidPassword_Beta};
 
             // Choose a block threshold based on whether the provided password was popular or not.
             // (If the actual password is among those commonly guessed, we need to be more aggressive in
@@ -453,10 +497,10 @@ namespace StopGuessing.Controllers
                 if ((DateTimeOffset.Now - failure.TimeOfAttempt) > _options.ExpireFailuresAfter)
                     break;
 
-                blockingScoresForEachAlgorithm.SSH += _options.BasePenaltyForInvalidPassword;
+                blockingScoresForEachAlgorithm.SSH += _options.PenaltyForInvalidPassword_Beta;
                 if (failure.Outcome != AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword)
                 {
-                    blockingScoresForEachAlgorithm.Industry += _options.BasePenaltyForInvalidPassword;
+                    blockingScoresForEachAlgorithm.Industry += _options.PenaltyForInvalidPassword_Beta;
                 }
                 // Increase the brute-force likelihood score based on the type of failure.
                 // (Failures that indicate a greater chance of being a brute-force attacker, such as those
@@ -464,15 +508,15 @@ namespace StopGuessing.Controllers
                 switch (failure.Outcome)
                 {
                     case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
-                        bruteLikelihoodScore += _options.PenaltyForInvalidAccount *
+                        bruteLikelihoodScore += _options.PenaltyForInvalidAccount_Alpha *
                                                 PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
                         break;
                     case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
-                        bruteLikelihoodScore += _options.BasePenaltyForInvalidPassword * _options.PenaltyMulitiplierForTypo;
+                        bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta * _options.PenaltyMulitiplierForTypo;
                         break;
                     case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                     case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
-                        bruteLikelihoodScore += _options.BasePenaltyForInvalidPassword *
+                        bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta *
                                                 PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
                         break;
                     case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:

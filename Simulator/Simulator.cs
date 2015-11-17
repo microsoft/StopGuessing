@@ -65,7 +65,7 @@ namespace Simulator
                 config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 1d;
                 // Make all failures increase the count towards the threshold by one
                 config.BlockingOptions.PenaltyMulitiplierForTypo = 1d;
-                config.BlockingOptions.PenaltyForInvalidAccount = config.BlockingOptions.BasePenaltyForInvalidPassword;
+                config.BlockingOptions.PenaltyForInvalidAccount_Alpha = config.BlockingOptions.PenaltyForInvalidPassword_Beta;
                 // If the below is empty, the multiplier for any popularity level will be 1.
                 config.BlockingOptions.PenaltyForReachingEachPopularityThreshold = new List<PenaltyForReachingAPopularityThreshold>();
                 // Correct passwords shouldn't help
