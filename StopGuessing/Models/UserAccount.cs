@@ -293,7 +293,7 @@ namespace StopGuessing.Models
 
 
         private const int DefaultSaltLength = 8;
-        private const int DefaultMaxAccountPasswordVerificationFailuresToTrack = 32;
+        private const int DefaultMaxAccountPasswordVerificationFailuresToTrack = 16;
         private const int DefaultMaxNumberOfCookiesToTrack = 24;
 
         /// <summary>

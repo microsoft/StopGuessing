@@ -281,7 +281,7 @@ namespace xUnit_Tests
         {
             BlockingAlgorithmOptions options = new BlockingAlgorithmOptions
             {
-                BasePenaltyForInvalidPassword = 1,
+                PenaltyForInvalidPassword_Beta = 1,
                 BlockThresholdPopularPassword = 1,
                 BlockThresholdMultiplierForUnpopularPasswords = 1,
                 PenaltyMulitiplierForTypo = .25d
