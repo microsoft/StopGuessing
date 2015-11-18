@@ -13,7 +13,7 @@ namespace StopGuessing.DataStructures
     /// with a probability 0.5.  On avarege, a key that has not been seen before will map to, on average,
     /// k/2 indexes that are set to 1 (true) and k/2 indexes that are set to 0 (false).
     /// 
-    /// If a non-empty subset of the indexes that a key maps to contains 0, observing that key (the Observe() method)
+    /// If a non-empty subset of the indexes that a key maps to contains 0, observing that key (the Step() method)
     /// will cause a random member of that subset to be changed from 0 to 1.  To ensure that the fraction of bits set to 1
     /// stays constant, it will simultaneously clear a random bit selected from subset of indexes in the entire sketch
     /// that have value 1.  The more times a key has been observed, the higher the expected number of indexes that will
@@ -27,7 +27,7 @@ namespace StopGuessing.DataStructures
     /// to differentiate from false positives.  To have confidence greater than one in a million that a key has been observed,
     /// it will take an average of 20 observations.
     /// </summary>
-    public class BinomialSketch
+    public class BinomialLadder
     {
         /// <summary>
         /// The number of hash functions that will index into the sketch
@@ -70,7 +70,7 @@ namespace StopGuessing.DataStructures
         /// <param name="keyToPreventAlgorithmicComplexityAttacks">A pseudorandom seed that allows the same sketch to be created
         /// twice, but (if kept secret) prevents an attacker from knowing the distribution of hashes and thus counters
         /// algorithmic complexity attacks.</param>
-        public BinomialSketch(int sizeInBits, int numberOfIndexes, string keyToPreventAlgorithmicComplexityAttacks)
+        public BinomialLadder(int sizeInBits, int numberOfIndexes, string keyToPreventAlgorithmicComplexityAttacks)
         {
             NumberOfIndexes = numberOfIndexes;
             string keyToPreventAlgorithmicComplexityAttacks1 = keyToPreventAlgorithmicComplexityAttacks ?? "";
@@ -134,7 +134,7 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public IEnumerable<int> GetIndexesOfZeroElements(string key)
+        public IEnumerable<int> GetZeroElementIndexes(string key)
         {
             return GetIndexesForKey(key).Where(index => !_sketch[index]);
         }
@@ -142,8 +142,7 @@ namespace StopGuessing.DataStructures
 
 
 
-        public void SetAZeroElementToOneAndClearAOneElementToZero(
-            int indexOfAZeroElementToSetToOne, int indexOfAOneElementToClearToZero)
+        public void Step(int indexOfAZeroElementToSetToOne, int indexOfAOneElementToClearToZero)
         {
             // ReSharper disable once RedundantBoolCompare
             if (_sketch[indexOfAZeroElementToSetToOne] == true || _sketch[indexOfAOneElementToClearToZero] == false)
@@ -152,7 +151,7 @@ namespace StopGuessing.DataStructures
             _sketch[indexOfAOneElementToClearToZero] = false;
         }
 
-        public void SetAZeroElementToOneAndClearARandomOneElementToZero(int indexOfZeroElementToSetToOne)
+        public void Step(int indexOfZeroElementToSetToOne)
         {            
             int randomIndexToAnElementSetToOneThatWeCanClearToZero;
             do
@@ -161,8 +160,7 @@ namespace StopGuessing.DataStructures
                 randomIndexToAnElementSetToOneThatWeCanClearToZero = (int) (StrongRandomNumberGenerator.Get64Bits((ulong) _sketch.Length));
             } while (_sketch[randomIndexToAnElementSetToOneThatWeCanClearToZero] == false);
 
-            SetAZeroElementToOneAndClearAOneElementToZero(indexOfZeroElementToSetToOne, 
-                randomIndexToAnElementSetToOneThatWeCanClearToZero);
+            Step(indexOfZeroElementToSetToOne, randomIndexToAnElementSetToOneThatWeCanClearToZero);
         }
 
 
@@ -174,13 +172,13 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="key">The key to add to the set.</param>       
         /// <returns>Of the bits at the indices for the given key, the number of bits that were set to 1 (true)
-        /// before the Observe operation.  The maximum possible value to be returned, if all bits were already
+        /// before the Step operation.  The maximum possible value to be returned, if all bits were already
         /// set to 1 (true) would be NumberOfIndexes.  If a key has not been seen before, the expected (average)
         /// result is NumberOfIndexes/2, but will vary with the binomial distribution.</returns>
-        public int Observe(string key)
+        public int Step(string key)
         {
             // Get a list of indexes that are not yet set
-            List<int> zeroElementIndexes = GetIndexesOfZeroElements(key).ToList();
+            List<int> zeroElementIndexes = GetZeroElementIndexes(key).ToList();
 
             // We can only update state to record the observation if there is an unset (0) index that we can set (to 1).
             if (zeroElementIndexes.Count > 0)
@@ -191,7 +189,7 @@ namespace StopGuessing.DataStructures
                 int indexToSet = zeroElementIndexes[ (int) (StrongRandomNumberGenerator.Get32Bits((uint) zeroElementIndexes.Count)) ];
 
                 // Next, set the zero element associted with the key and clear a random one element from the entire array
-                SetAZeroElementToOneAndClearARandomOneElementToZero(indexToSet);
+                Step(indexToSet);
             }
 
             // The number of bits set to 1/true is the number that were not 0/false.
@@ -209,7 +207,7 @@ namespace StopGuessing.DataStructures
         /// NumberOfIndexes/2, but will vary with the binomial distribution.</returns>
         public int GetNumberOfIndexesSet(string key)
         {
-            return NumberOfIndexes - GetIndexesOfZeroElements(key).Count();
+            return NumberOfIndexes - GetZeroElementIndexes(key).Count();
         }
 
         /// <summary>
@@ -220,7 +218,7 @@ namespace StopGuessing.DataStructures
         /// is the expected number of tests one would expect to get one false positive in.
         /// </summary>
         /// <param name="numberOfIndexesSet">The number of indexes set for a given key, as returned by
-        /// GetNumberoFindexesSet() or Observe().</param>
+        /// GetNumberoFindexesSet() or Step().</param>
         /// <returns>The probability p</returns>
         public double TestNullHypothesisThatAllIndexesWereSetByChance(int numberOfIndexesSet)
         {
@@ -233,12 +231,12 @@ namespace StopGuessing.DataStructures
         }
 
         /// <summary>
-        /// Estimates the number of observations of a key (the number of times Observe(key) has been called) at a given level
+        /// Estimates the number of observations of a key (the number of times Step(key) has been called) at a given level
         /// of statistical confidence (p value).
         /// In other words, how many observations can we assume occurred and reject the null hypothesis that fewer observations
         /// occurred and the nubmer of bits set was this high due to chance.
         /// </summary>
-        /// <param name="numberOfIndexesSet">The number of indexes set in the sketch as returned by a call to Observe() or Add().
+        /// <param name="numberOfIndexesSet">The number of indexes set in the sketch as returned by a call to Step() or Add().
         /// </param>
         /// <param name="confidenceLevelCommonlyCalledPValue">The p value, or confidence level, at which we want to be sure
         /// the claimed number of observations occurred.</param>

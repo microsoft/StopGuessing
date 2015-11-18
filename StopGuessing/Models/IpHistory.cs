@@ -31,16 +31,17 @@ namespace StopGuessing.Models
 
         public DateTime TimeOfLastLoginAttemptUtc;
 
-        public float CurrentBlockScore;
+        public DoubleThatDecaysWithTime CurrentBlockScore;
 
 
         public IpHistory(//bool isIpAKnownAggregatorThatWeCannotBlock = false,
             IPAddress address,
-            int numberOfPotentailTyposToTrack = DefaultNumberOfPotentailTyposToTrack)
+            BlockingAlgorithmOptions options)
         {
             Address = address;
+            CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
             RecentPotentialTypos =
-                new Sequence<LoginAttemptSummaryForTypoAnalysis>(numberOfPotentailTyposToTrack);
+                new Sequence<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
         }
 
 

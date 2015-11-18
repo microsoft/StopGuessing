@@ -18,7 +18,6 @@ namespace StopGuessing.Controllers
         private readonly UserAccountClient _userAccountClient;
         private readonly BlockingAlgorithmOptions _options;
         private readonly SelfLoadingCache<string, UserAccount> _userAccountCache;
-        private LimitPerTimePeriod[] CreditLimits { get; }
 
         TimeSpan DefaultTimeout { get; } = new TimeSpan(0, 0, 0, 0, 500);
 
@@ -27,14 +26,12 @@ namespace StopGuessing.Controllers
             LoginAttemptClient loginAttemptClient,
             MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions options,
-            IStableStore stableStore,
-            LimitPerTimePeriod[] creditLimits)
+            IStableStore stableStore)
         {
 //            _options = optionsAccessor.Options;
             _options = options;
             _stableStore = stableStore;
             _userAccountClient = userAccountClient;
-            CreditLimits = creditLimits;
             _userAccountCache = new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
             SetLoginAttemptClient(loginAttemptClient);
             userAccountClient.SetLocalUserAccountController(this);
@@ -149,64 +146,64 @@ namespace StopGuessing.Controllers
         }
 
 
-        /// <summary>
-        /// When a user has provided the correct password for an account, use it to decrypt the key that stores
-        /// previous failed password attempts, use that key to decrypt that passwords used in those attempts,
-        /// and determine whether they passwords were incorrect because they were typos--passwords similar to,
-        /// but a small edit distance away from, the correct password.
-        /// </summary>
-        /// <param name="id">The username or account ID of the account for which the client has authenticated using the correct password.</param>
-        /// <param name="correctPassword">The correct password provided by the client.</param>
-        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password
-        /// (we could re-derive this, the hash should be expensive to calculate and so we don't want to replciate the work unnecessarily.)</param>
-        /// <param name="ipAddressToExcludeFromAnalysis">This is used to prevent the analysis fro examining LoginAttempts from this IP.
-        /// We use it because it's more efficient to perform the analysis for that IP as part of the process of evaluting whether
-        /// that IP should be blocked or not.</param>
-        /// <param name="serversResponsibleForCachingThisAccount"></param>
-        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        /// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
-        [HttpPost("{id}")]
-        public async Task<IActionResult> UpdateOutcomesUsingTypoAnalysisAsync(
-            string id,
-            [FromBody] string correctPassword,
-            [FromBody] byte[] phase1HashOfCorrectPassword,
-            [FromBody] System.Net.IPAddress ipAddressToExcludeFromAnalysis,
-            [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
+        ///// <summary>
+        ///// When a user has provided the correct password for an account, use it to decrypt the key that stores
+        ///// previous failed password attempts, use that key to decrypt that passwords used in those attempts,
+        ///// and determine whether they passwords were incorrect because they were typos--passwords similar to,
+        ///// but a small edit distance away from, the correct password.
+        ///// </summary>
+        ///// <param name="id">The username or account ID of the account for which the client has authenticated using the correct password.</param>
+        ///// <param name="correctPassword">The correct password provided by the client.</param>
+        ///// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password
+        ///// (we could re-derive this, the hash should be expensive to calculate and so we don't want to replciate the work unnecessarily.)</param>
+        ///// <param name="ipAddressToExcludeFromAnalysis">This is used to prevent the analysis fro examining LoginAttempts from this IP.
+        ///// We use it because it's more efficient to perform the analysis for that IP as part of the process of evaluting whether
+        ///// that IP should be blocked or not.</param>
+        ///// <param name="serversResponsibleForCachingThisAccount"></param>
+        ///// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        ///// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
+        //[HttpPost("{id}")]
+        //public async Task<IActionResult> UpdateOutcomesUsingTypoAnalysisAsync(
+        //    string id,
+        //    [FromBody] string correctPassword,
+        //    [FromBody] byte[] phase1HashOfCorrectPassword,
+        //    [FromBody] System.Net.IPAddress ipAddressToExcludeFromAnalysis,
+        //    [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
 
-            // Do the typo analysis and obtain the set of LoginAttempt records with outcomes changed due to the analyis
-            List<LoginAttempt> attemptsToUpdate = account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(
-                correctPassword,
-                phase1HashOfCorrectPassword,
-                _options.MaxEditDistanceConsideredATypo,
-                account.PasswordVerificationFailures.Where(attempt =>
-                    attempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
-                    (!string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword)) &&
-                    (!attempt.AddressOfClientInitiatingRequest.Equals(ipAddressToExcludeFromAnalysis))
-                    )
-                );
+        //    // Do the typo analysis and obtain the set of LoginAttempt records with outcomes changed due to the analyis
+        //    List<LoginAttempt> attemptsToUpdate = account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(
+        //        correctPassword,
+        //        phase1HashOfCorrectPassword,
+        //        _options.MaxEditDistanceConsideredATypo,
+        //        account.PasswordVerificationFailures.Where(attempt =>
+        //            attempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
+        //            (!string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword)) &&
+        //            (!attempt.AddressOfClientInitiatingRequest.Equals(ipAddressToExcludeFromAnalysis))
+        //            )
+        //        );
 
-            if (attemptsToUpdate.Count > 0)
-            {
-                // Update this UserAccount in stable store.  Updating caches is not as important as the worst
-                // outcome of inconsistency is that the same analyses are performed again and the
-                // outcomes are again updated.
-                // FUTURE -- can we write only changes to the login attempts?  Do we even need this?
-                WriteAccountInBackground(account, serversResponsibleForCachingThisAccount,
-                    updateTheLocalCache:false, updateRemoteCaches: true, updateStableStore: true,
-                    cancellationToken: cancellationToken);
+        //    if (attemptsToUpdate.Count > 0)
+        //    {
+        //        // Update this UserAccount in stable store.  Updating caches is not as important as the worst
+        //        // outcome of inconsistency is that the same analyses are performed again and the
+        //        // outcomes are again updated.
+        //        // FUTURE -- can we write only changes to the login attempts?  Do we even need this?
+        //        WriteAccountInBackground(account, serversResponsibleForCachingThisAccount,
+        //            updateTheLocalCache:false, updateRemoteCaches: true, updateStableStore: true,
+        //            cancellationToken: cancellationToken);
 
-                // Update the primary copies of the LoginAttempt records with outcomes we've modified using
-                // our typo analysis. 
-                _loginAttemptClient.UpdateLoginAttemptOutcomesInBackground(attemptsToUpdate,
-                    timeout: DefaultTimeout,
-                    cancellationToken: cancellationToken);
-            }
+        //        // Update the primary copies of the LoginAttempt records with outcomes we've modified using
+        //        // our typo analysis. 
+        //        _loginAttemptClient.UpdateLoginAttemptOutcomesInBackground(attemptsToUpdate,
+        //            timeout: DefaultTimeout,
+        //            cancellationToken: cancellationToken);
+        //    }
 
-            return new ObjectResult(attemptsToUpdate.Count);
-        }
+        //    return new ObjectResult(attemptsToUpdate.Count);
+        //}
 
 
         /// <summary>
@@ -282,79 +279,42 @@ namespace StopGuessing.Controllers
         }
 
 
-        /// <summary>
-        /// ClientHelper to get a credit that can be used to allow this account's successful login from an IP addresss to undo some
-        /// of the reputational damage caused by failed attempts.
-        /// </summary>
-        /// <param name="id">The username or account id that uniquely identifies the account to get a credit from.</param>
-        /// <param name="amountToGet">The amount of credit needed.</param>
-        /// <param name="serversResponsibleForCachingThisAccount"></param>
-        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        /// <returns></returns>
-        [HttpPost("{id}")]
-        public async Task<IActionResult> TryGetCreditAsync(
-            string id,
-            [FromBody] double amountToGet = 1f,
-            [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return new ObjectResult(await LocalTryGetCreditAsync(id, amountToGet, serversResponsibleForCachingThisAccount, cancellationToken));
-        }
+        ///// <summary>
+        ///// ClientHelper to get a credit that can be used to allow this account's successful login from an IP addresss to undo some
+        ///// of the reputational damage caused by failed attempts.
+        ///// </summary>
+        ///// <param name="id">The username or account id that uniquely identifies the account to get a credit from.</param>
+        ///// <param name="amountToGet">The amount of credit needed.</param>
+        ///// <param name="serversResponsibleForCachingThisAccount"></param>
+        ///// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        ///// <returns></returns>
+        //[HttpPost("{id}")]
+        //public async Task<IActionResult> TryGetCreditAsync(
+        //    string id,
+        //    [FromBody] double amountToGet = 1f,
+        //    [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    return new ObjectResult(await LocalTryGetCreditAsync(id, amountToGet, serversResponsibleForCachingThisAccount, cancellationToken));
+        //}
 
-        public async Task<double> LocalTryGetCreditAsync(
-            string id,
-            double amountToGet = 1f,
-            List<RemoteHost> serversResponsibleForCachingThisAccount = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            // FIXME -- should use exponetial decay
+        //public async Task<double> LocalTryGetCreditAsync(
+        //    string id,
+        //    double amountToGet = 1f,
+        //    List<RemoteHost> serversResponsibleForCachingThisAccount = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    // FIXME -- should use exponetial decay
 
-            UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
+        //    UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
 
-            double amountConsumed = amountToGet;
+        //    double amountAvailable = account.CreditLimit - account.ConsumedCredits;
+        //    double amountConsumed =  Math.Min(amountToGet, amountAvailable);
+        //    account.ConsumedCredits.Subtract(amountConsumed);
 
-            DateTime timeAtStartOfMethodUtc = DateTime.UtcNow;
-            int limitIndex = 0;
-            foreach (UserAccount.ConsumedCredit consumedCredit in account.ConsumedCredits)
-            {
-                TimeSpan age = timeAtStartOfMethodUtc - consumedCredit.WhenCreditConsumedUtc;
-                while (limitIndex < CreditLimits.Length && age > CreditLimits[limitIndex].TimePeriod)
-                {
-                    // If the consumed credit is older than the time period for the current limit,
-                    // we've not exceeded that limit within that time period.  Check the next limit down the line.
-                    limitIndex++;
-                }
-                if (limitIndex >= CreditLimits.Length)
-                {
-                    // The age of this consumed credit is older than the longest limit duration, which means
-                    // we've not exceeded the limit at any duration.
-                    // We can exit this for loop knowing there is credit available.
-                    break;
-                }
-                amountConsumed += consumedCredit.AmountConsumed;
-                if (amountConsumed > CreditLimits[limitIndex].Limit)
-                {
-                    // We've exceeded the limit for this time period.
-                    return 0d;
-                }
-                else
-                {
-                    // We were able to accomodate this credit within the limits so far.
-                    // Move on to the next one.
-                }
-            }
-
-            // We never exceeded a limit.  We have a credit to consume.
-            // Add it and return true to indicate that a credit was retrieved.
-            account.ConsumedCredits.Add(new UserAccount.ConsumedCredit()
-            {
-                WhenCreditConsumedUtc = timeAtStartOfMethodUtc,
-                AmountConsumed = amountToGet
-            });
-            // FUTURE -- can we write only this field?
-            WriteAccountInBackground(account, serversResponsibleForCachingThisAccount, false, true, true, cancellationToken);
-            return amountToGet;
-        }
+        //    WriteAccountInBackground(account, serversResponsibleForCachingThisAccount, false, true, true, cancellationToken);
+        //    return amountToGet;
+        //}
         
 
 

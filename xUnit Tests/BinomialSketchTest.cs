@@ -10,14 +10,14 @@ namespace xUnit_Tests
         [Fact]
         public void TwentyObservations()
         {
-            BinomialSketch sketch = new BinomialSketch(1024*1024*1024, 64, "Louis Tully as played by Rick Moranis");
+            BinomialLadder sketch = new BinomialLadder(1024*1024*1024, 64, "Louis Tully as played by Rick Moranis");
             string somethingToObserve = "Gosh.  It's a nice day out, isn't it?";
 
             int observationCount = sketch.GetNumberOfIndexesSet(somethingToObserve);
 
             for (int i = 0; i < 20; i++)
             {
-                int lastCount = sketch.Observe(somethingToObserve);
+                int lastCount = sketch.Step(somethingToObserve);
                 Assert.Equal(observationCount, lastCount);
                 observationCount++;
             }
