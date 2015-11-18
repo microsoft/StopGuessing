@@ -18,6 +18,7 @@ namespace xUnit_Tests
         public UserAccountController MyUserAccountController;
         public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
+        public BlockingAlgorithmOptions MyBlockingAlgorithmOptions;
         public LimitPerTimePeriod[] CreditLimits;
         public MemoryOnlyStableStore StableStore;
     }
@@ -27,19 +28,7 @@ namespace xUnit_Tests
         public static TestConfiguration InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
         {
             TestConfiguration configuration = new TestConfiguration();
-            if (options == null)
-                options = new BlockingAlgorithmOptions();
-            configuration.CreditLimits = new[]
-            {
-                // 3 per hour
-                new LimitPerTimePeriod(new TimeSpan(1, 0, 0), 3f),
-                // 6 per day (24 hours, not calendar day)
-                new LimitPerTimePeriod(new TimeSpan(1, 0, 0, 0), 6f),
-                // 10 per week
-                new LimitPerTimePeriod(new TimeSpan(6, 0, 0, 0), 10f),
-                // 15 per month
-                new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
-            };
+            configuration.MyBlockingAlgorithmOptions = options ?? new BlockingAlgorithmOptions();
 
             configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
@@ -52,10 +41,9 @@ namespace xUnit_Tests
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
             configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient,
-                configuration.MyLoginAttemptClient, memoryUsageLimiter, options, stableStore, 
-                configuration.CreditLimits);
+                configuration.MyLoginAttemptClient, memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions, stableStore);
             LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient, configuration.MyUserAccountClient,
-                memoryUsageLimiter, options, stableStore);
+                memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions, stableStore);
 
             configuration.MyUserAccountController.SetLoginAttemptClient(configuration.MyLoginAttemptClient);
             configuration.MyUserAccountClient.SetLocalUserAccountController(configuration.MyUserAccountController);
@@ -68,7 +56,9 @@ namespace xUnit_Tests
         public async static Task<UserAccount> CreateTestAccountAsync(TestConfiguration configuration, string usernameOrAccountId, string password)
         {
             UserAccount account = UserAccount.Create(usernameOrAccountId,
-              (int) configuration.CreditLimits.Last().Limit,  password,
+              configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
+              configuration.MyBlockingAlgorithmOptions.BlockScoreHalfLife,
+              password,
               numberOfIterationsToUseForPhase1Hash: 1);
             await configuration.MyUserAccountController.PutAsync(account.UsernameOrAccountId, account);
             return account;

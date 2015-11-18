@@ -213,7 +213,7 @@ namespace StopGuessing.EncryptionPrimitives
             int indexIntoRandomKeyVector = 0;
             for (int i = 0; i < messageToBeHashed.Count; i++)
             {
-                // Construct uint32 to Observe to hash from four bytes
+                // Construct uint32 to Step to hash from four bytes
                 // (or leave zeros where bytes are missing)
                 ulong value = (((UInt32)messageToBeHashed[i]) << 24);
                 if (++i < messageToBeHashed.Count)

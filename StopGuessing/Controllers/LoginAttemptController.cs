@@ -61,7 +61,7 @@ namespace StopGuessing.Controllers
                 {
                     return
                         Task.Run(
-                            () => new IpHistory(id, _options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos),
+                            () => new IpHistory(id, _options),
                             cancellationToken);
                     // FUTURE -- option to load from stable store
                 });
@@ -391,12 +391,7 @@ namespace StopGuessing.Controllers
             return penalty;
         }
 
-        public async Task UpdateBlockingScore(
-            LoginAttempt loginAttempt,
-            IpHistory ip,
-            List<RemoteHost> serversResponsibleForCachingTheAccount,
-            CancellationToken cancellationToken
-            )
+        public double CalculatePenalty(IpHistory ip, LoginAttempt loginAttempt, UserAccount account)
         {
             // loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount;
             double penalty = 0d;
@@ -419,12 +414,8 @@ namespace StopGuessing.Controllers
                     if (ip.CurrentBlockScore > 0)
                     {
                         double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, ip.CurrentBlockScore);
-                        double credit = await _userAccountClient.TryGetCreditAsync(loginAttempt.UsernameOrAccountId,
-                            amountToGet: desiredCredit,
-                            serversResponsibleForCachingThisAccount: serversResponsibleForCachingTheAccount,
-                            cancellationToken: cancellationToken);
+                        double credit = account.TryGetCredit(desiredCredit);
                         penalty -=credit;
-                        // FIXME - deduct from account's credit
                     }
                     break;
                 case AuthenticationOutcome.CredentialsValidButBlocked:
@@ -434,10 +425,11 @@ namespace StopGuessing.Controllers
                     //    break;
                     // case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
             }
+            return penalty;
         }
 
 
-    /// <returns></returns>
+        /// <returns></returns>
         //public async Task<BlockingScoresForEachAlgorithm> UpdateOutcomeIfIpShouldBeBlockedAsync(
         //    LoginAttempt loginAttempt,
         //    IpHistory ip,
@@ -666,6 +658,13 @@ namespace StopGuessing.Controllers
                 serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
                 cancellationToken: cancellationToken);
 
+            // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
+            // as we are most concerned about frequently-guessed passwords.
+            Proportion popularity = _passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(
+                passwordProvidedByClient, isSubmittedPasswordCorrect,
+                confidenceLevel: _options.PopularityConfidenceLevel,
+                minDenominatorForPasswordPopularity: _options.MinDenominatorForPasswordPopularity);
+
             if (account == null)
             {
                 // This appears to be an loginAttempt to login to a non-existent account, and so all we need to do is
@@ -716,24 +715,10 @@ namespace StopGuessing.Controllers
                     // a malicous IP that just made a lucky guess, it may be revised to CrendtialsValidButBlocked.
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValid;
 
-                    // If the password is correct, we can decrypt the EcPrivateAccountKey and perform analysis to provide
-                    // enlightenment into past failures that may help us to evaluate whether they were malicious.  Specifically,
-                    // we may be able to detrmine if past failures were due to typos.
-
                     // Determine if any of the outcomes for login attempts from the client IP for this request were the result of typos,
                     // as this might impact our decision about whether or not to block this client IP in response to its past behaviors.
                     UpdateOutcomesUsingTypoAnalysis(await ipHistoryGetTask,
                         account, passwordProvidedByClient, phase1HashOfProvidedPassword);
-
-                    // In the background, update any outcomes for logins to this account from other IPs, so that if those
-                    // IPs loginAttempt to login to any account in the future we can gain insight as to whether those past logins
-                    // were typos or non-typos.
-                    _userAccountClient.UpdateOutcomesUsingTypoAnalysisInBackground(account.UsernameOrAccountId,
-                        passwordProvidedByClient, phase1HashOfProvidedPassword,
-                        loginAttempt.AddressOfClientInitiatingRequest,
-                        serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
-                        timeout: DefaultTimeout,
-                        cancellationToken: cancellationToken);
                 }
                 else
                 {
@@ -773,12 +758,6 @@ namespace StopGuessing.Controllers
                         : AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
                 }
 
-                // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
-                // as we are most concerned about frequently-guessed passwords.
-                Proportion popularity = _passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(
-                    passwordProvidedByClient, isSubmittedPasswordCorrect,
-                    confidenceLevel: _options.PopularityConfidenceLevel,
-                    minDenominatorForPasswordPopularity: _options.MinDenominatorForPasswordPopularity);
                 // When there's little data, we want to make sure the popularity is not overstated because           
                 // (e.g., if we've only seen 10 account failures since we started watching, it would not be
                 //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
@@ -787,12 +766,28 @@ namespace StopGuessing.Controllers
 
             }
 
-
             // Preform an analysis of the IPs past beavhior to determine if the IP has been performing so many failed guesses
             // that we disallow logins even if it got the right password.  We call this even when the submitted password is
             // correct lest we create a timing indicator (slower responses for correct passwords) that attackers could use
             // to guess passwords even if we'd blocked their IPs.
             IpHistory ip = await ipHistoryGetTask;
+
+            if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
+            {
+                double blockingThreshold = _options.BlockThresholdPopularPassword;
+                if (loginAttempt.PasswordsPopularityAmongFailedGuesses <
+                    _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
+                    blockingThreshold *= _options.BlockThresholdMultiplierForUnpopularPasswords;
+                if (ip.CurrentBlockScore > blockingThreshold)
+                    loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
+            }        
+            
+            double passwordsPopularityAmongGuesses = popularity.MinDenominator(_options.MinDenominatorForPasswordPopularity).AsDouble;
+            double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses); ;
+            
+            ip.CurrentBlockScore.Add(CalculatePenalty(ip, loginAttempt,account));
+
+
             BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = await UpdateOutcomeIfIpShouldBeBlockedAsync(
                 loginAttempt, ip, serversResponsibleForCachingThisAccount, cancellationToken);
 
@@ -804,10 +799,10 @@ namespace StopGuessing.Controllers
             // to include this one.
             // If it's a failure, it will add this to the list of failures that we may be able to learn about later when
             // we know what the correct password is and can determine if it was a typo.
-            _userAccountClient.UpdateForNewLoginAttemptInBackground(loginAttempt,
-                timeout: DefaultTimeout,
-                serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
-                cancellationToken: cancellationToken);
+            //_userAccountClient.UpdateForNewLoginAttemptInBackground(loginAttempt,
+            //    timeout: DefaultTimeout,
+            //    serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
+            //    cancellationToken: cancellationToken);
 
             // Mark this task as completed by removing it from the Dictionary of tasks storing loginAttemptsInProgress
             // and by putting the login loginAttempt into our cache of recent login attempts.            

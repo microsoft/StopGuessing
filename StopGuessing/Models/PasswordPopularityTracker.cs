@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Framework.WebEncoders;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
@@ -9,15 +10,16 @@ namespace StopGuessing.Models
 
     public class PasswordPopularityTracker
     {
+
         /// <summary>
         /// A sketch that estimates the number of times a failed password has been observed, while minimizing
         /// privacy risk since all estimates are probabilistic and any password has a small chance of
         /// appearing to have been observed.
         /// </summary>
-        protected BinomialSketch BinomialSketchOfFailedPasswords;
+        protected BinomialLadder BinomialLadderOfFailedPasswords;
 
         ///// <summary>
-        ///// When a password exceeds the threshold of commonality in the BinomialSketchOfFailedPasswords sketch,
+        ///// When a password exceeds the threshold of commonality in the BinomialLadderOfFailedPasswords sketch,
         ///// we start tracking its hash using this dictionary to get a precise occurrence count for future occurrences.
         ///// This filters out the rare false positives so that we don't track their plaintext values
         ///// </summary>
@@ -121,7 +123,7 @@ namespace StopGuessing.Models
 
             SketchForTestingIfNonexistentAccountIpPasswordHasBeenSeenBefore =
                 new AgingMembershipSketch(DefaultNumberOfSketchColumns, conservativelyHighEstimateOfRowsNeeded);
-            BinomialSketchOfFailedPasswords = new BinomialSketch(SizeOfBinomialLadder, HeightOfBinomialLadder, keyToPreventAlgorithmicComplexityAttacks); // FIXME configuration parameters
+            BinomialLadderOfFailedPasswords = new BinomialLadder(SizeOfBinomialLadder, HeightOfBinomialLadder, keyToPreventAlgorithmicComplexityAttacks); // FIXME configuration parameters
 
             MapOfHighlyPopularUnsaltedHashedPasswordsToPlaintextPasswords =
                 new Dictionary<string, string>();
@@ -156,7 +158,7 @@ namespace StopGuessing.Models
         /// <param name="minDenominatorForPasswordPopularity">When there are few samples observations, use this minimum denomoninator
         /// to prevent something appearing popular just becausae we haven't seen much else yet.</param>
         /// <returns></returns>
-        public Proportion GetPopularityOfPasswordAmongFailures(string password,
+        public IPasswordPopularityHandle GetPopularityOfPasswordAmongFailures(string password,
             bool wasPasswordCorrect, 
             double confidenceLevel = 0.001,
             ulong minDenominatorForPasswordPopularity = 10000)
@@ -166,15 +168,15 @@ namespace StopGuessing.Models
             if (!wasPasswordCorrect)
             {
                 FailedPasswordsRecordedSoFar += 1d;
-                sketchBitsSet = BinomialSketchOfFailedPasswords.Observe(password);
+                sketchBitsSet = BinomialLadderOfFailedPasswords.Step(password);
             }
             else
             {
-                sketchBitsSet = BinomialSketchOfFailedPasswords.GetNumberOfIndexesSet(password);
+                sketchBitsSet = BinomialLadderOfFailedPasswords.GetNumberOfIndexesSet(password);
             }
             Proportion highestPopularity = new Proportion(
-                (ulong)BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, confidenceLevel),
-                Math.Min((ulong) BinomialSketchOfFailedPasswords.NumberOfObservationsAccountingForAging, 
+                (ulong)BinomialLadderOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, confidenceLevel),
+                Math.Min((ulong) BinomialLadderOfFailedPasswords.NumberOfObservationsAccountingForAging, 
                                  minDenominatorForPasswordPopularity));
             
             string passwordHash = Convert.ToBase64String(SimplePasswordHash(password));
@@ -184,7 +186,7 @@ namespace StopGuessing.Models
             // good secret, we'll continue to track the unsalted hash
             if (PasswordFrequencyEstimatesForDifferentPeriods[0].Get(passwordHash).Numerator > 0 ||
                 sketchBitsSet >= HeightOfLadderDeemedPopular)
-                // FIXME BinomialSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, 0.000001d) >
+                // FIXME BinomialLadderOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, 0.000001d) >
                 //_minCountRequiredToTrackPreciseOccurrences)
             {
                 foreach (var passwordTrackerForThisPeriod in PasswordFrequencyEstimatesForDifferentPeriods)

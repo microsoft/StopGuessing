@@ -36,7 +36,7 @@ namespace Simulator
         public LoginAttemptController MyLoginAttemptController;
         public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
-        public LimitPerTimePeriod[] CreditLimits;
+        //public LimitPerTimePeriod[] CreditLimits;
         public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
         public ExperimentalConfiguration MyExperimentalConfiguration;
 
@@ -211,17 +211,17 @@ namespace Simulator
         {
             MyExperimentalConfiguration = myExperimentalConfiguration;
             PasswordSelector = passwordSelector;
-            CreditLimits = new[]
-            {
-                // 3 per hour
-                new LimitPerTimePeriod(new TimeSpan(1, 0, 0), 3f),
-                // 6 per day (24 hours, not calendar day)
-                new LimitPerTimePeriod(new TimeSpan(1, 0, 0, 0), 6f),
-                // 10 per week
-                new LimitPerTimePeriod(new TimeSpan(6, 0, 0, 0), 10f),
-                // 15 per month
-                new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
-            };
+            //CreditLimits = new[]
+            //{
+            //    // 3 per hour
+            //    new LimitPerTimePeriod(new TimeSpan(1, 0, 0), 3f),
+            //    // 6 per day (24 hours, not calendar day)
+            //    new LimitPerTimePeriod(new TimeSpan(1, 0, 0, 0), 6f),
+            //    // 10 per week
+            //    new LimitPerTimePeriod(new TimeSpan(6, 0, 0, 0), 10f),
+            //    // 15 per month
+            //    new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
+            //};
             //We are testing with local server now
             MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             //configuration.MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
@@ -234,8 +234,7 @@ namespace Simulator
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter(hardMemoryLimit: 80L *1024L *1024L *1024L);
             StableStore.LoginAttempts = null;
             MyUserAccountController = new UserAccountController(MyUserAccountClient,
-                MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore,
-                CreditLimits);
+                MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
             MyLoginAttemptController = new LoginAttemptController(MyLoginAttemptClient, MyUserAccountClient,
                 memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
 
@@ -268,7 +267,9 @@ namespace Simulator
             await TaskParalllel.ForEach(allAccounts,
                 async (simAccount) =>
                 {
-                    UserAccount account = UserAccount.Create(simAccount.UniqueId, (int) CreditLimits.Last().Limit,
+                    UserAccount account = UserAccount.Create(simAccount.UniqueId,
+                        MyExperimentalConfiguration.BlockingOptions.AccountCreditLimit,
+                        MyExperimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
                         simAccount.Password, "PBKDF2_SHA256", 1);
                     foreach (string cookie in simAccount.Cookies)
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(

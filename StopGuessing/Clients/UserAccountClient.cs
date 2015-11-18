@@ -61,14 +61,14 @@ namespace StopGuessing.Clients
             {
                 serversResponsibleForCachingThisAccount = GetServersResponsibleForCachingAnAccount(usernameOrAccountId);
             }
-            return await RestClientHelper.TryServersUntilOneResponds(
+            return await RestClientHelper.TryServersUntilOneRespondsWithResult(
                 iterationParameters: serversResponsibleForCachingThisAccount,
                 timeBetweenRetries: timeout ?? DefaultTimeout,
                 actionToTry: async (server, localTimeout) => server.Equals(_localHost)
                     ? await _localUserAccountController.LocalTryGetCreditAsync(
                         usernameOrAccountId, amountToGet,
                         serversResponsibleForCachingThisAccount, cancellationToken)
-                    : await RestClientHelper.PostAsync<bool>(server.Uri,
+                    : await RestClientHelper.PostAsync<double>(server.Uri,
                         "/api/UserAccount/" + Uri.EscapeUriString(usernameOrAccountId) + "/TryGetCredit",
                         new Object[]
                         {
@@ -100,16 +100,14 @@ namespace StopGuessing.Clients
 
             string pathUri = "/api/UserAccount/" + Uri.EscapeUriString(accountId);
 
-            return await RestClientHelper.TryServersUntilOneResponds(
+            return await RestClientHelper.TryServersUntilOneRespondsWithResult(
                 serversResponsibleForCachingThisAccount,
                 timeout ?? DefaultTimeout,
-                async (server, innerTimeout) =>
-                {
-                    if (server.Equals(_localHost))
-                        return await _localUserAccountController.LocalGetAsync(accountId, serversResponsibleForCachingThisAccount, cancellationToken);
-                    else
-                        return await RestClientHelper.GetAsync<UserAccount>(server.Uri, pathUri, timeout:innerTimeout, cancellationToken: cancellationToken);
-                }, cancellationToken);
+                async (server, innerTimeout) => (server.Equals(_localHost)) ?
+                    await _localUserAccountController.LocalGetAsync(accountId, serversResponsibleForCachingThisAccount, cancellationToken)
+                    :
+                    await RestClientHelper.GetAsync<UserAccount>(server.Uri, pathUri, timeout:innerTimeout, cancellationToken: cancellationToken),
+                cancellationToken);
         }
 
         /// <summary>
@@ -127,7 +125,7 @@ namespace StopGuessing.Clients
         {
             List<RemoteHost> serversResponsibleFOrCachingAnAccount = GetServersResponsibleForCachingAnAccount(account);
 
-            return await RestClientHelper.TryServersUntilOneResponds(
+            return await RestClientHelper.TryServersUntilOneRespondsWithResult(
                 serversResponsibleFOrCachingAnAccount,
                 timeout ?? DefaultTimeout,
                 async (server, innerTimeout) =>
@@ -173,79 +171,79 @@ namespace StopGuessing.Clients
                 timeout, cancellationToken), cancellationToken);
         }
 
-        /// <summary>
-        /// When a user has provided the correct password for an account, use it to decrypt the key that stores
-        /// previous failed password attempts, use that key to decrypt that passwords used in those attempts,
-        /// and determine whether they passwords were incorrect because they were typos--passwords similar to,
-        /// but a small edit distance away from, the correct password.
-        /// </summary>
-        /// <param name="usernameOrAccountId">The username or account ID of the account for which the client has authenticated using the correct password.</param>
-        /// <param name="correctPassword">The correct password provided by the client.</param>
-        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password
-        /// (we could re-derive this, the hash should be expensive to calculate and so we don't want to replciate the work unnecessarily.)</param>
-        /// <param name="ipAddressToExcludeFromAnalysis">This is used to prevent the analysis fro examining LoginAttempts from this IP.
-        /// We use it because it's more efficient to perform the analysis for that IP as part of the process of evaluting whether
-        /// that IP should be blocked or not.</param>
-        /// <param name="serversResponsibleForCachingThisAccount"></param>
-        /// <param name="timeout"></param>
-        /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        /// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
-        public async Task UpdateOutcomesUsingTypoAnalysisAsync(string usernameOrAccountId,
-            string correctPassword,
-            byte[] phase1HashOfCorrectPassword,
-            System.Net.IPAddress ipAddressToExcludeFromAnalysis,
-            List<RemoteHost> serversResponsibleForCachingThisAccount,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            if (serversResponsibleForCachingThisAccount == null)
-            {
-                serversResponsibleForCachingThisAccount = GetServersResponsibleForCachingAnAccount(usernameOrAccountId);
-            }
+        ///// <summary>
+        ///// When a user has provided the correct password for an account, use it to decrypt the key that stores
+        ///// previous failed password attempts, use that key to decrypt that passwords used in those attempts,
+        ///// and determine whether they passwords were incorrect because they were typos--passwords similar to,
+        ///// but a small edit distance away from, the correct password.
+        ///// </summary>
+        ///// <param name="usernameOrAccountId">The username or account ID of the account for which the client has authenticated using the correct password.</param>
+        ///// <param name="correctPassword">The correct password provided by the client.</param>
+        ///// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password
+        ///// (we could re-derive this, the hash should be expensive to calculate and so we don't want to replciate the work unnecessarily.)</param>
+        ///// <param name="ipAddressToExcludeFromAnalysis">This is used to prevent the analysis fro examining LoginAttempts from this IP.
+        ///// We use it because it's more efficient to perform the analysis for that IP as part of the process of evaluting whether
+        ///// that IP should be blocked or not.</param>
+        ///// <param name="serversResponsibleForCachingThisAccount"></param>
+        ///// <param name="timeout"></param>
+        ///// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
+        ///// <returns>The number of LoginAttempts updated as a result of the analyis.</returns>
+        //public async Task UpdateOutcomesUsingTypoAnalysisAsync(string usernameOrAccountId,
+        //    string correctPassword,
+        //    byte[] phase1HashOfCorrectPassword,
+        //    System.Net.IPAddress ipAddressToExcludeFromAnalysis,
+        //    List<RemoteHost> serversResponsibleForCachingThisAccount,
+        //    TimeSpan? timeout = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    if (serversResponsibleForCachingThisAccount == null)
+        //    {
+        //        serversResponsibleForCachingThisAccount = GetServersResponsibleForCachingAnAccount(usernameOrAccountId);
+        //    }
 
-            await RestClientHelper.TryServersUntilOneResponds(
-                iterationParameters: serversResponsibleForCachingThisAccount,
-                actionToTry: async (server, innerTimeout) =>
-                {
-                    if (server.Equals(_localHost))
-                    {
-                        await _localUserAccountController.UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId,
-                            correctPassword,
-                            phase1HashOfCorrectPassword, ipAddressToExcludeFromAnalysis,
-                            serversResponsibleForCachingThisAccount, cancellationToken);
-                    }
-                    else
-                    {
-                        await RestClientHelper.PostAsync(server.Uri,
-                            "/api/UserAccount/" + Uri.EscapeUriString(usernameOrAccountId), new Object[]
-                            {
-                                new KeyValuePair<string, string>("correctPassword", correctPassword),
-                                new KeyValuePair<string, byte[]>("phase1HashOfCorrectPassword",
-                                    phase1HashOfCorrectPassword),
-                                new KeyValuePair<string, System.Net.IPAddress>("ipAddressToExcludeFromAnalysis",
-                                    ipAddressToExcludeFromAnalysis)
-                            },
-                            timeout: innerTimeout,
-                            cancellationToken: cancellationToken);
-                    }
-                },
-                timeBetweenRetries: timeout ?? DefaultTimeout,
-                cancellationToken: cancellationToken);
-        }
+        //    await RestClientHelper.TryServersUntilOneResponds(
+        //        iterationParameters: serversResponsibleForCachingThisAccount,
+        //        actionToTry: async (server, innerTimeout) =>
+        //        {
+        //            if (server.Equals(_localHost))
+        //            {
+        //                await _localUserAccountController.UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId,
+        //                    correctPassword,
+        //                    phase1HashOfCorrectPassword, ipAddressToExcludeFromAnalysis,
+        //                    serversResponsibleForCachingThisAccount, cancellationToken);
+        //            }
+        //            else
+        //            {
+        //                await RestClientHelper.PostAsync(server.Uri,
+        //                    "/api/UserAccount/" + Uri.EscapeUriString(usernameOrAccountId), new Object[]
+        //                    {
+        //                        new KeyValuePair<string, string>("correctPassword", correctPassword),
+        //                        new KeyValuePair<string, byte[]>("phase1HashOfCorrectPassword",
+        //                            phase1HashOfCorrectPassword),
+        //                        new KeyValuePair<string, System.Net.IPAddress>("ipAddressToExcludeFromAnalysis",
+        //                            ipAddressToExcludeFromAnalysis)
+        //                    },
+        //                    timeout: innerTimeout,
+        //                    cancellationToken: cancellationToken);
+        //            }
+        //        },
+        //        timeBetweenRetries: timeout ?? DefaultTimeout,
+        //        cancellationToken: cancellationToken);
+        //}
 
 
-        public void UpdateOutcomesUsingTypoAnalysisInBackground(string usernameOrAccountId, string correctPassword,
-            byte[] phase1HashOfCorrectPassword,
-            System.Net.IPAddress ipAddressToExcludeFromAnalysis,
-            List<RemoteHost> serversResponsibleForCachingThisAccount,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Task.Run(() => UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId, correctPassword,
-                phase1HashOfCorrectPassword, ipAddressToExcludeFromAnalysis,
-                serversResponsibleForCachingThisAccount, timeout, cancellationToken),
-                cancellationToken);
-        }
+        //public void UpdateOutcomesUsingTypoAnalysisInBackground(string usernameOrAccountId, string correctPassword,
+        //    byte[] phase1HashOfCorrectPassword,
+        //    System.Net.IPAddress ipAddressToExcludeFromAnalysis,
+        //    List<RemoteHost> serversResponsibleForCachingThisAccount,
+        //    TimeSpan? timeout = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    Task.Run(() => UpdateOutcomesUsingTypoAnalysisAsync(usernameOrAccountId, correctPassword,
+        //        phase1HashOfCorrectPassword, ipAddressToExcludeFromAnalysis,
+        //        serversResponsibleForCachingThisAccount, timeout, cancellationToken),
+        //        cancellationToken);
+        //}
 
 
         /// <summary>
@@ -282,7 +280,7 @@ namespace StopGuessing.Clients
                             serversResponsibleForCachingThisAccount,
                             cancellationToken);
                     else
-                        await RestClientHelper.PostAsync(server.Uri,
+                        await (Task) RestClientHelper.PostAsync(server.Uri,
                             "/api/UserAccount/" +
                             Uri.EscapeUriString(attempt.UsernameOrAccountId), new Object[]
                             {

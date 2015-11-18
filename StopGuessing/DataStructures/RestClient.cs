@@ -167,7 +167,7 @@ namespace StopGuessing.DataStructures
         /// <param name="actionToTry"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async static Task<TResult> TryServersUntilOneResponds<TResult, TIterationParameter>(
+        public async static Task<TResult> TryServersUntilOneRespondsWithResult<TResult, TIterationParameter>(
             IEnumerable<TIterationParameter> iterationParameters,
             TimeSpan timeBetweenRetries,
             Func<TIterationParameter, TimeSpan, Task<TResult>> actionToTry,
@@ -223,15 +223,15 @@ namespace StopGuessing.DataStructures
             }
         }
 
-        public static async Task<TResult> TryServersUntilOneResponds<TIterationParameter, TResult>(
+        public static async Task TryServersUntilOneResponds<TIterationParameter>(
             List<TIterationParameter> iterationParameters,
             TimeSpan timeBetweenRetries,
-            Func<TIterationParameter, TimeSpan, Task<TResult>> actionToTry,
+            Func<TIterationParameter, TimeSpan, Task> actionToTry,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
             
-            List<Task<TResult>> attemptsInProgress = new List<Task<TResult>>();
+            List<Task> attemptsInProgress = new List<Task>();
 
             int indexOfTaskFound = -1;
             TimeSpan timeUntilFinalTimeout = new TimeSpan(
@@ -268,7 +268,7 @@ namespace StopGuessing.DataStructures
             }
             if (indexOfTaskFound >= 0)
             {
-                return await attemptsInProgress[indexOfTaskFound];
+                await attemptsInProgress[indexOfTaskFound];
             }
             else
             {

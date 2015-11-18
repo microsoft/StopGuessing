@@ -10,15 +10,6 @@ namespace StopGuessing.Models
     [DataContract]
     public class UserAccount
     {
-        [DataContract]
-        public class ConsumedCredit
-        {
-            [DataMember]
-            public DateTime WhenCreditConsumedUtc { get; set; }
-
-            [DataMember]
-            public double AmountConsumed { get; set; }
-        }
 
         /// <summary>
         /// A string that uniquely identifies the account.
@@ -82,11 +73,18 @@ namespace StopGuessing.Models
         public Sequence<LoginAttempt> PasswordVerificationFailures { get; set; }
 
         /// <summary>
-        /// A sequence of credits consumed in order to use successful logins from this account
-        /// to counter evidence that that logged into this account is malicious.
+        /// The account's credit limit for offsetting penalties for IP addresses from which
+        /// the account has logged in successfully.
         /// </summary>
         [DataMember]
-        public Sequence<ConsumedCredit> ConsumedCredits { get; set; }
+        public double CreditLimit { get; set; }
+
+        /// <summary>
+        /// A decaying double with the amount of credits consumed against the credit limit
+        /// used to offset IP blocking penalties.
+        /// </summary>
+        [DataMember]
+        public DoubleThatDecaysWithTime ConsumedCredits { get; set; }
 
         ///// <summary>
         ///// A member used exclusively to set the password.  This is primarily a convenience member for testing.
@@ -285,7 +283,14 @@ namespace StopGuessing.Models
 
 
 
+        public double TryGetCredit(double amountRequested)
+        {
+            double amountAvailable = CreditLimit - ConsumedCredits;
+            double amountConsumed = Math.Min(amountRequested, amountAvailable);
+            ConsumedCredits.Add(amountConsumed);
 
+            return amountConsumed;
+        }
 
 
 
@@ -300,7 +305,8 @@ namespace StopGuessing.Models
         /// Create a UserAccount record to match a given username or account id.
         /// </summary>
         /// <param name="usernameOrAccountId">A unique identifier for this account, such as a username, email address, or data index for the account record.</param>
-        /// <param name="consumedCreditSequenceLength"></param>
+        /// <param name="creditLimit"></param>
+        /// <param name="creditHalfLife"></param>
         /// <param name="password">The password for the account.  If null or not provided, no password is set.</param>
         /// <param name="numberOfIterationsToUseForPhase1Hash">The number of iterations to use when hashing the password.</param>
         /// <param name="saltUniqueToThisAccount">The salt for this account.  If null or not provided, a random salt is generated with length determined
@@ -315,7 +321,8 @@ namespace StopGuessing.Models
         /// <param name="saltLength">If <paramref name="saltUniqueToThisAccount"/>is not specified or null, the constructor will create
         /// a random salt of this length.  If this length is not specified, a default will be used.</param>
         public static UserAccount Create(string usernameOrAccountId,
-            int consumedCreditSequenceLength,
+            double creditLimit,
+            TimeSpan creditHalfLife,
             string password = null,
             string phase1HashFunctionName = ExpensiveHashFunctionFactory.DefaultFunctionName,
             int numberOfIterationsToUseForPhase1Hash = 10000,
@@ -339,7 +346,8 @@ namespace StopGuessing.Models
                     new CapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
                 PasswordVerificationFailures =
                     new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
-                ConsumedCredits = new Sequence<ConsumedCredit>(consumedCreditSequenceLength),
+                ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife),
+                CreditLimit = creditLimit,
                 PasswordHashPhase1FunctionName = phase1HashFunctionName,
                 NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash
                 //Password = password

@@ -32,7 +32,11 @@ namespace StopGuessing.Models
 
         public double BlockThresholdPopularPassword { get; set; } = 50d;
         public double BlockThresholdMultiplierForUnpopularPasswords { get; set; } = 20d;
-        public TimeSpan ExpireFailuresAfter { get; set; } = new TimeSpan(24, 0, 0); // 24 hours
+        //public TimeSpan ExpireFailuresAfter { get; set; } = new TimeSpan(24, 0, 0); // 24 hours
+        public TimeSpan BlockScoreHalfLife = new TimeSpan(12,0,0); // 12 hours
+
+        public double AccountCreditLimit { get; set; } = 50d;
+        public TimeSpan AccountCreditLimitHalfLife = new TimeSpan(12,0,0); // 12 hours
 
         /// <summary>
         /// Until we've observed enough failure attempts, we use the following denominator for popularity calculations.
