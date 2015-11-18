@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StopGuessing.DataStructures
@@ -11,7 +12,8 @@ namespace StopGuessing.DataStructures
             IEnumerable<T> items,
             Action<T> actionToRun,
             Action<Exception> callOnException = null,
-            uint waveSize = 500)
+            uint waveSize = 500,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             Queue<T> itemQueue = new Queue<T>(items);
             int firstWaveSize = (int)Math.Min((ulong)waveSize, (ulong)itemQueue.Count);
@@ -22,7 +24,7 @@ namespace StopGuessing.DataStructures
             for (int i = 0; i < firstWaveSize; i++)
             {
                 T item = itemQueue.Dequeue();
-                currentWave[i] = Task.Run(() => actionToRun(item));
+                currentWave[i] = Task.Run(() => actionToRun(item), cancellationToken);
             }
 
             while (currentWave != null)
@@ -38,7 +40,7 @@ namespace StopGuessing.DataStructures
                     for (int i = 0; i < nextWave.Length; i++)
                     {
                         T item = itemQueue.Dequeue();
-                        currentWave[i] = Task.Run(() => actionToRun(item));
+                        currentWave[i] = Task.Run(() => actionToRun(item), cancellationToken);
                     }
                 }
                 else
@@ -53,7 +55,7 @@ namespace StopGuessing.DataStructures
                 if (callOnException != null)
                     foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                        Task.Run(() => callOnException(exceptionTask.Exception));
+                        await Task.Run(() => callOnException(exceptionTask.Exception));
 
                 // The current wave becomes the next wave...
                 Task[] tempWave = currentWave;
