@@ -14,10 +14,10 @@ namespace StopGuessing.Models
         public class ConsumedCredit
         {
             [DataMember]
-            public DateTimeOffset WhenCreditConsumed { get; set; }
+            public DateTime WhenCreditConsumedUtc { get; set; }
 
             [DataMember]
-            public float AmountConsumed { get; set; }
+            public double AmountConsumed { get; set; }
         }
 
         /// <summary>

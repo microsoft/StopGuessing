@@ -51,8 +51,8 @@ namespace StopGuessing.Clients
         /// <param name="timeout"></param>
         /// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
         /// <returns></returns>
-        public async Task<bool> TryGetCreditAsync(string usernameOrAccountId,
-            float amountToGet = 1f,
+        public async Task<double> TryGetCreditAsync(string usernameOrAccountId,
+            double amountToGet = 1f,
             List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))

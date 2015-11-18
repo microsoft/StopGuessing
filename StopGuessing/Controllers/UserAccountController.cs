@@ -294,28 +294,30 @@ namespace StopGuessing.Controllers
         [HttpPost("{id}")]
         public async Task<IActionResult> TryGetCreditAsync(
             string id,
-            [FromBody] float amountToGet = 1f,
+            [FromBody] double amountToGet = 1f,
             [FromBody] List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             return new ObjectResult(await LocalTryGetCreditAsync(id, amountToGet, serversResponsibleForCachingThisAccount, cancellationToken));
         }
 
-        public async Task<bool> LocalTryGetCreditAsync(
+        public async Task<double> LocalTryGetCreditAsync(
             string id,
-            float amountToGet = 1f,
+            double amountToGet = 1f,
             List<RemoteHost> serversResponsibleForCachingThisAccount = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            // FIXME -- should use exponetial decay
+
             UserAccount account = await LocalGetAsync(id, serversResponsibleForCachingThisAccount, cancellationToken);
 
-            float amountConsumed = amountToGet;
+            double amountConsumed = amountToGet;
 
-            DateTimeOffset timeAtStartOfMethod = DateTimeOffset.Now;
+            DateTime timeAtStartOfMethodUtc = DateTime.UtcNow;
             int limitIndex = 0;
             foreach (UserAccount.ConsumedCredit consumedCredit in account.ConsumedCredits)
             {
-                TimeSpan age = timeAtStartOfMethod - consumedCredit.WhenCreditConsumed;
+                TimeSpan age = timeAtStartOfMethodUtc - consumedCredit.WhenCreditConsumedUtc;
                 while (limitIndex < CreditLimits.Length && age > CreditLimits[limitIndex].TimePeriod)
                 {
                     // If the consumed credit is older than the time period for the current limit,
@@ -333,7 +335,7 @@ namespace StopGuessing.Controllers
                 if (amountConsumed > CreditLimits[limitIndex].Limit)
                 {
                     // We've exceeded the limit for this time period.
-                    return false;
+                    return 0d;
                 }
                 else
                 {
@@ -346,12 +348,12 @@ namespace StopGuessing.Controllers
             // Add it and return true to indicate that a credit was retrieved.
             account.ConsumedCredits.Add(new UserAccount.ConsumedCredit()
             {
-                WhenCreditConsumed = timeAtStartOfMethod,
+                WhenCreditConsumedUtc = timeAtStartOfMethodUtc,
                 AmountConsumed = amountToGet
             });
             // FUTURE -- can we write only this field?
             WriteAccountInBackground(account, serversResponsibleForCachingThisAccount, false, true, true, cancellationToken);
-            return true;
+            return amountToGet;
         }
         
 

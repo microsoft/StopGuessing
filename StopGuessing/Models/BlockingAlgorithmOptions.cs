@@ -28,7 +28,7 @@ namespace StopGuessing.Models
         public double PenaltyForInvalidPassword_Beta { get; set; } = 1d;
         public double PenaltyForInvalidAccount_Alpha { get; set; } = 2d; // 2 * PenaltyForInvalidPassword_Beta;
 
-        public double RewardForCorrectPasswordPerAccount { get; set; } = -30d;
+        public double RewardForCorrectPasswordPerAccount_Gamma { get; set; } = 30d;
 
         public double BlockThresholdPopularPassword { get; set; } = 50d;
         public double BlockThresholdMultiplierForUnpopularPasswords { get; set; } = 20d;
