@@ -175,12 +175,6 @@ namespace StopGuessing.DataStructures
         {
             Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
 
-            // FIXME Hack to test perf
-            if (iterationParameterQueue.Count == 1)
-            {
-                return await actionToTry(iterationParameterQueue.Dequeue(), timeBetweenRetries);
-            }
-
             List<Task<TResult>> attemptsInProgress = new List<Task<TResult>>();
             
             int indexOfTaskFound = -1;
@@ -229,22 +223,15 @@ namespace StopGuessing.DataStructures
             }
         }
 
-        public static async Task TryServersUntilOneResponds<TIterationParameter>(
+        public static async Task<TResult> TryServersUntilOneResponds<TIterationParameter, TResult>(
             List<TIterationParameter> iterationParameters,
             TimeSpan timeBetweenRetries,
-            Func<TIterationParameter, TimeSpan, Task> actionToTry,
+            Func<TIterationParameter, TimeSpan, Task<TResult>> actionToTry,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
-
-            // FIXME Hack to test perf
-            if (iterationParameterQueue.Count == 1)
-            {
-                await actionToTry(iterationParameterQueue.Dequeue(), timeBetweenRetries);
-                return;
-            }
-
-            List<Task> attemptsInProgress = new List<Task>();
+            
+            List<Task<TResult>> attemptsInProgress = new List<Task<TResult>>();
 
             int indexOfTaskFound = -1;
             TimeSpan timeUntilFinalTimeout = new TimeSpan(
@@ -253,10 +240,8 @@ namespace StopGuessing.DataStructures
             while (indexOfTaskFound == -1 && iterationParameterQueue.Count > 0)
             {
                 TimeSpan localtimeUntilFinalTimeout = timeUntilFinalTimeout;
-                attemptsInProgress.Add(Task.Run(async () =>
-                {
-                    await actionToTry(iterationParameterQueue.Dequeue(), localtimeUntilFinalTimeout);
-                }, cancellationToken));
+                attemptsInProgress.Add(Task.Run(async () => await actionToTry(iterationParameterQueue.Dequeue(), localtimeUntilFinalTimeout),
+                        cancellationToken));
 
                 indexOfTaskFound = Task.WaitAny(
                         (attemptsInProgress.Select(t => (Task)t).ToArray()),
@@ -283,7 +268,7 @@ namespace StopGuessing.DataStructures
             }
             if (indexOfTaskFound >= 0)
             {
-                await attemptsInProgress[indexOfTaskFound];
+                return await attemptsInProgress[indexOfTaskFound];
             }
             else
             {

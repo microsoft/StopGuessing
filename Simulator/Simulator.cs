@@ -69,7 +69,7 @@ namespace Simulator
                 // If the below is empty, the multiplier for any popularity level will be 1.
                 config.BlockingOptions.PenaltyForReachingEachPopularityThreshold = new List<PenaltyForReachingAPopularityThreshold>();
                 // Correct passwords shouldn't help
-                config.BlockingOptions.RewardForCorrectPasswordPerAccount = 0;
+                config.BlockingOptions.RewardForCorrectPasswordPerAccount_Gamma = 0;
             }
             if (mode == SystemMode.SSH)
             {

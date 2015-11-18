@@ -120,30 +120,30 @@ namespace StopGuessing.Controllers
             return loginAttempt;
         }
 
-        // WriteAccountAsync login attempts
-        // POST api/LoginAttempt/
-        [HttpPost]
-        public async Task<IActionResult> UpdateLoginAttemptOutcomesAsync(
-            [FromBody] List<LoginAttempt> loginAttemptsWithUpdatedOutcomes,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            await new Task(() =>
-            {
-                Parallel.ForEach(
-                    loginAttemptsWithUpdatedOutcomes.ToLookup(attempt => attempt.AddressOfClientInitiatingRequest),
-                    loginAttemptsWithUpdatedOutcomesByIp =>
-                    {
-                        // If there is a record of the IP address that the login attempt belongs to,
-                        // update that IP history with the new loginAttempt outcome.
-                        IpHistory ip;
-                        if (_ipHistoryCache.TryGetValue(loginAttemptsWithUpdatedOutcomesByIp.Key, out ip))
-                        {
-                            ip.UpdateLoginAttemptsWithNewOutcomes(loginAttemptsWithUpdatedOutcomesByIp.ToList());
-                        }
-                    });
-            });
-            return new HttpOkResult();
-        }
+        //// WriteAccountAsync login attempts
+        //// POST api/LoginAttempt/
+        //[HttpPost]
+        //public async Task<IActionResult> UpdateLoginAttemptOutcomesAsync(
+        //    [FromBody] List<LoginAttempt> loginAttemptsWithUpdatedOutcomes,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    await new Task(() =>
+        //    {
+        //        Parallel.ForEach(
+        //            loginAttemptsWithUpdatedOutcomes.ToLookup(attempt => attempt.AddressOfClientInitiatingRequest),
+        //            loginAttemptsWithUpdatedOutcomesByIp =>
+        //            {
+        //                // If there is a record of the IP address that the login attempt belongs to,
+        //                // update that IP history with the new loginAttempt outcome.
+        //                IpHistory ip;
+        //                if (_ipHistoryCache.TryGetValue(loginAttemptsWithUpdatedOutcomesByIp.Key, out ip))
+        //                {
+        //                    ip.UpdateLoginAttemptsWithNewOutcomes(loginAttemptsWithUpdatedOutcomesByIp.ToList());
+        //                }
+        //            });
+        //    });
+        //    return new HttpOkResult();
+        //}
 
         // PUT api/LoginAttempt/clientsIpHistory-address-datetime
         [HttpPut("{id}")]
@@ -395,9 +395,10 @@ namespace StopGuessing.Controllers
             LoginAttempt loginAttempt,
             IpHistory ip,
             List<RemoteHost> serversResponsibleForCachingTheAccount,
-            CancellationToken cancellationToke
+            CancellationToken cancellationToken
             )
         {
+            // loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount;
             double penalty = 0d;
             double passwordsPopularityAmongGuesses = loginAttempt.PasswordsPopularityAmongFailedGuesses;
             double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses);;
@@ -415,7 +416,17 @@ namespace StopGuessing.Controllers
                     penalty = 0;
                     break;
                 case AuthenticationOutcome.CredentialsValid:
-                break;
+                    if (ip.CurrentBlockScore > 0)
+                    {
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, ip.CurrentBlockScore);
+                        double credit = await _userAccountClient.TryGetCreditAsync(loginAttempt.UsernameOrAccountId,
+                            amountToGet: desiredCredit,
+                            serversResponsibleForCachingThisAccount: serversResponsibleForCachingTheAccount,
+                            cancellationToken: cancellationToken);
+                        penalty -=credit;
+                        // FIXME - deduct from account's credit
+                    }
+                    break;
                 case AuthenticationOutcome.CredentialsValidButBlocked:
                 break;
                     // case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
@@ -427,204 +438,204 @@ namespace StopGuessing.Controllers
 
 
     /// <returns></returns>
-        public async Task<BlockingScoresForEachAlgorithm> UpdateOutcomeIfIpShouldBeBlockedAsync(
-            LoginAttempt loginAttempt,
-            IpHistory ip,
-            List<RemoteHost> serversResponsibleForCachingTheAccount,
-            CancellationToken cancellationToken)
-        {
-            // Always allow a login if there's a valid device cookie associate with this account
-            // FUTURE -- we probably want to do something at the account level to track targetted attacks
-            //          against individual accounts and lock them out
-            if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount && 
-                !_options.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE)
-                return new BlockingScoresForEachAlgorithm { Ours = 0d, Industry =  0d,
-                    SSH = ip.RecentLoginFailures.Count * _options.PenaltyForInvalidPassword_Beta};
+        //public async Task<BlockingScoresForEachAlgorithm> UpdateOutcomeIfIpShouldBeBlockedAsync(
+        //    LoginAttempt loginAttempt,
+        //    IpHistory ip,
+        //    List<RemoteHost> serversResponsibleForCachingTheAccount,
+        //    CancellationToken cancellationToken)
+        //{
+        //    // Always allow a login if there's a valid device cookie associate with this account
+        //    // FUTURE -- we probably want to do something at the account level to track targetted attacks
+        //    //          against individual accounts and lock them out
+        //    if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount && 
+        //        !_options.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE)
+        //        return new BlockingScoresForEachAlgorithm { Ours = 0d, Industry =  0d,
+        //            SSH = ip.RecentLoginFailures.Count * _options.PenaltyForInvalidPassword_Beta};
 
-            // Choose a block threshold based on whether the provided password was popular or not.
-            // (If the actual password is among those commonly guessed, we need to be more aggressive in
-            //  blocking potential guessing attacks.)
-            double blockThreshold = _options.BlockThresholdPopularPassword;
-            if (loginAttempt.PasswordsPopularityAmongFailedGuesses < _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
-                blockThreshold *= _options.BlockThresholdMultiplierForUnpopularPasswords;
+        //    // Choose a block threshold based on whether the provided password was popular or not.
+        //    // (If the actual password is among those commonly guessed, we need to be more aggressive in
+        //    //  blocking potential guessing attacks.)
+        //    double blockThreshold = _options.BlockThresholdPopularPassword;
+        //    if (loginAttempt.PasswordsPopularityAmongFailedGuesses < _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
+        //        blockThreshold *= _options.BlockThresholdMultiplierForUnpopularPasswords;
 
 
-            // As we account for successes, we'll want to make sure we never give credit for more than one success
-            // per account.  This set tracks the accounts we've already given credit for
-            HashSet<string> accountsUsedForSuccessCredit = new HashSet<string>();
+        //    // As we account for successes, we'll want to make sure we never give credit for more than one success
+        //    // per account.  This set tracks the accounts we've already given credit for
+        //    HashSet<string> accountsUsedForSuccessCredit = new HashSet<string>();
 
-            // Start the scoring at zero, with a higher score indicating a greater chance this is a brute-force
-            // attack.  (We'll conclude it's a brute force attack if the score goes over the BlockThreshold.)
-            double bruteLikelihoodScore = 0;
-            BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = new BlockingScoresForEachAlgorithm();            
+        //    // Start the scoring at zero, with a higher score indicating a greater chance this is a brute-force
+        //    // attack.  (We'll conclude it's a brute force attack if the score goes over the BlockThreshold.)
+        //    double bruteLikelihoodScore = 0;
+        //    BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = new BlockingScoresForEachAlgorithm();            
 
-            // This algoirthm estimates the likelihood that the IP is engaged in a brute force attack and should be
-            // blocked by examining login failures from the IP from most-recent to least-recent, adjusting (increasing) the
-            // BruteLikelihoodScore to account for each failure based on its type (e.g., we penalize known
-            // typos less than other login attempts that use popular password guesses).
-            //
-            // Successful logins reduce our estimated likelihood that the IP address.
-            // We also account for successful logins in reverse chronological order, but do so _lazily_:
-            // we only only examine the minimum number of successes needed to take the likelihood score below
-            // the block threshold.  We do so because we want there to be a cost to an account of having its
-            // successes used to prevent an IP from being blocked, otherwise attackers could use a few fake
-            // accounts to intersperse lots of login successes between every failure and never be detected.
+        //    // This algoirthm estimates the likelihood that the IP is engaged in a brute force attack and should be
+        //    // blocked by examining login failures from the IP from most-recent to least-recent, adjusting (increasing) the
+        //    // BruteLikelihoodScore to account for each failure based on its type (e.g., we penalize known
+        //    // typos less than other login attempts that use popular password guesses).
+        //    //
+        //    // Successful logins reduce our estimated likelihood that the IP address.
+        //    // We also account for successful logins in reverse chronological order, but do so _lazily_:
+        //    // we only only examine the minimum number of successes needed to take the likelihood score below
+        //    // the block threshold.  We do so because we want there to be a cost to an account of having its
+        //    // successes used to prevent an IP from being blocked, otherwise attackers could use a few fake
+        //    // accounts to intersperse lots of login successes between every failure and never be detected.
 
-            // These counters track how many successes we have stepped through in search of login successes
-            // that can be used to offset login failures when accounting for the likelihood the IP is attacking
-            int successesWithoutCreditsIndex = 0;
-            int successesWithCreditsIndex = 0;
+        //    // These counters track how many successes we have stepped through in search of login successes
+        //    // that can be used to offset login failures when accounting for the likelihood the IP is attacking
+        //    int successesWithoutCreditsIndex = 0;
+        //    int successesWithCreditsIndex = 0;
 
-            List<LoginAttempt> copyOfRecentLoginFailures;
-            List<LoginAttempt> copyOfRecentLoginSuccessesAtMostOnePerAccount;
-            //FIXME -- this lock does nothing -- lock (ip.RecentLoginFailures)
-            {
-                copyOfRecentLoginFailures = 
-                    ip.RecentLoginFailures.MostRecentToOldest.ToList();
-                copyOfRecentLoginSuccessesAtMostOnePerAccount = 
-                    ip.RecentLoginSuccessesAtMostOnePerAccount.MostRecentToOldest.ToList();
-            }
+        //    List<LoginAttempt> copyOfRecentLoginFailures;
+        //    List<LoginAttempt> copyOfRecentLoginSuccessesAtMostOnePerAccount;
+        //    //FIXME -- this lock does nothing -- lock (ip.RecentLoginFailures)
+        //    {
+        //        copyOfRecentLoginFailures = 
+        //            ip.RecentLoginFailures.MostRecentToOldest.ToList();
+        //        copyOfRecentLoginSuccessesAtMostOnePerAccount = 
+        //            ip.RecentLoginSuccessesAtMostOnePerAccount.MostRecentToOldest.ToList();
+        //    }
 
-            // We step through failures in reverse chronological order (from the 0th element of the sequence on up)
-            for (int failureIndex = 0;
-                failureIndex < copyOfRecentLoginFailures.Count && bruteLikelihoodScore <= blockThreshold;
-                failureIndex++)
-            {
-                // Get the failure at the index in the sequence.
-                LoginAttempt failure = copyOfRecentLoginFailures[failureIndex];
+        //    // We step through failures in reverse chronological order (from the 0th element of the sequence on up)
+        //    for (int failureIndex = 0;
+        //        failureIndex < copyOfRecentLoginFailures.Count && bruteLikelihoodScore <= blockThreshold;
+        //        failureIndex++)
+        //    {
+        //        // Get the failure at the index in the sequence.
+        //        LoginAttempt failure = copyOfRecentLoginFailures[failureIndex];
 
-                // Stop tracking failures that are too old in order to forgive IPs that have tranferred to benign owner
-                if ((DateTimeOffset.Now - failure.TimeOfAttempt) > _options.ExpireFailuresAfter)
-                    break;
+        //        // Stop tracking failures that are too old in order to forgive IPs that have tranferred to benign owner
+        //        if ((DateTimeOffset.Now - failure.TimeOfAttempt) > _options.ExpireFailuresAfter)
+        //            break;
 
-                blockingScoresForEachAlgorithm.SSH += _options.PenaltyForInvalidPassword_Beta;
-                if (failure.Outcome != AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword)
-                {
-                    blockingScoresForEachAlgorithm.Industry += _options.PenaltyForInvalidPassword_Beta;
-                }
-                // Increase the brute-force likelihood score based on the type of failure.
-                // (Failures that indicate a greater chance of being a brute-force attacker, such as those
-                //  using popular passwords, warrant higher scores.)
-                switch (failure.Outcome)
-                {
-                    case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
-                        bruteLikelihoodScore += _options.PenaltyForInvalidAccount_Alpha *
-                                                PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
-                        break;
-                    case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
-                        bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta * _options.PenaltyMulitiplierForTypo;
-                        break;
-                    case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
-                    case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
-                        bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta *
-                                                PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
-                        break;
-                    case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
-                        // We ignore repeats of incorrect passwords we've already accounted for
-                        // No penalty
-                        break;                    
-                }
+        //        blockingScoresForEachAlgorithm.SSH += _options.PenaltyForInvalidPassword_Beta;
+        //        if (failure.Outcome != AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword)
+        //        {
+        //            blockingScoresForEachAlgorithm.Industry += _options.PenaltyForInvalidPassword_Beta;
+        //        }
+        //        // Increase the brute-force likelihood score based on the type of failure.
+        //        // (Failures that indicate a greater chance of being a brute-force attacker, such as those
+        //        //  using popular passwords, warrant higher scores.)
+        //        switch (failure.Outcome)
+        //        {
+        //            case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
+        //                bruteLikelihoodScore += _options.PenaltyForInvalidAccount_Alpha *
+        //                                        PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
+        //                break;
+        //            case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
+        //                bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta * _options.PenaltyMulitiplierForTypo;
+        //                break;
+        //            case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
+        //            case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
+        //                bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta *
+        //                                        PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
+        //                break;
+        //            case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
+        //                // We ignore repeats of incorrect passwords we've already accounted for
+        //                // No penalty
+        //                break;                    
+        //        }
 
-                if (bruteLikelihoodScore > blockThreshold)
-                {
-                    // The most recent failure took us above the threshold at which we would make the decision to block
-                    // this login.  However, there are successes we have yet to account for that might reduce the likelihood score.
-                    // We'll account for successes that are more recent than that last failure until we either
-                    //    (a) run out of successes, or
-                    //    (b) reduce the score below the threshold
-                    //        (in which case we'll save any remaining successes to use if we again go over the threshold.)
+        //        if (bruteLikelihoodScore > blockThreshold)
+        //        {
+        //            // The most recent failure took us above the threshold at which we would make the decision to block
+        //            // this login.  However, there are successes we have yet to account for that might reduce the likelihood score.
+        //            // We'll account for successes that are more recent than that last failure until we either
+        //            //    (a) run out of successes, or
+        //            //    (b) reduce the score below the threshold
+        //            //        (in which case we'll save any remaining successes to use if we again go over the threshold.)
 
-                    while (bruteLikelihoodScore > blockThreshold &&
-                           successesWithCreditsIndex < copyOfRecentLoginSuccessesAtMostOnePerAccount.Count &&
-                           copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithCreditsIndex].TimeOfAttempt >
-                           failure.TimeOfAttempt)
-                    {
-                        // Start with successes for which, on a prior calculation of ShouldBlock, we already removed
-                        // a credit from the account that logged in via a call to TryGetCredit.
+        //            while (bruteLikelihoodScore > blockThreshold &&
+        //                   successesWithCreditsIndex < copyOfRecentLoginSuccessesAtMostOnePerAccount.Count &&
+        //                   copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithCreditsIndex].TimeOfAttempt >
+        //                   failure.TimeOfAttempt)
+        //            {
+        //                // Start with successes for which, on a prior calculation of ShouldBlock, we already removed
+        //                // a credit from the account that logged in via a call to TryGetCredit.
 
-                        LoginAttempt success =
-                            copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithCreditsIndex];
+        //                LoginAttempt success =
+        //                    copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithCreditsIndex];
 
-                        if ( // We have not already used this account to reduce the BruteLikelihoooScore
-                             // earlier in this calculation (during this call to ShouldBlock)
-                            !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
-                            // We HAVE received the credit during a prior recalculation
-                            // (during a prior call to ShouldBlock)                        
-                            success.HasReceivedCreditForUseToReduceBlockingScore)
-                        {
-                            // Ensure that we don't count this success more than once
-                            accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
+        //                if ( // We have not already used this account to reduce the BruteLikelihoooScore
+        //                     // earlier in this calculation (during this call to ShouldBlock)
+        //                    !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
+        //                    // We HAVE received the credit during a prior recalculation
+        //                    // (during a prior call to ShouldBlock)                        
+        //                    success.HasReceivedCreditForUseToReduceBlockingScore)
+        //                {
+        //                    // Ensure that we don't count this success more than once
+        //                    accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
 
-                            // Reduce the brute-force attack likelihood score to account for this past successful login
-                            bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount;
-                        }
-                        successesWithCreditsIndex++;
-                    }
+        //                    // Reduce the brute-force attack likelihood score to account for this past successful login
+        //                    bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount_Gamma;
+        //                }
+        //                successesWithCreditsIndex++;
+        //            }
 
-                    while (bruteLikelihoodScore > blockThreshold &&
-                           successesWithoutCreditsIndex < copyOfRecentLoginSuccessesAtMostOnePerAccount.Count &&
-                           copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithoutCreditsIndex].TimeOfAttempt >
-                           failure.TimeOfAttempt)
-                    {
-                        // If we still are above the threshold, use successes for which we will need to remove a new credit
-                        // from the account responsible for the success via TryGetCredit.
+        //            while (bruteLikelihoodScore > blockThreshold &&
+        //                   successesWithoutCreditsIndex < copyOfRecentLoginSuccessesAtMostOnePerAccount.Count &&
+        //                   copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithoutCreditsIndex].TimeOfAttempt >
+        //                   failure.TimeOfAttempt)
+        //            {
+        //                // If we still are above the threshold, use successes for which we will need to remove a new credit
+        //                // from the account responsible for the success via TryGetCredit.
 
-                        LoginAttempt success =
-                            copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithoutCreditsIndex];
+        //                LoginAttempt success =
+        //                    copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithoutCreditsIndex];
 
-                        if ( // We have not already used this account to reduce the BruteLikelihoodScore
-                             // earlier in this calculation (during this call to ShouldBlock)
-                            !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
-                            // We have NOT received the credit during a prior recalculation
-                            // (during a prior call to ShouldBlock)                        
-                            !success.HasReceivedCreditForUseToReduceBlockingScore)
-                        {
-                            // FUTURE -- We may wnat to parallelize to get rid of the latency.  However, it may well not be worth
-                            // worth the added complexity, since requests for credits should rarely (if ever) occur more than
-                            // once per login
+        //                if ( // We have not already used this account to reduce the BruteLikelihoodScore
+        //                     // earlier in this calculation (during this call to ShouldBlock)
+        //                    !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
+        //                    // We have NOT received the credit during a prior recalculation
+        //                    // (during a prior call to ShouldBlock)                        
+        //                    !success.HasReceivedCreditForUseToReduceBlockingScore)
+        //                {
+        //                    // FUTURE -- We may wnat to parallelize to get rid of the latency.  However, it may well not be worth
+        //                    // worth the added complexity, since requests for credits should rarely (if ever) occur more than
+        //                    // once per login
 
-                            // Reduce credit from the account for the login so that the account cannot be used to generate
-                            // an unlimited number of login successes.
-                            if (await _userAccountClient.TryGetCreditAsync(success.UsernameOrAccountId, 
-                                        serversResponsibleForCachingThisAccount: serversResponsibleForCachingTheAccount,
-                                        cancellationToken: cancellationToken))
-                            {
-                                // There exists enough credit left in the account for us to use this success.
+        //                    // Reduce credit from the account for the login so that the account cannot be used to generate
+        //                    // an unlimited number of login successes.
+        //                    if (await _userAccountClient.TryGetCreditAsync(success.UsernameOrAccountId, 
+        //                                serversResponsibleForCachingThisAccount: serversResponsibleForCachingTheAccount,
+        //                                cancellationToken: cancellationToken))
+        //                    {
+        //                        // There exists enough credit left in the account for us to use this success.
 
-                                // Ensure that we don't count this success more than once
-                                accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
+        //                        // Ensure that we don't count this success more than once
+        //                        accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
 
-                                // Reduce the brute-force attack likelihood score to account for this past successful login
-                                bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount;
-                            }
+        //                        // Reduce the brute-force attack likelihood score to account for this past successful login
+        //                        bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount_Gamma;
+        //                    }
 
-                        }
-                        successesWithoutCreditsIndex++;
-                    }
+        //                }
+        //                successesWithoutCreditsIndex++;
+        //            }
 
-                }
+        //        }
 
-                // The brute-force attack likelihood score should never fall below 0, even after a success credit.
-                if (bruteLikelihoodScore < 0d)
-                    bruteLikelihoodScore = 0d;
+        //        // The brute-force attack likelihood score should never fall below 0, even after a success credit.
+        //        if (bruteLikelihoodScore < 0d)
+        //            bruteLikelihoodScore = 0d;
 
-                if (bruteLikelihoodScore >= blockThreshold)
-                {
-                    if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
-                    {
-                        loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
-                    }
-                    // FIXME -- uncomment off when not simulating
-                    // break;
-                }
+        //        if (bruteLikelihoodScore >= blockThreshold)
+        //        {
+        //            if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
+        //            {
+        //                loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
+        //            }
+        //            // FIXME -- uncomment off when not simulating
+        //            // break;
+        //        }
 
-            }
-            blockingScoresForEachAlgorithm.Ours =
-                (loginAttempt.PasswordsPopularityAmongFailedGuesses < _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular) ?
-                bruteLikelihoodScore / _options.BlockThresholdMultiplierForUnpopularPasswords :
-                bruteLikelihoodScore;
-            return blockingScoresForEachAlgorithm;
-        }
+        //    }
+        //    blockingScoresForEachAlgorithm.Ours =
+        //        (loginAttempt.PasswordsPopularityAmongFailedGuesses < _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular) ?
+        //        bruteLikelihoodScore / _options.BlockThresholdMultiplierForUnpopularPasswords :
+        //        bruteLikelihoodScore;
+        //    return blockingScoresForEachAlgorithm;
+        //}
 
 
         /// <summary>
