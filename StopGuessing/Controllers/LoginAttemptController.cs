@@ -33,7 +33,6 @@ namespace StopGuessing.Controllers
         private readonly Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>
             _loginAttemptsInProgress;
 
-        private UserAccountClient _userAccountClient;
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
         private readonly LoginAttemptClient _loginAttemptClient;
 
@@ -73,7 +72,7 @@ namespace StopGuessing.Controllers
 
 
         public void SetUserAccountClient(UserAccountClient userAccountClient)
-        {
+        {h
             _userAccountClient = userAccountClient;
         }
 
@@ -87,7 +86,7 @@ namespace StopGuessing.Controllers
         // GET api/LoginAttempt/5
         [HttpGet("{id}")]
         public async Task<IActionResult> GetAsync(string id,
-            [FromBody] List<RemoteHost> serversResponsibleForCachingALoginAttempt = null,
+            [FromQuery] List<RemoteHost> serversResponsibleForCachingALoginAttempt = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             LoginAttempt result = await LocalGetAsync(id, serversResponsibleForCachingALoginAttempt, cancellationToken);

@@ -7,7 +7,14 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.DataStructures
 {
-    public abstract class Ladder<TRung>
+    public interface ILadderForKey
+    {
+        int HeightOfLadderInRungs { get; }
+        int HeightOfKeyInRungs { get; }
+        Task StepAsync(CancellationToken cancellationToken = default(CancellationToken));
+    }
+
+    public abstract class LadderForKey<TRung> : ILadderForKey
     {
         protected List<TRung> RungsAbove { get; set; }
 
@@ -15,7 +22,7 @@ namespace StopGuessing.DataStructures
 
         public int HeightOfKeyInRungs => HeightOfLadderInRungs - RungsAbove.Count;
 
-        protected Ladder(IEnumerable<TRung> rungsNotYetClimbed, int heightOfLadderInRungs)
+        protected LadderForKey(IEnumerable<TRung> rungsNotYetClimbed, int heightOfLadderInRungs)
         {
             RungsAbove = rungsNotYetClimbed.ToList();
             HeightOfLadderInRungs = heightOfLadderInRungs;
@@ -54,9 +61,9 @@ namespace StopGuessing.DataStructures
 
     }
 
-    public abstract class BinomialLadder<TRung> : Ladder<TRung>
+    public abstract class BinomialLadderForKey<TRung> : LadderForKey<TRung>
     {
-        protected BinomialLadder(IEnumerable<TRung> rungsNotYetClimbed, int heightOfLadderInRungs)
+        protected BinomialLadderForKey(IEnumerable<TRung> rungsNotYetClimbed, int heightOfLadderInRungs)
             : base(rungsNotYetClimbed, heightOfLadderInRungs)
         {
         }
@@ -67,7 +74,6 @@ namespace StopGuessing.DataStructures
         /// In other words, how many observations can we assume occurred and reject the null hypothesis that fewer observations
         /// occurred and the nubmer of bits set was this high due to chance.
         /// </summary>
-
         /// <param name="confidenceLevelCommonlyCalledPValue">The p value, or confidence level, at which we want to be sure
         /// the claimed number of observations occurred.</param>
         /// <returns>The number of observations</returns>
