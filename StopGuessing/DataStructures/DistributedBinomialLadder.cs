@@ -11,13 +11,12 @@ using StopGuessing.Models;
 namespace StopGuessing.DataStructures
 {
 
+
     public class DistributedBinomialLadder
     {
         // FIXME
         public int HostsPerKey = 6;
         public int TotalRungs = 96;
-
-
 
         public class RemoteRungNotYetClimbed
         {
@@ -31,36 +30,14 @@ namespace StopGuessing.DataStructures
             }
         }
 
-        public class LadderSeenByASingleKey
+        public class DistributedKeysLadder : Ladder<RemoteRungNotYetClimbed>
         {
-            protected List<RemoteRungNotYetClimbed> RungsNotYetClimbed { get; set; }
-
-            public int HeightOfLadderInRungs { get; protected set; }
-
-            public int HeightOfKeyInRungs => HeightOfLadderInRungs - RungsNotYetClimbed.Count;
-
-            public LadderSeenByASingleKey(IEnumerable<RemoteRungNotYetClimbed> rungsNotYetClimbed, int heightOfLadderInRungs)
+            public DistributedKeysLadder(IEnumerable<RemoteRungNotYetClimbed> rungsNotYetClimbed, int heightOfLadderInRungs) : base(rungsNotYetClimbed, heightOfLadderInRungs)
             {
-                RungsNotYetClimbed = rungsNotYetClimbed.ToList();
-                HeightOfLadderInRungs = heightOfLadderInRungs;
             }
 
-            public async Task Step(CancellationToken cancellationToken = default(CancellationToken))
+            protected override async Task StepAsync(RemoteRungNotYetClimbed rungToClimb, CancellationToken cancellationToken = default(CancellationToken))
             {
-                RemoteRungNotYetClimbed rungToClimb;
-                lock (RungsNotYetClimbed)
-                {
-                    if (RungsNotYetClimbed.Count == 0)
-                    {
-                        // The key is already at the top of the ladder.  No further steps can be taken.
-                        return;
-                    }
-
-                    int randomRungIndex = (int)StrongRandomNumberGenerator.Get32Bits(RungsNotYetClimbed.Count);
-                    rungToClimb = RungsNotYetClimbed[randomRungIndex];
-                    RungsNotYetClimbed.RemoveAt(randomRungIndex);
-                }
-
                 await RestClientHelper.PutAsync(
                        rungToClimb.Host.Uri,
                        "DistributedBinomialSketchElement/" + rungToClimb.Index,
@@ -73,7 +50,7 @@ namespace StopGuessing.DataStructures
 
         private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
 
-        public async Task<LadderSeenByASingleKey> GetZeros(string key, TimeSpan timeout, 
+        public async Task<DistributedKeysLadder> GetZeros(string key, TimeSpan timeout, 
             CancellationToken cancellationToken = default(CancellationToken))
         {
             List<RemoteHost> hosts = _responsibleHosts.FindMembersResponsible(key, HostsPerKey);
@@ -105,7 +82,7 @@ namespace StopGuessing.DataStructures
                     // FIXME -- what to do with exceptions?
                 }, cancellationToken: cancellationToken);
 
-            return new LadderSeenByASingleKey(rungsNotYetClimbed, rungsCalculated);
+            return new DistributedKeysLadder(rungsNotYetClimbed, rungsCalculated);
         }
 
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -9,25 +10,6 @@ namespace StopGuessing.DataStructures
 {
     public class BinomialDistribution
     {
-        //private static Dictionary<int, BinomialDistribution> cacheOfCalculatedDistributions = new Dictionary<int, BinomialDistribution>();
-
-        //public static BinomialDistribution GetDistribution(int numberOfCoinFlips)
-        //{
-        //    BinomialDistribution result;
-        //    if (!cacheOfCalculatedDistributions.TryGetValue(numberOfCoinFlips, out result))
-        //    {
-        //        result = new BinomialDistribution(numberOfCoinFlips);
-        //        lock (cacheOfCalculatedDistributions)
-        //        {
-        //            if (!cacheOfCalculatedDistributions.ContainsKey(numberOfCoinFlips))
-        //            {
-        //                cacheOfCalculatedDistributions[numberOfCoinFlips] = result;
-        //            }
-        //        }
-        //    }
-        //    return result;
-        //}
-
         private readonly double[] _probabilityExactlyThisManySetByChance;
         private readonly double[] _probabilityThisManyOrFewerSetByChance;
 
@@ -74,7 +56,7 @@ namespace StopGuessing.DataStructures
         }
 
 
-        public BinomialDistribution(int outOf)
+        protected BinomialDistribution(int outOf)
         {
             _probabilityThisManyOrFewerSetByChance = new double[outOf +1];
             _probabilityExactlyThisManySetByChance = new double[outOf + 1];
@@ -95,5 +77,35 @@ namespace StopGuessing.DataStructures
                     _probabilityThisManyOrFewerSetByChance[k] + _probabilityExactlyThisManySetByChance[k - 1];
         }
 
+
+        protected static readonly Dictionary<int, BinomialDistribution> CacheOfCalculatedDistributions = new Dictionary<int, BinomialDistribution>();
+        protected static readonly ReaderWriterLockSlim RwLock = new ReaderWriterLockSlim();
+        public static BinomialDistribution ForCoinFlips(int numberOfCoinFlips)
+        {
+            BinomialDistribution result;
+            RwLock.EnterUpgradeableReadLock();
+            try
+            {
+                if (!CacheOfCalculatedDistributions.TryGetValue(numberOfCoinFlips, out result))
+                {
+                    RwLock.EnterWriteLock();
+                    try
+                    {
+                        result = CacheOfCalculatedDistributions[numberOfCoinFlips] =
+                            new BinomialDistribution(numberOfCoinFlips);
+                        CacheOfCalculatedDistributions[numberOfCoinFlips] = result;
+                    }
+                    finally
+                    {
+                        RwLock.ExitWriteLock();
+                    }
+                }
+            }
+            finally
+            {
+                RwLock.ExitUpgradeableReadLock();
+            }
+            return result;
+        }
     }
 }

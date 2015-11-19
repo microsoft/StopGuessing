@@ -16,10 +16,10 @@ namespace StopGuessing.Models
         /// privacy risk since all estimates are probabilistic and any password has a small chance of
         /// appearing to have been observed.
         /// </summary>
-        protected BinomialLadder BinomialLadderOfFailedPasswords;
+        protected BinomialLadderSketch BinomialLadderSketchOfFailedPasswords;
 
         ///// <summary>
-        ///// When a password exceeds the threshold of commonality in the BinomialLadderOfFailedPasswords sketch,
+        ///// When a password exceeds the threshold of commonality in the BinomialLadderSketchOfFailedPasswords sketch,
         ///// we start tracking its hash using this dictionary to get a precise occurrence count for future occurrences.
         ///// This filters out the rare false positives so that we don't track their plaintext values
         ///// </summary>
@@ -123,7 +123,7 @@ namespace StopGuessing.Models
 
             SketchForTestingIfNonexistentAccountIpPasswordHasBeenSeenBefore =
                 new AgingMembershipSketch(DefaultNumberOfSketchColumns, conservativelyHighEstimateOfRowsNeeded);
-            BinomialLadderOfFailedPasswords = new BinomialLadder(SizeOfBinomialLadder, HeightOfBinomialLadder, keyToPreventAlgorithmicComplexityAttacks); // FIXME configuration parameters
+            BinomialLadderSketchOfFailedPasswords = new BinomialLadderSketch(SizeOfBinomialLadder, HeightOfBinomialLadder, keyToPreventAlgorithmicComplexityAttacks); // FIXME configuration parameters
 
             MapOfHighlyPopularUnsaltedHashedPasswordsToPlaintextPasswords =
                 new Dictionary<string, string>();
@@ -168,15 +168,15 @@ namespace StopGuessing.Models
             if (!wasPasswordCorrect)
             {
                 FailedPasswordsRecordedSoFar += 1d;
-                sketchBitsSet = BinomialLadderOfFailedPasswords.Step(password);
+                sketchBitsSet = BinomialLadderSketchOfFailedPasswords.Step(password);
             }
             else
             {
-                sketchBitsSet = BinomialLadderOfFailedPasswords.GetNumberOfIndexesSet(password);
+                sketchBitsSet = BinomialLadderSketchOfFailedPasswords.GetRungsBelow(password);
             }
             Proportion highestPopularity = new Proportion(
-                (ulong)BinomialLadderOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, confidenceLevel),
-                Math.Min((ulong) BinomialLadderOfFailedPasswords.NumberOfObservationsAccountingForAging, 
+                (ulong)BinomialLadderSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, confidenceLevel),
+                Math.Min((ulong) BinomialLadderSketchOfFailedPasswords.NumberOfObservationsAccountingForAging, 
                                  minDenominatorForPasswordPopularity));
             
             string passwordHash = Convert.ToBase64String(SimplePasswordHash(password));
@@ -186,7 +186,7 @@ namespace StopGuessing.Models
             // good secret, we'll continue to track the unsalted hash
             if (PasswordFrequencyEstimatesForDifferentPeriods[0].Get(passwordHash).Numerator > 0 ||
                 sketchBitsSet >= HeightOfLadderDeemedPopular)
-                // FIXME BinomialLadderOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, 0.000001d) >
+                // FIXME BinomialLadderSketchOfFailedPasswords.CountObservationsForGivenConfidence(sketchBitsSet, 0.000001d) >
                 //_minCountRequiredToTrackPreciseOccurrences)
             {
                 foreach (var passwordTrackerForThisPeriod in PasswordFrequencyEstimatesForDifferentPeriods)
