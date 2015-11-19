@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using StopGuessing.EncryptionPrimitives;
 using System.Threading;
 using System.Threading.Tasks;
+using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.DataStructures
 {
@@ -35,31 +34,30 @@ namespace StopGuessing.DataStructures
     public class BinomialLadderSketch
     {
 
-
         /// <summary>
         /// The number of hash functions that will index keys to rungs
         /// </summary>
-        public int HeightOfLaddersInRungs { get; }
+        public int MaxLadderHeightInRungs { get; }
 
         /// <summary>
         /// The size of the sketch in bits
         /// </summary>
-        public int TotalNumberOfRungElements => _rungElements.Length;
+        public int TotalNumberOfRungElements => RungElements.Length;
 
         /// <summary>
         /// The bits of the array that can be used as rungs of a ladder
         /// </summary>
-        private readonly BitArray _rungElements;
+        protected readonly BitArray RungElements;
 
         /// <summary>
         /// The hash functions used to index into the sketch to map keys to rungs
         /// (There is one hash function per rung)
         /// </summary>
-        private readonly UniversalHashFunction[] _hashFunctionsMappingKeysToRungs;
+        protected readonly UniversalHashFunction[] HashFunctionsMappingKeysToRungs;
 
 
         /// <summary>
-        /// Construct a binomial sketch, in which a set of k hash functions (k=HeightOfLaddersInRungs) will map any
+        /// Construct a binomial sketch, in which a set of k hash functions (k=MaxLadderHeightInRungs) will map any
         /// key to k points with an array of n bits (numberOfRungsInSketch).
         /// When one Adds a key to a binomial sketch, a random bit among the subset of k that are currently 0 will be set to 1.
         /// To ensure roughly half the bits remain zero, a random index from the subset of all k bits that are currently 1 will be set to 0.
@@ -68,93 +66,86 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="numberOfRungsInSketch">The total number of bits to maintain in the table.
         /// In theoretical discussions of bloom filters and sketches, this is usually referrted to by the letter n.</param>
-        /// <param name="heightOfLaddersInRungs">The number of indexes to map each key to, each of which is assigned a unique pseudorandom
+        /// <param name="maxLadderHeightInRungs">The number of indexes to map each key to, each of which is assigned a unique pseudorandom
         /// hash function.  This is typically referred to by the letter k.</param>
-        /// <param name="keyToPreventAlgorithmicComplexityAttacks">A pseudorandom seed that allows the same sketch to be created
-        /// twice, but (if kept secret) prevents an attacker from knowing the distribution of hashes and thus counters
-        /// algorithmic complexity attacks.</param>
-        public BinomialLadderSketch(int numberOfRungsInSketch, int heightOfLaddersInRungs, string keyToPreventAlgorithmicComplexityAttacks)
+        public BinomialLadderSketch(int numberOfRungsInSketch, int maxLadderHeightInRungs)
         {
-            HeightOfLaddersInRungs = heightOfLaddersInRungs;
-            string keyToPreventAlgorithmicComplexityAttacks1 = keyToPreventAlgorithmicComplexityAttacks ?? StrongRandomNumberGenerator.Get64Bits().ToString();
-            int actualSizeInBits = numberOfRungsInSketch;
+            MaxLadderHeightInRungs = maxLadderHeightInRungs;
 
-            // Align on next byte boundary
-            if ((actualSizeInBits & 7) != 0)
-                actualSizeInBits = (numberOfRungsInSketch + 8) ^ 0x7;
-            int capacityInBytes = actualSizeInBits / 8;
+            // Align on byte boundary to guarantee no less than numberOfRungsInSketch
+            int capacityInBytes = (numberOfRungsInSketch + 7) / 8;
 
-            _hashFunctionsMappingKeysToRungs = new UniversalHashFunction[heightOfLaddersInRungs];
-            for (int i = 0; i < _hashFunctionsMappingKeysToRungs.Length; i++)
+            // Create hash functions for each rung
+            HashFunctionsMappingKeysToRungs = new UniversalHashFunction[maxLadderHeightInRungs];
+            for (int i = 0; i < HashFunctionsMappingKeysToRungs.Length; i++)
             {
-                _hashFunctionsMappingKeysToRungs[i] =
-                    new UniversalHashFunction(i.ToString() + keyToPreventAlgorithmicComplexityAttacks1, 64);
+                HashFunctionsMappingKeysToRungs[i] =
+                    new UniversalHashFunction(64);
             }
 
             // Initialize the sketch setting ~half the bits randomly to zero by using the
             // cryptographic random number generator.
             byte[] initialSketchValues = new byte[capacityInBytes];
             StrongRandomNumberGenerator.GetBytes(initialSketchValues);
-            _rungElements = new BitArray(initialSketchValues);
+            RungElements = new BitArray(initialSketchValues);
         }
 
         /// <summary>
         /// Map a key to its corresponding rungs (indexes) on the ladder (array).
         /// </summary>
         /// <param name="key">The key to be mapped to indexes</param>
-        /// <param name="numberOfRungs">The number of rungs to get keys for.  If not set,
-        /// uses the HeightOfLaddersInRungs specified in the constructor.</param>
+        /// <param name="heightOfLadderInRungs">The number of rungs to get keys for.  If not set,
+        /// uses the MaxLadderHeightInRungs specified in the constructor.</param>
         /// <returns>The rungs (array indexes) associated with the key</returns>
-        protected IEnumerable<int> GetRungs(byte[] key, int? numberOfRungs = null)
+        protected IEnumerable<int> GetRungs(byte[] key, int? heightOfLadderInRungs = null)
         {
 
             byte[] sha256HashOfKey = ManagedSHA256.Hash(key);
 
-            if (numberOfRungs == null || numberOfRungs.Value >= _hashFunctionsMappingKeysToRungs.Length)
-                return _hashFunctionsMappingKeysToRungs.Select(f => (int) (f.Hash(sha256HashOfKey)%(uint) TotalNumberOfRungElements));
+            if (heightOfLadderInRungs == null || heightOfLadderInRungs.Value >= HashFunctionsMappingKeysToRungs.Length)
+                return HashFunctionsMappingKeysToRungs.Select(f => (int) (f.Hash(sha256HashOfKey)%(uint) TotalNumberOfRungElements));
             else
-                return _hashFunctionsMappingKeysToRungs.Take(numberOfRungs.Value).Select(f => (int)(f.Hash(sha256HashOfKey) % (uint)TotalNumberOfRungElements));
+                return HashFunctionsMappingKeysToRungs.Take(heightOfLadderInRungs.Value).Select(f => (int)(f.Hash(sha256HashOfKey) % (uint)TotalNumberOfRungElements));
         }
 
-        protected IEnumerable<int> GetRungs(string key, int? numberOfRungs = null)
+        protected IEnumerable<int> GetRungs(string key, int? heightOfLadderInRungs = null)
         {
-            return GetRungs(Encoding.UTF8.GetBytes(key), numberOfRungs);
+            return GetRungs(Encoding.UTF8.GetBytes(key), heightOfLadderInRungs);
         }
 
         /// <summary>
         /// Get the subset of indexes for a given key that map to bits that are not set (a.k.a. 0 or false).
         /// </summary>
         /// <param name="key">The key to be mapped to indexes</param>
-        /// <param name="numberOfRungs">The number of rungs to get keys for.  If not set,
-        /// uses the HeightOfLaddersInRungs specified in the constructor.</param>
+        /// <param name="heightOfLadderInRungs">The number of rungs to get keys for.  If not set,
+        /// uses the MaxLadderHeightInRungs specified in the constructor.</param>
         /// <returns>The rungs (array indexes) associated with the key that are above the position
         /// of the key on the ladder (the elements at these indexes are set to zero/false).</returns>
-        public IEnumerable<int> GetRungsAbove(string key, int? numberOfRungs = null)
+        public IEnumerable<int> GetRungsAbove(string key, int? heightOfLadderInRungs = null)
         {
-            return GetRungs(key, numberOfRungs).Where(index => !_rungElements[index]);
+            return GetRungs(key, heightOfLadderInRungs).Where(index => !RungElements[index]);
         }
-
 
         
-        protected void Step(int indexOfRungToClimb, int indexOfNonRungElementToClear)
+        protected void Step(int rungElementToClimb, int indexOfNonRungElementToClear)
         {
             // ReSharper disable once RedundantBoolCompare
-            if (_rungElements[indexOfRungToClimb] == true || _rungElements[indexOfNonRungElementToClear] == false)
+            if (RungElements[rungElementToClimb] == true || RungElements[indexOfNonRungElementToClear] == false)
                 return;
-            _rungElements[indexOfRungToClimb] = true;
-            _rungElements[indexOfNonRungElementToClear] = false;
+            RungElements[rungElementToClimb] = true;
+            RungElements[indexOfNonRungElementToClear] = false;
         }
 
-        public void Step(int indexOfZeroElementToSetToOne)
+        public void Step(int rungElementToClimb)
         {            
-            int randomIndexToAnElementSetToOneThatWeCanClearToZero;
+            int randomClimbedRungElementToMarkAsUnclimbed;
             do
             {
                 // Iterate through random elements until we find one that is set to one (true) and can be cleared
-                randomIndexToAnElementSetToOneThatWeCanClearToZero = (int) (StrongRandomNumberGenerator.Get64Bits((ulong) _rungElements.Length));
-            } while (_rungElements[randomIndexToAnElementSetToOneThatWeCanClearToZero] == false);
+                randomClimbedRungElementToMarkAsUnclimbed = (int) (StrongRandomNumberGenerator.Get64Bits((ulong) RungElements.Length));
+            } while (RungElements[randomClimbedRungElementToMarkAsUnclimbed] == false);
 
-            Step(indexOfZeroElementToSetToOne, randomIndexToAnElementSetToOneThatWeCanClearToZero);
+            Step(rungElementToClimb, randomClimbedRungElementToMarkAsUnclimbed);
         }
 
 
@@ -164,21 +155,20 @@ namespace StopGuessing.DataStructures
         /// To ensure roughly half the bits remain zero at all times, a random index from the subset of all k bits that
         /// are currently 1 (true) will be set to 0 (false).
         /// </summary>
-        /// <param name="key">The key to add to the set.</param>       
+        /// <param name="key">The key to add to the set.</param>
+        /// <param name="heightOfLadderInRungs">Set if using a ladder shorter than the default for this sketch</param>
         /// <returns>Of the bits at the indices for the given key, the number of bits that were set to 1 (true)
         /// before the Step operation.  The maximum possible value to be returned, if all bits were already
-        /// set to 1 (true) would be HeightOfLaddersInRungs.  If a key has not been seen before, the expected (average)
-        /// result is HeightOfLaddersInRungs/2, but will vary with the binomial distribution.</returns>
-        public int Step(string key)
+        /// set to 1 (true) would be MaxLadderHeightInRungs.  If a key has not been seen before, the expected (average)
+        /// result is MaxLadderHeightInRungs/2, but will vary with the binomial distribution.</returns>
+        public int Step(string key, int? heightOfLadderInRungs = null)
         {
             // Get a list of indexes that are not yet set
-            List<int> rungsAbove = GetRungsAbove(key).ToList();
+            List<int> rungsAbove = GetRungsAbove(key, heightOfLadderInRungs).ToList();
 
             // We can only update state to record the observation if there is an unset (0) index that we can set (to 1).
             if (rungsAbove.Count > 0)
             {
-                //FIXME REMOVEME NumberOfObservations++;
-                
                 // First, pick an index to a zero element at random.
                 int indexToSet = rungsAbove[ (int) (StrongRandomNumberGenerator.Get32Bits((uint) rungsAbove.Count)) ];
 
@@ -187,7 +177,34 @@ namespace StopGuessing.DataStructures
             }
 
             // The number of bits set to 1/true is the number that were not 0/false.
-            return HeightOfLaddersInRungs - rungsAbove.Count;
+            return MaxLadderHeightInRungs - rungsAbove.Count;
+        }
+
+
+        public BinomialLadder GetLadder(string key, int? heightOfLadderInRungs = null)
+        {
+            int heightOfLadderInRungsOrDefault = heightOfLadderInRungs ?? MaxLadderHeightInRungs;
+            return new BinomialLadder(this, GetRungsAbove(key, heightOfLadderInRungsOrDefault), heightOfLadderInRungsOrDefault);
+        }
+
+
+        public class BinomialLadder : BinomialLadderForKey<int>
+        {
+            protected BinomialLadderSketch Sketch;
+            public BinomialLadder(BinomialLadderSketch sketch, IEnumerable<int> rungsNotYetClimbed, int heightOfLadderInRungs)
+                : base(rungsNotYetClimbed, heightOfLadderInRungs)
+            {
+                Sketch = sketch;
+            }
+
+            protected override async Task StepAsync(int rungToClimb, CancellationToken cancellationToken = new CancellationToken())
+            {
+                await Task.Run(() =>
+                {
+                    Sketch.Step(rungToClimb);
+                }, cancellationToken);
+
+            }
         }
 
     }
