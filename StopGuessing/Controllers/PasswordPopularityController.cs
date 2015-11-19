@@ -32,7 +32,7 @@ namespace StopGuessing.Controllers
             public Proportion GetPopularity()
             {
                 throw new NotImplementedException();
-                tracker.BinomialLadderOfFailedPasswords.
+                tracker.BinomialLadderSketchOfFailedPasswords.
                 }
 
             public void IncrementPopularity()
