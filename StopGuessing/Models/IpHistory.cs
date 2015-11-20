@@ -56,6 +56,7 @@ namespace StopGuessing.Models
             {
                 RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
                 {
+                    UsernameOrAccountId = attempt.UsernameOrAccountId,
                     Penalty = penalty,
                     TimeOfAttempt = attempt.TimeOfAttempt.UtcDateTime,
                     EncryptedIncorrectPassword = attempt.EncryptedIncorrectPassword

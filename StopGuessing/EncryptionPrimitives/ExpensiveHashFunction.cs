@@ -10,6 +10,7 @@ namespace StopGuessing.EncryptionPrimitives
     {
 
         public const string DefaultFunctionName = "PBKDF2_SHA256";
+        public const int DefaultNumberOfIterations = 10000;
 
         private static readonly Dictionary<string, ExpensiveHashFunction> ExpensiveHashFunctions = new Dictionary<string, ExpensiveHashFunction>
             {

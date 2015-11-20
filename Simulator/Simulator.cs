@@ -54,29 +54,24 @@ namespace Simulator
             StopGuessing
         };
 
-        public static void SetSystemMode(ExperimentalConfiguration config, SystemMode mode)
-        {
-            if (mode == SystemMode.Basic || mode == SystemMode.SSH)
-            {
-                //
-                // Industrial-best-practice baseline
-                //
-                // Use the same threshold regardless of the popularity of the account password
-                config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 1d;
-                // Make all failures increase the count towards the threshold by one
-                config.BlockingOptions.PenaltyMulitiplierForTypo = 1d;
-                config.BlockingOptions.PenaltyForInvalidAccount_Alpha = config.BlockingOptions.PenaltyForInvalidPassword_Beta;
-                // If the below is empty, the multiplier for any popularity level will be 1.
-                config.BlockingOptions.PenaltyForReachingEachPopularityThreshold = new List<PenaltyForReachingAPopularityThreshold>();
-                // Correct passwords shouldn't help
-                config.BlockingOptions.RewardForCorrectPasswordPerAccount_Gamma = 0;
-            }
-            if (mode == SystemMode.SSH)
-            {
-                // SSH mode doesn't discard the repeat <password/account> pairs
-                config.BlockingOptions.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE = true;
-            }
-        }
+        //public static void SetSystemMode(ExperimentalConfiguration config, SystemMode mode)
+        //{
+        //    if (mode == SystemMode.Basic || mode == SystemMode.SSH)
+        //    {
+        //        //
+        //        // Industrial-best-practice baseline
+        //        //
+        //        // Use the same threshold regardless of the popularity of the account password
+        //        config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 1d;
+        //        // Make all failures increase the count towards the threshold by one
+        //        config.BlockingOptions.PenaltyMulitiplierForTypo = 1d;
+        //        config.BlockingOptions.PenaltyForInvalidAccount_Alpha = config.BlockingOptions.PenaltyForInvalidPassword_Beta;
+        //        // If the below is empty, the multiplier for any popularity level will be 1.
+        //        config.BlockingOptions.PenaltyForReachingEachPopularityThreshold = new List<PenaltyForReachingAPopularityThreshold>();
+        //        // Correct passwords shouldn't help
+        //        config.BlockingOptions.RewardForCorrectPasswordPerAccount_Gamma = 0;
+        //    }
+        //}
 
 
         public interface IParameterSweeper

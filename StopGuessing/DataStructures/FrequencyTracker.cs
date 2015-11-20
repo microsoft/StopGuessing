@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StopGuessing.DataStructures
@@ -7,9 +9,10 @@ namespace StopGuessing.DataStructures
     /// <summary>
     /// A class to track the frequency of a sequence of observed values (keys).
     /// </summary>
-    /// <typeparam name="T">The type of values (keys) to observe.</typeparam>
-    public class FrequencyTracker<T>
+    /// <typeparam name="TKey">The type of values (keys) to observe.</typeparam>
+    public class FrequencyTracker<TKey>
     {
+   
         /// <summary>
         /// The maximum number of elements this data structure should store before
         /// recovering space.
@@ -43,7 +46,7 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// Where the elements are stored
         /// </summary>
-        private readonly SortedDictionary<T, uint> _keyCounts;
+        private readonly SortedDictionary<TKey, uint> _keyCounts;
 
         /// <summary>
         /// Trigger reduction when this threshold is reached to clear old out observations
@@ -73,7 +76,7 @@ namespace StopGuessing.DataStructures
         // For recovering capacity or reducing observations
         private readonly object _recoveryTaskLock;
         private Task _recoveryTask;
-        private Queue<T> _cleanupQueue;
+        private Queue<TKey> _cleanupQueue;
 
 
         /// <summary>
@@ -118,10 +121,10 @@ namespace StopGuessing.DataStructures
             _capacityAtWhichToIncreaseTheIncrement = _periodBetweenIncrementGrowth;
 
             // Initialize our main storage data structure
-            _keyCounts = new SortedDictionary<T, uint>();
+            _keyCounts = new SortedDictionary<TKey, uint>();
 
             // Use these two objects during clean-up
-            _cleanupQueue = new Queue<T>();
+            _cleanupQueue = new Queue<TKey>();
             _recoveryTaskLock = new object();
         }
 
@@ -131,7 +134,7 @@ namespace StopGuessing.DataStructures
         /// <param name="key">The key to query.</param>
         /// <returns>The proportion (frequency) with which that observation occurred before this observation,
         /// aged over time.</returns>
-        public Proportion Get(T key)
+        public Proportion Get(TKey key)
         {
             uint count;
             lock (_keyCounts)
@@ -141,12 +144,13 @@ namespace StopGuessing.DataStructures
             return new Proportion(count, SumOfAmountsOverAllKeys);
         }
 
+
         /// <summary>
         /// Add an observation of a given key, returning the estimated frequency of that key before the observation.
         /// </summary>
         /// <param name="key">The key to observe</param>
         /// <returns>The proportion (frequency) with which that observation occurred, aged over time.</returns>
-        public Proportion Observe(T key)
+        public Proportion Observe(TKey key)
         {
             uint count;
             bool recoveryNeeded;
@@ -243,12 +247,12 @@ namespace StopGuessing.DataStructures
                 {
                     lock (_keyCounts)
                     {
-                        _cleanupQueue = new Queue<T>(_keyCounts.Keys);
+                        _cleanupQueue = new Queue<TKey>(_keyCounts.Keys);
                     }
                 }
                 // Dequeue one key from the clean-up queue (we only run one recovery-task at a time,
                 // so we don't need task/thread safety here.
-                T key = _cleanupQueue.Dequeue();
+                TKey key = _cleanupQueue.Dequeue();
                 // Reduce the count for the current key on the queue and, if the count reaches 0,
                 // remove that key
                 lock (_keyCounts)

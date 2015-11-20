@@ -7,6 +7,7 @@ using Microsoft.AspNet.Mvc;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using StopGuessing.Clients;
 using StopGuessing.EncryptionPrimitives;
@@ -27,32 +28,42 @@ namespace StopGuessing.Controllers
     {
         private readonly IStableStore _stableStore;
         private readonly BlockingAlgorithmOptions _options;
-        public readonly PasswordPopularityTracker _passwordPopularityTracker;
-        private readonly FixedSizeLruCache<string, LoginAttempt> _loginAttemptCache;
+        private readonly IBinomialLadderSketch _binomialLadderSketch;
+        private readonly IFrequenciesProvider<string> _incorrectPasswordFrequenciesProvider;
+        //private readonly FixedSizeLruCache<string, LoginAttempt> _loginAttemptCache;
+        private readonly AgingMembershipSketch _recentIncorrectPasswords;
 
         private readonly Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>
             _loginAttemptsInProgress;
 
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
         private readonly LoginAttemptClient _loginAttemptClient;
+        private UserAccountClient _userAccountClient;
 
         private TimeSpan DefaultTimeout { get; } = new TimeSpan(0, 0, 0, 0, 500); // FUTURE use configuration value
 
         public LoginAttemptController(
             LoginAttemptClient loginAttemptClient,
             UserAccountClient userAccountClient,
+            IBinomialLadderSketch binomialLadderSketch,
+            IFrequenciesProvider<string> incorrectPasswordFrequenciesProvider,
             MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions blockingOptions,
             IStableStore stableStore)
         {
             _options = blockingOptions; //optionsAccessor.Options;
             _stableStore = stableStore;
-            _passwordPopularityTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig"
-                //FIXME -- use configuration to get options here"FIXME-uniquekeyfromconfig", thresholdRequiredToTrackPreciseOccurrences: 10);
-                );
+            _binomialLadderSketch = binomialLadderSketch;
+            _incorrectPasswordFrequenciesProvider = incorrectPasswordFrequenciesProvider;
 
-            _loginAttemptCache = new FixedSizeLruCache<string, LoginAttempt>(80000);
-                // FIXME -- use configuration file for size
+            _recentIncorrectPasswords = new AgingMembershipSketch(16, 128 * 1024); // FIXME -- more configurable?
+                
+            //_passwordPopularityTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig"
+            //FIXME -- use configuration to get options here"FIXME-uniquekeyfromconfig", thresholdRequiredToTrackPreciseOccurrences: 10);
+            //);
+
+            //_loginAttemptCache = new FixedSizeLruCache<string, LoginAttempt>(80000);
+            // FIXME -- use configuration file for size
             _loginAttemptsInProgress =
                 new Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>();
             _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
@@ -72,7 +83,7 @@ namespace StopGuessing.Controllers
 
 
         public void SetUserAccountClient(UserAccountClient userAccountClient)
-        {h
+        {
             _userAccountClient = userAccountClient;
         }
 
@@ -83,41 +94,41 @@ namespace StopGuessing.Controllers
             throw new NotImplementedException("Cannot enumerate all login attempts");
         }
 
-        // GET api/LoginAttempt/5
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetAsync(string id,
-            [FromQuery] List<RemoteHost> serversResponsibleForCachingALoginAttempt = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            LoginAttempt result = await LocalGetAsync(id, serversResponsibleForCachingALoginAttempt, cancellationToken);
-            return (result == null) ? (IActionResult) (new HttpNotFoundResult()) : (new ObjectResult(result));
-        }
+        //// GET api/LoginAttempt/5
+        //[HttpGet("{id}")]
+        //public async Task<IActionResult> GetAsync(string id,
+        //    [FromQuery] List<RemoteHost> serversResponsibleForCachingALoginAttempt = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    LoginAttempt result = await LocalGetAsync(id, serversResponsibleForCachingALoginAttempt, cancellationToken);
+        //    return (result == null) ? (IActionResult) (new HttpNotFoundResult()) : (new ObjectResult(result));
+        //}
 
-        public async Task<LoginAttempt> LocalGetAsync(
-            string key,
-            List<RemoteHost> serversResponsibleFOrCachingALoginAttempt = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            LoginAttempt loginAttempt;
+        //public async Task<LoginAttempt> LocalGetAsync(
+        //    string key,
+        //    List<RemoteHost> serversResponsibleFOrCachingALoginAttempt = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    LoginAttempt loginAttempt;
 
-            // If the requested LoginAttempt is in cache, return it immediately
-            if (_loginAttemptCache.TryGetValue(key, out loginAttempt))
-                return loginAttempt;
+        //    // If the requested LoginAttempt is in cache, return it immediately
+        //    if (_loginAttemptCache.TryGetValue(key, out loginAttempt))
+        //        return loginAttempt;
 
-            // We'll have to load the login attempt from stable store
-            loginAttempt = await _stableStore.ReadLoginAttemptAsync(key, cancellationToken);
+        //    // We'll have to load the login attempt from stable store
+        //    loginAttempt = await _stableStore.ReadLoginAttemptAsync(key, cancellationToken);
 
-            if (loginAttempt != null)
-            {
-                // We successfully read the login attempt from stable store.  We now need to ensure
-                // that it enters the local cache and the other caches
-                WriteLoginAttemptInBackground(loginAttempt, serversResponsibleFOrCachingALoginAttempt,
-                    updateTheLocalCache: true, updateRemoteCaches: true, updateStableStore: false,
-                    cancellationToken: cancellationToken);
-            }
+        //    if (loginAttempt != null)
+        //    {
+        //        // We successfully read the login attempt from stable store.  We now need to ensure
+        //        // that it enters the local cache and the other caches
+        //        WriteLoginAttemptInBackground(loginAttempt, serversResponsibleFOrCachingALoginAttempt,
+        //            updateTheLocalCache: true, updateRemoteCaches: true, updateStableStore: false,
+        //            cancellationToken: cancellationToken);
+        //    }
 
-            return loginAttempt;
-        }
+        //    return loginAttempt;
+        //}
 
         //// WriteAccountAsync login attempts
         //// POST api/LoginAttempt/
@@ -216,7 +227,8 @@ namespace StopGuessing.Controllers
                         LoginAttempt attemptToDetermineOutcomeOf = loginAttempt;
                         _loginAttemptsInProgress[key] = outcomeCalculationTask =
                             Task.Run(() => DetermineLoginAttemptOutcomeAsync(
-                                attemptToDetermineOutcomeOf, passwordProvidedByClient, cancellationToken),
+                                attemptToDetermineOutcomeOf, passwordProvidedByClient,
+                                cancellationToken: cancellationToken),
                                 cancellationToken);
                         // The above call will update the local cache and remove _loginAttemptsInProgress[key]
                         // It's best to do add the LoginAttempt to the local cache there, and not below,
@@ -276,11 +288,11 @@ namespace StopGuessing.Controllers
         {
             Task stableStoreTask = null;
 
-            if (updateTheLocalCache)
-            {
-                // Write to the local cache on this server
-                _loginAttemptCache.Add(loginAttempt.UniqueKey, loginAttempt);
-            }
+            //if (updateTheLocalCache)
+            //{
+            //    // Write to the local cache on this server
+            //    _loginAttemptCache.Add(loginAttempt.UniqueKey, loginAttempt);
+            //}
 
             if (updateStableStore)
             {
@@ -358,10 +370,9 @@ namespace StopGuessing.Controllers
                 account.UpdateLoginAttemptOutcomeUsingTypoAnalysis(correctPassword,
                     phase1HashOfCorrectPassword,
                     _options.MaxEditDistanceConsideredATypo,
-                    clientsIpHistory.RecentLoginFailures.MostRecentToOldest.Where(
-                        attempt => attempt.UsernameOrAccountId == account.UsernameOrAccountId &&
-                                   attempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword &&
-                                   !string.IsNullOrEmpty(attempt.EncryptedIncorrectPassword))
+                    clientsIpHistory.RecentPotentialTypos.Where(
+                        pt => pt.UsernameOrAccountId == account.UsernameOrAccountId &&
+                              !string.IsNullOrEmpty(pt.EncryptedIncorrectPassword))
                     );
 
             foreach (LoginAttempt updatedLoginAttempt in loginAttemptsWithOutcompesUpdatedDueToTypoAnalysis)
@@ -429,212 +440,13 @@ namespace StopGuessing.Controllers
 
 
         /// <returns></returns>
-        //public async Task<BlockingScoresForEachAlgorithm> UpdateOutcomeIfIpShouldBeBlockedAsync(
-        //    LoginAttempt loginAttempt,
-        //    IpHistory ip,
-        //    List<RemoteHost> serversResponsibleForCachingTheAccount,
-        //    CancellationToken cancellationToken)
-        //{
-        //    // Always allow a login if there's a valid device cookie associate with this account
-        //    // FUTURE -- we probably want to do something at the account level to track targetted attacks
-        //    //          against individual accounts and lock them out
-        //    if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount && 
-        //        !_options.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE)
-        //        return new BlockingScoresForEachAlgorithm { Ours = 0d, Industry =  0d,
-        //            SSH = ip.RecentLoginFailures.Count * _options.PenaltyForInvalidPassword_Beta};
-
-        //    // Choose a block threshold based on whether the provided password was popular or not.
-        //    // (If the actual password is among those commonly guessed, we need to be more aggressive in
-        //    //  blocking potential guessing attacks.)
-        //    double blockThreshold = _options.BlockThresholdPopularPassword;
-        //    if (loginAttempt.PasswordsPopularityAmongFailedGuesses < _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
-        //        blockThreshold *= _options.BlockThresholdMultiplierForUnpopularPasswords;
-
-
-        //    // As we account for successes, we'll want to make sure we never give credit for more than one success
-        //    // per account.  This set tracks the accounts we've already given credit for
-        //    HashSet<string> accountsUsedForSuccessCredit = new HashSet<string>();
-
-        //    // Start the scoring at zero, with a higher score indicating a greater chance this is a brute-force
-        //    // attack.  (We'll conclude it's a brute force attack if the score goes over the BlockThreshold.)
-        //    double bruteLikelihoodScore = 0;
-        //    BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = new BlockingScoresForEachAlgorithm();            
-
-        //    // This algoirthm estimates the likelihood that the IP is engaged in a brute force attack and should be
-        //    // blocked by examining login failures from the IP from most-recent to least-recent, adjusting (increasing) the
-        //    // BruteLikelihoodScore to account for each failure based on its type (e.g., we penalize known
-        //    // typos less than other login attempts that use popular password guesses).
-        //    //
-        //    // Successful logins reduce our estimated likelihood that the IP address.
-        //    // We also account for successful logins in reverse chronological order, but do so _lazily_:
-        //    // we only only examine the minimum number of successes needed to take the likelihood score below
-        //    // the block threshold.  We do so because we want there to be a cost to an account of having its
-        //    // successes used to prevent an IP from being blocked, otherwise attackers could use a few fake
-        //    // accounts to intersperse lots of login successes between every failure and never be detected.
-
-        //    // These counters track how many successes we have stepped through in search of login successes
-        //    // that can be used to offset login failures when accounting for the likelihood the IP is attacking
-        //    int successesWithoutCreditsIndex = 0;
-        //    int successesWithCreditsIndex = 0;
-
-        //    List<LoginAttempt> copyOfRecentLoginFailures;
-        //    List<LoginAttempt> copyOfRecentLoginSuccessesAtMostOnePerAccount;
-        //    //FIXME -- this lock does nothing -- lock (ip.RecentLoginFailures)
-        //    {
-        //        copyOfRecentLoginFailures = 
-        //            ip.RecentLoginFailures.MostRecentToOldest.ToList();
-        //        copyOfRecentLoginSuccessesAtMostOnePerAccount = 
-        //            ip.RecentLoginSuccessesAtMostOnePerAccount.MostRecentToOldest.ToList();
-        //    }
-
-        //    // We step through failures in reverse chronological order (from the 0th element of the sequence on up)
-        //    for (int failureIndex = 0;
-        //        failureIndex < copyOfRecentLoginFailures.Count && bruteLikelihoodScore <= blockThreshold;
-        //        failureIndex++)
-        //    {
-        //        // Get the failure at the index in the sequence.
-        //        LoginAttempt failure = copyOfRecentLoginFailures[failureIndex];
-
-        //        // Stop tracking failures that are too old in order to forgive IPs that have tranferred to benign owner
-        //        if ((DateTimeOffset.Now - failure.TimeOfAttempt) > _options.ExpireFailuresAfter)
-        //            break;
-
-        //        blockingScoresForEachAlgorithm.SSH += _options.PenaltyForInvalidPassword_Beta;
-        //        if (failure.Outcome != AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword)
-        //        {
-        //            blockingScoresForEachAlgorithm.Industry += _options.PenaltyForInvalidPassword_Beta;
-        //        }
-        //        // Increase the brute-force likelihood score based on the type of failure.
-        //        // (Failures that indicate a greater chance of being a brute-force attacker, such as those
-        //        //  using popular passwords, warrant higher scores.)
-        //        switch (failure.Outcome)
-        //        {
-        //            case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
-        //                bruteLikelihoodScore += _options.PenaltyForInvalidAccount_Alpha *
-        //                                        PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
-        //                break;
-        //            case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
-        //                bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta * _options.PenaltyMulitiplierForTypo;
-        //                break;
-        //            case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
-        //            case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
-        //                bruteLikelihoodScore += _options.PenaltyForInvalidPassword_Beta *
-        //                                        PopularityPenaltyMultiplier(failure.PasswordsPopularityAmongFailedGuesses);
-        //                break;
-        //            case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
-        //                // We ignore repeats of incorrect passwords we've already accounted for
-        //                // No penalty
-        //                break;                    
-        //        }
-
-        //        if (bruteLikelihoodScore > blockThreshold)
-        //        {
-        //            // The most recent failure took us above the threshold at which we would make the decision to block
-        //            // this login.  However, there are successes we have yet to account for that might reduce the likelihood score.
-        //            // We'll account for successes that are more recent than that last failure until we either
-        //            //    (a) run out of successes, or
-        //            //    (b) reduce the score below the threshold
-        //            //        (in which case we'll save any remaining successes to use if we again go over the threshold.)
-
-        //            while (bruteLikelihoodScore > blockThreshold &&
-        //                   successesWithCreditsIndex < copyOfRecentLoginSuccessesAtMostOnePerAccount.Count &&
-        //                   copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithCreditsIndex].TimeOfAttempt >
-        //                   failure.TimeOfAttempt)
-        //            {
-        //                // Start with successes for which, on a prior calculation of ShouldBlock, we already removed
-        //                // a credit from the account that logged in via a call to TryGetCredit.
-
-        //                LoginAttempt success =
-        //                    copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithCreditsIndex];
-
-        //                if ( // We have not already used this account to reduce the BruteLikelihoooScore
-        //                     // earlier in this calculation (during this call to ShouldBlock)
-        //                    !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
-        //                    // We HAVE received the credit during a prior recalculation
-        //                    // (during a prior call to ShouldBlock)                        
-        //                    success.HasReceivedCreditForUseToReduceBlockingScore)
-        //                {
-        //                    // Ensure that we don't count this success more than once
-        //                    accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
-
-        //                    // Reduce the brute-force attack likelihood score to account for this past successful login
-        //                    bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount_Gamma;
-        //                }
-        //                successesWithCreditsIndex++;
-        //            }
-
-        //            while (bruteLikelihoodScore > blockThreshold &&
-        //                   successesWithoutCreditsIndex < copyOfRecentLoginSuccessesAtMostOnePerAccount.Count &&
-        //                   copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithoutCreditsIndex].TimeOfAttempt >
-        //                   failure.TimeOfAttempt)
-        //            {
-        //                // If we still are above the threshold, use successes for which we will need to remove a new credit
-        //                // from the account responsible for the success via TryGetCredit.
-
-        //                LoginAttempt success =
-        //                    copyOfRecentLoginSuccessesAtMostOnePerAccount[successesWithoutCreditsIndex];
-
-        //                if ( // We have not already used this account to reduce the BruteLikelihoodScore
-        //                     // earlier in this calculation (during this call to ShouldBlock)
-        //                    !accountsUsedForSuccessCredit.Contains(success.UsernameOrAccountId) &&
-        //                    // We have NOT received the credit during a prior recalculation
-        //                    // (during a prior call to ShouldBlock)                        
-        //                    !success.HasReceivedCreditForUseToReduceBlockingScore)
-        //                {
-        //                    // FUTURE -- We may wnat to parallelize to get rid of the latency.  However, it may well not be worth
-        //                    // worth the added complexity, since requests for credits should rarely (if ever) occur more than
-        //                    // once per login
-
-        //                    // Reduce credit from the account for the login so that the account cannot be used to generate
-        //                    // an unlimited number of login successes.
-        //                    if (await _userAccountClient.TryGetCreditAsync(success.UsernameOrAccountId, 
-        //                                serversResponsibleForCachingThisAccount: serversResponsibleForCachingTheAccount,
-        //                                cancellationToken: cancellationToken))
-        //                    {
-        //                        // There exists enough credit left in the account for us to use this success.
-
-        //                        // Ensure that we don't count this success more than once
-        //                        accountsUsedForSuccessCredit.Add(success.UsernameOrAccountId);
-
-        //                        // Reduce the brute-force attack likelihood score to account for this past successful login
-        //                        bruteLikelihoodScore += _options.RewardForCorrectPasswordPerAccount_Gamma;
-        //                    }
-
-        //                }
-        //                successesWithoutCreditsIndex++;
-        //            }
-
-        //        }
-
-        //        // The brute-force attack likelihood score should never fall below 0, even after a success credit.
-        //        if (bruteLikelihoodScore < 0d)
-        //            bruteLikelihoodScore = 0d;
-
-        //        if (bruteLikelihoodScore >= blockThreshold)
-        //        {
-        //            if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
-        //            {
-        //                loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
-        //            }
-        //            // FIXME -- uncomment off when not simulating
-        //            // break;
-        //        }
-
-        //    }
-        //    blockingScoresForEachAlgorithm.Ours =
-        //        (loginAttempt.PasswordsPopularityAmongFailedGuesses < _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular) ?
-        //        bruteLikelihoodScore / _options.BlockThresholdMultiplierForUnpopularPasswords :
-        //        bruteLikelihoodScore;
-        //    return blockingScoresForEachAlgorithm;
-        //}
-
-
         /// <summary>
         /// Add a LoginAttempt, along the way determining whether that loginAttempt should be allowed
         /// (the user authenticated) or denied.
         /// </summary>
         /// <param name="loginAttempt">The login loginAttempt record to be stored.</param>
         /// <param name="passwordProvidedByClient">The plaintext password provided by the client.</param>
+        /// <param name="timeout"></param>
         /// <param name="cancellationToken">To allow this async method to be cancelled.</param>
         /// <returns>If the password is correct and the IP not blocked, returns AuthenticationOutcome.CredentialsValid.
         /// Otherwise, it returns a different AuthenticationOutcome.
@@ -642,27 +454,57 @@ namespace StopGuessing.Controllers
         public async Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>> DetermineLoginAttemptOutcomeAsync(
             LoginAttempt loginAttempt,
             string passwordProvidedByClient,
-            CancellationToken cancellationToken)
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
+
             // We'll need to know more about the IP making this loginAttempt, so let's get the historical information
             // we've been keeping about it.
             Task<IpHistory> ipHistoryGetTask = _ipHistoryCache.GetAsync(loginAttempt.AddressOfClientInitiatingRequest,
                 cancellationToken);
+            Task<ILadder> binomialLadderTask = _binomialLadderSketch.GetLadderAsync(passwordProvidedByClient, 
+                cancellationToken: cancellationToken);
+
+            string easyHashOfPassword =
+                Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordProvidedByClient)));
+            Task<IFrequencies> passwordFrequencyTask = _incorrectPasswordFrequenciesProvider.GetFrequenciesAsync(
+                easyHashOfPassword,
+                timeout: timeout,
+                cancellationToken: cancellationToken);
+
 
             List<RemoteHost> serversResponsibleForCachingThisAccount =
                 _userAccountClient.GetServersResponsibleForCachingAnAccount(loginAttempt.UsernameOrAccountId);
 
-            // Get a copy of the UserAccount record for the account that the client wants to authenticate as.
-            UserAccount account = await _userAccountClient.GetAsync(loginAttempt.UsernameOrAccountId,
+            Task<UserAccount> userAccountRequestTask = _userAccountClient.GetAsync(loginAttempt.UsernameOrAccountId,
                 serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
                 cancellationToken: cancellationToken);
 
+
+
+            // Get a copy of the UserAccount record for the account that the client wants to authenticate as.
+            UserAccount account = await userAccountRequestTask;
+
+            //  Move later
+            ILadder passwordLadder = await binomialLadderTask;
+            IFrequencies passwordFrequencies = await passwordFrequencyTask;
             // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
             // as we are most concerned about frequently-guessed passwords.
-            Proportion popularity = _passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(
-                passwordProvidedByClient, isSubmittedPasswordCorrect,
-                confidenceLevel: _options.PopularityConfidenceLevel,
-                minDenominatorForPasswordPopularity: _options.MinDenominatorForPasswordPopularity);
+            int ladderRungsWithConfidence = passwordLadder.CountObservationsForGivenConfidence(_options.PopularityConfidenceLevel);
+            double ladderPopularity = (double) ladderRungsWithConfidence / (10d * 1000d);//FIXME
+            double trackedPopularity = Proportion.GetLargest(passwordFrequencies.Proportions).AsDouble;
+            double popularityOfPasswordAmongIncorrectPasswords = Math.Max(ladderPopularity, trackedPopularity);
+
+
+            byte[] phase1HashOfProvidedPassword = account != null
+                ? account.ComputePhase1Hash(passwordProvidedByClient)
+                : ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
+                    passwordProvidedByClient,
+                    Encoding.UTF8.GetBytes(loginAttempt.AddressOfClientInitiatingRequest.ToString()),
+                    _options.DefaultExpensiveHashingFunctionIterations);
+            string phase1HashOfProvidedPasswordAsString = Convert.ToBase64String(phase1HashOfProvidedPassword);
+
+            bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently = _recentIncorrectPasswords.AddMember(phase1HashOfProvidedPasswordAsString);
 
             if (account == null)
             {
@@ -672,9 +514,7 @@ namespace StopGuessing.Controllers
                 // this clientsIpHistory/account/password tripple before and note in the outcome if it's a repeat so that.
                 // the IP need not be penalized for issuign a query that isn't getting it any information it
                 // didn't already have.
-                loginAttempt.Outcome = _passwordPopularityTracker.HasNonexistentAccountIpPasswordTripleBeenSeenBefore(
-                    loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.UsernameOrAccountId,
-                    passwordProvidedByClient)
+                loginAttempt.Outcome = didSketchIndicateThatTheSameGuessHasBeenMadeRecently
                     ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
                     : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
             }
@@ -696,7 +536,7 @@ namespace StopGuessing.Controllers
                 //
                 // First, the expensive (phase1) hash which is used to encrypt the EC public key for this account
                 // (which we use to store the encryptions of incorrect passwords)
-                byte[] phase1HashOfProvidedPassword = account.ComputePhase1Hash(passwordProvidedByClient);
+                //byte[] phase1HashOfProvidedPassword = account.ComputePhase1Hash(passwordProvidedByClient);
                 // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
                 // hash of the phase1 hash.
                 string phase2HashOfProvidedPassword =
@@ -742,17 +582,11 @@ namespace StopGuessing.Controllers
                     // tiny LRU cache of recent failed passwords for this account.  We'll check both.
 
                     // The triple sketch will automatically record that we saw this triple when we check to see if we've seen it before.
-                    bool repeatFailureIdentifiedBySketch =
-                        _passwordPopularityTracker.HasNonexistentAccountIpPasswordTripleBeenSeenBefore(
-                            loginAttempt.AddressOfClientInitiatingRequest, loginAttempt.UsernameOrAccountId,
-                            passwordProvidedByClient);
-
                     bool repeatFailureIdentifiedByAccountHashes =
                         account.PasswordVerificationFailures.Count(failedAttempt =>
                             failedAttempt.Phase2HashOfIncorrectPassword == phase2HashOfProvidedPassword) > 0;
 
-                    loginAttempt.Outcome = (!_options.FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE &&
-                                            (repeatFailureIdentifiedByAccountHashes || repeatFailureIdentifiedBySketch))
+                    loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes || didSketchIndicateThatTheSameGuessHasBeenMadeRecently)
                         ? AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword
                         : AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
                 }
@@ -760,8 +594,7 @@ namespace StopGuessing.Controllers
                 // When there's little data, we want to make sure the popularity is not overstated because           
                 // (e.g., if we've only seen 10 account failures since we started watching, it would not be
                 //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
-                loginAttempt.PasswordsPopularityAmongFailedGuesses =
-                    popularity.MinDenominator(_options.MinDenominatorForPasswordPopularity).AsDouble;
+                loginAttempt.PasswordsPopularityAmongFailedGuesses = popularityOfPasswordAmongIncorrectPasswords;
 
             }
 
@@ -781,17 +614,28 @@ namespace StopGuessing.Controllers
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
             }        
             
-            double passwordsPopularityAmongGuesses = popularity.MinDenominator(_options.MinDenominatorForPasswordPopularity).AsDouble;
-            double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses); ;
+            double popularityMultiplier = PopularityPenaltyMultiplier(popularityOfPasswordAmongIncorrectPasswords); ;
             
             ip.CurrentBlockScore.Add(CalculatePenalty(ip, loginAttempt,account));
 
+            if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
+                loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
+            {
+                if (passwordFrequencies.Proportions.Last().AsDouble > 0 ||
+                    // FIXME with configuration values
+                    passwordLadder.CountObservationsForGivenConfidence(1d/(1000d*1000d*1000d)) > 5)
+                {
+                    Task background1 = passwordFrequencies.RecordObservationAsync(cancellationToken: cancellationToken);
+                }
 
-            BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = await UpdateOutcomeIfIpShouldBeBlockedAsync(
-                loginAttempt, ip, serversResponsibleForCachingThisAccount, cancellationToken);
+                Task background2 = passwordLadder.StepAsync(cancellationToken);
+            }
+
+            //BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = await UpdateOutcomeIfIpShouldBeBlockedAsync(
+            //    loginAttempt, ip, serversResponsibleForCachingThisAccount, cancellationToken);
 
             // Add this LoginAttempt to our history of all login attempts for this IP address.
-            ip.RecordLoginAttempt(loginAttempt);
+            //ip.RecordLoginAttempt(loginAttempt);
 
             // Update the account record to incorporate what we've learned as a result of processing this login loginAttempt.
             // If this is a success and there's a cookie, it will update the set of cookies that have successfully logged in
@@ -803,17 +647,17 @@ namespace StopGuessing.Controllers
             //    serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
             //    cancellationToken: cancellationToken);
 
-            // Mark this task as completed by removing it from the Dictionary of tasks storing loginAttemptsInProgress
-            // and by putting the login loginAttempt into our cache of recent login attempts.            
-            string key = loginAttempt.UniqueKey;
-            _loginAttemptCache.Add(key, loginAttempt);
-            lock (_loginAttemptsInProgress)
-            {
-                if (_loginAttemptsInProgress.ContainsKey(key))
-                {
-                    _loginAttemptsInProgress.Remove(key);
-                }
-            }
+            //// Mark this task as completed by removing it from the Dictionary of tasks storing loginAttemptsInProgress
+            //// and by putting the login loginAttempt into our cache of recent login attempts.            
+            //string key = loginAttempt.UniqueKey;
+            //_loginAttemptCache.Add(key, loginAttempt);
+            //lock (_loginAttemptsInProgress)
+            //{
+            //    if (_loginAttemptsInProgress.ContainsKey(key))
+            //    {
+            //        _loginAttemptsInProgress.Remove(key);
+            //    }
+            //}
 
             // We return the processed login loginAttempt so that the caller can determine its outcome and,
             // in the event that the caller wants to keep a copy of the record, ensure that it has the

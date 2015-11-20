@@ -60,18 +60,6 @@ namespace Simulator
         config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
             }, new Simulator.IParameterSweeper[]
             {
-                new Simulator.ParameterSweeper<Simulator.SystemMode>
-                {
-                    Name = "Algorithm",
-                    Parameters = new Simulator.SystemMode[]
-                    {
-                        Simulator.SystemMode.StopGuessing,
-                        //Simulator.SystemMode.Basic,
-                        //Simulator.SystemMode.SSH
-                    },
-                    ParameterSetter =
-                        (config, modeForThisExp) => Simulator.SetSystemMode(config, modeForThisExp)
-                },
                 new Simulator.ParameterSweeper<double>
                 {
                     Name = "BlockThresholdPopularPassword",

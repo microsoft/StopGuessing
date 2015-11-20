@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using StopGuessing.EncryptionPrimitives;
 
 
 namespace StopGuessing.Models
@@ -14,13 +15,9 @@ namespace StopGuessing.Models
 
     public class BlockingAlgorithmOptions
     {
-        //FIXME
-        public bool FOR_SIMULATION_ONLY_TURN_ON_SSH_STUPID_MODE = false;
-
         public int NumberOfRedundentHostsToCacheIPs = 3;
         public int NumberOfRedundentHostsToCachePasswordPopularity = 3;
-
-//        public int NumberOfSuccessesToTrackPerIp = 20;
+        
         public int NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos = 8;
 
         public float MaxEditDistanceConsideredATypo { get; set; } = 2f;
@@ -32,8 +29,17 @@ namespace StopGuessing.Models
 
         public double BlockThresholdPopularPassword { get; set; } = 50d;
         public double BlockThresholdMultiplierForUnpopularPasswords { get; set; } = 20d;
-        //public TimeSpan ExpireFailuresAfter { get; set; } = new TimeSpan(24, 0, 0); // 24 hours
+
         public TimeSpan BlockScoreHalfLife = new TimeSpan(12,0,0); // 12 hours
+
+
+        // For tracking popular passwords with a set of frequency trackers
+        public  uint LengthOfShortestPopularityMeasurementPeriod = 10 * 1000;
+        public  uint FactorOfGrowthBetweenPopularityMeasurementPeriods = 10;
+        public  int NumberOfPopularityMeasurementPeriods = 4;
+
+        public string DefaultExpensiveHashingFunction = ExpensiveHashFunctionFactory.DefaultFunctionName;
+        public int DefaultExpensiveHashingFunctionIterations = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
 
         public double AccountCreditLimit { get; set; } = 50d;
         public TimeSpan AccountCreditLimitHalfLife = new TimeSpan(12,0,0); // 12 hours
