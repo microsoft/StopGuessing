@@ -1,18 +1,16 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web.UI.WebControls;
-using StopGuessing.EncryptionPrimitives;
+using StopGuessing.DataStructures;
 using StopGuessing.Models;
 
-namespace StopGuessing.DataStructures
+namespace StopGuessing.Clients
 {
 
 
-    public class DistributedBinomialLadderClient
+    public class DistributedBinomialLadderClient : IBinomialLadderSketch
     {
         /// <summary>
         /// The number of hosts to distribute a ladder over
@@ -38,7 +36,8 @@ namespace StopGuessing.DataStructures
 
         private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
 
-        public async Task<DistributedBinomialLadder> GetLadder(string key, TimeSpan timeout, 
+        public async Task<ILadder> GetLadderAsync(string key,
+            TimeSpan? timeout = null, 
             CancellationToken cancellationToken = default(CancellationToken))
         {
             List<RemoteHost> hosts = _responsibleHosts.FindMembersResponsible(key, HostsPerLadder);
@@ -48,12 +47,12 @@ namespace StopGuessing.DataStructures
             object rungLock = new object();
 
             await TaskParalllel.ForEach(hosts,
-                async (host) =>
+                async host =>
                 {
                     int[] indexesOfRungsNotYetClimbed = await RestClientHelper.GetAsync<int[]>(
                         host.Uri,
                         "BinomialLadder/" + Microsoft.Framework.WebEncoders.UrlEncoder.Default.UrlEncode(key),
-                        new KeyValuePair<string, string>[]
+                        new[]
                         {
                             new KeyValuePair<string, string>("numberOfRungs", rungsPerHost.ToString())
                         },
@@ -65,7 +64,7 @@ namespace StopGuessing.DataStructures
                         rungsCalculated += rungsPerHost;
                     }
                 },
-                (e) =>
+                e =>
                 {
                     // FIXME -- what to do with exceptions?
                 }, cancellationToken: cancellationToken);
@@ -93,12 +92,13 @@ namespace StopGuessing.DataStructures
         }
 
 
-        public class DistributedBinomialLadder : LadderForKey<RemoteRungNotYetClimbed>
+        public class DistributedBinomialLadder : BinomialLadder<RemoteRungNotYetClimbed>
         {
             public DistributedBinomialLadder(IEnumerable<RemoteRungNotYetClimbed> rungsNotYetClimbed, int heightOfLadderInRungs) : base(rungsNotYetClimbed, heightOfLadderInRungs)
             {
             }
 
+            // ReSharper disable once MemberHidesStaticFromOuterClass
             protected override async Task StepAsync(RemoteRungNotYetClimbed rungToClimb, CancellationToken cancellationToken = default(CancellationToken))
             {
                 await DistributedBinomialLadderClient.StepAsync(rungToClimb, cancellationToken);

@@ -9,7 +9,7 @@ using StopGuessing.EncryptionPrimitives;
 
 // ReSharper disable CompareOfFloatsByEqualityOperator
 
-namespace StopGuessing.Models
+namespace StopGuessing.DataStructures
 {
     /// <summary>
     /// A class that represents a double that decays over time using a half life, to borrow
@@ -21,7 +21,7 @@ namespace StopGuessing.Models
     /// never be used as the key into a Dictionary or kept in a HashSet.  It should not be compared
     /// for exact equality.
     /// </summary>
-    public class DoubleThatDecaysWithTime
+    public struct DoubleThatDecaysWithTime
     {
         /// <summary>
         /// The time period over which a score will decay to half it's current value.
@@ -31,14 +31,14 @@ namespace StopGuessing.Models
         /// <summary>
         /// The last time the value was updated (UTC).
         /// </summary>
-        public DateTime LastUpdatedUtc { get; protected set; }
+        public DateTime LastUpdatedUtc { get; private set; }
 
         /// <summary>
         /// The value at the time of last update.  The current value must be
         /// adjusted for any decay that has occurred since the time of the last
         /// update.
         /// </summary>
-        public double ValueAtTimeOfLastUpdate { get; protected set; }
+        public double ValueAtTimeOfLastUpdate { get; private set; }
 
         /// <summary>
         /// This a the preferred way to get and set the current value, so long as you are using the

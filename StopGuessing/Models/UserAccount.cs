@@ -29,13 +29,13 @@ namespace StopGuessing.Models
         /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
         /// </summary>
         [DataMember]
-        public string PasswordHashPhase1FunctionName { get; set; }
+        public string PasswordHashPhase1FunctionName { get; set; } = ExpensiveHashFunctionFactory.DefaultFunctionName;
 
         /// <summary>
         /// The number of iterations to use for the phase 1 hash to make it more expensive.
         /// </summary>
         [DataMember]
-        public int NumberOfIterationsToUseForPhase1Hash { get; set; }
+        public int NumberOfIterationsToUseForPhase1Hash { get; set; } = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
 
         /// <summary>
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
@@ -325,7 +325,7 @@ namespace StopGuessing.Models
             TimeSpan creditHalfLife,
             string password = null,
             string phase1HashFunctionName = ExpensiveHashFunctionFactory.DefaultFunctionName,
-            int numberOfIterationsToUseForPhase1Hash = 10000,
+            int numberOfIterationsToUseForPhase1Hash = ExpensiveHashFunctionFactory.DefaultNumberOfIterations,
             byte[] saltUniqueToThisAccount = null,
             int maxNumberOfCookiesToTrack = DefaultMaxNumberOfCookiesToTrack,
             int maxAccountPasswordVerificationFailuresToTrack = DefaultMaxAccountPasswordVerificationFailuresToTrack,

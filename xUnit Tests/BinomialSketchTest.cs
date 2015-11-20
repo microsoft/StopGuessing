@@ -10,10 +10,10 @@ namespace xUnit_Tests
         [Fact]
         public void TwentyObservations()
         {
-            BinomialLadderSketch sketch = new BinomialLadderSketch(1024*1024*1024, 64, "Louis Tully as played by Rick Moranis");
+            BinomialLadderSketch sketch = new BinomialLadderSketch(1024*1024*1024, 64);
             string somethingToObserve = "Gosh.  It's a nice day out, isn't it?";
 
-            int observationCount = sketch.GetRungsBelow(somethingToObserve);
+            int observationCount = sketch.GetLadder(somethingToObserve).HeightOfKeyInRungs;
 
             for (int i = 0; i < 20; i++)
             {
@@ -22,15 +22,12 @@ namespace xUnit_Tests
                 observationCount++;
             }
 
-            Assert.Equal(observationCount, sketch.GetRungsBelow(somethingToObserve));
+            Assert.Equal(observationCount, sketch.GetLadder(somethingToObserve).HeightOfKeyInRungs);
 
-            double pNullHypothesis = sketch.TestNullHypothesisThatAllIndexesWereSetByChance(observationCount);
-            Assert.True(pNullHypothesis < 0.01);
 
-            int minObservationsAtOnePercentConfidence = sketch.CountObservationsForGivenConfidence(observationCount,
-                0.01d);
+            int minObservationsAtOnePercentConfidence = sketch.GetLadder(somethingToObserve).
+                CountObservationsForGivenConfidence(0.01d);
             Assert.True(minObservationsAtOnePercentConfidence > 5);
-
         }
         
 

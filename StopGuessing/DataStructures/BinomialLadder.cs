@@ -7,14 +7,9 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.DataStructures
 {
-    public interface ILadderForKey
-    {
-        int HeightOfLadderInRungs { get; }
-        int HeightOfKeyInRungs { get; }
-        Task StepAsync(CancellationToken cancellationToken = default(CancellationToken));
-    }
 
-    public abstract class LadderForKey<TRung> : ILadderForKey
+
+    public abstract class BinomialLadder<TRung> : ILadder
     {
         protected List<TRung> RungsAbove { get; set; }
 
@@ -22,7 +17,7 @@ namespace StopGuessing.DataStructures
 
         public int HeightOfKeyInRungs => HeightOfLadderInRungs - RungsAbove.Count;
 
-        protected LadderForKey(IEnumerable<TRung> rungsNotYetClimbed, int heightOfLadderInRungs)
+        protected BinomialLadder(IEnumerable<TRung> rungsNotYetClimbed, int heightOfLadderInRungs)
         {
             RungsAbove = rungsNotYetClimbed.ToList();
             HeightOfLadderInRungs = heightOfLadderInRungs;
@@ -58,16 +53,7 @@ namespace StopGuessing.DataStructures
 
             await StepAsync(rungToClimb, cancellationToken);
         }
-
-    }
-
-    public abstract class BinomialLadderForKey<TRung> : LadderForKey<TRung>
-    {
-        protected BinomialLadderForKey(IEnumerable<TRung> rungsNotYetClimbed, int heightOfLadderInRungs)
-            : base(rungsNotYetClimbed, heightOfLadderInRungs)
-        {
-        }
-
+        
         /// <summary>
         /// Estimates the number of observations of a key (the number of times Step(key) has been called) at a given level
         /// of statistical confidence (p value).

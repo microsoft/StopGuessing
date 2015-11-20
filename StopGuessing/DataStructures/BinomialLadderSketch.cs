@@ -1,13 +1,21 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using StopGuessing.Clients;
 using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.DataStructures
 {
+    public interface IBinomialLadderSketch
+    {
+        Task<ILadder> GetLadderAsync(string key,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default(CancellationToken));
+    }
     /// <summary>
     /// A binomial ladder maps keys to k indexes in an n bit table of bits, which are initially set at random
     /// with a probability 0.5.  Each index represents a rung on a ladder. The indexes set to 1/true are rungs that
@@ -31,7 +39,7 @@ namespace StopGuessing.DataStructures
     /// to differentiate from false positives.  To have confidence greater than one in a million that a key has been observed,
     /// it will take an average of 20 observations.
     /// </summary>
-    public class BinomialLadderSketch
+    public class BinomialLadderSketch : IBinomialLadderSketch
     {
 
         /// <summary>
@@ -187,8 +195,15 @@ namespace StopGuessing.DataStructures
             return new BinomialLadder(this, GetRungsAbove(key, heightOfLadderInRungsOrDefault), heightOfLadderInRungsOrDefault);
         }
 
+        public async Task<ILadder> GetLadderAsync(string key,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return await Task.Run(() => GetLadder(key), cancellationToken);
+        }
 
-        public class BinomialLadder : BinomialLadderForKey<int>
+
+        public class BinomialLadder : BinomialLadder<int>
         {
             protected BinomialLadderSketch Sketch;
             public BinomialLadder(BinomialLadderSketch sketch, IEnumerable<int> rungsNotYetClimbed, int heightOfLadderInRungs)

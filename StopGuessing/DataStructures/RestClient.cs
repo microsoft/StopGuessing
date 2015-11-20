@@ -35,15 +35,11 @@ namespace StopGuessing.DataStructures
             return builder.Uri.PathAndQuery;
         }
 
-        internal static object GetAsync<T>(object uri, string v1, string v2)
-        {
-            throw new NotImplementedException();
-        }
 
         public static async Task<TReturnType> PutAsync<TReturnType>(
             Uri baseAddress,
             string pathAndQuery,
-            Object parameters,
+            Object parameters = null,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -72,8 +68,8 @@ namespace StopGuessing.DataStructures
         public static async Task<TReturnType> PostAsync<TReturnType>(
             Uri baseAddress,
             string pathAndQuery,
-            Object parameters,
-            TimeSpan? timeout,
+            Object parameters = null,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             using (HttpClient client = new HttpClient())
@@ -88,8 +84,8 @@ namespace StopGuessing.DataStructures
         public static async Task PostAsync(
             Uri baseAddress,
             string pathAndQuery,
-            Object parameters,
-            TimeSpan? timeout,
+            Object parameters = null,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             using (HttpClient client = new HttpClient())
@@ -101,8 +97,8 @@ namespace StopGuessing.DataStructures
 
         public static void PostBackground(Uri baseAddress, 
             string pathAndQuery,
-            Object parameters,
-            TimeSpan? timeout,
+            Object parameters = null,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Task.Run(() => PostAsync(baseAddress, pathAndQuery, parameters, timeout, cancellationToken),
