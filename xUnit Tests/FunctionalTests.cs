@@ -15,8 +15,6 @@ namespace xUnit_Tests
     public class TestConfiguration
     {
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
-        public UserAccountController MyUserAccountController;
-        public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
         public BlockingAlgorithmOptions MyBlockingAlgorithmOptions;
         public LimitPerTimePeriod[] CreditLimits;
@@ -35,20 +33,13 @@ namespace xUnit_Tests
             configuration.MyResponsibleHosts.Add("localhost", localHost);
             IStableStore stableStore = configuration.StableStore = new MemoryOnlyStableStore();
             
-            configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts, localHost);
             configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
-            configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient,
-                configuration.MyLoginAttemptClient, memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions, stableStore);
-            LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient, configuration.MyUserAccountClient,
+            LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient,
                 memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions, stableStore);
 
-            configuration.MyUserAccountController.SetLoginAttemptClient(configuration.MyLoginAttemptClient);
-            configuration.MyUserAccountClient.SetLocalUserAccountController(configuration.MyUserAccountController);
-
-            myLoginAttemptController.SetUserAccountClient(configuration.MyUserAccountClient);
             configuration.MyLoginAttemptClient.SetLocalLoginAttemptController(myLoginAttemptController);
             return configuration;
         }

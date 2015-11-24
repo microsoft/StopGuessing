@@ -32,9 +32,7 @@ namespace Simulator
         }
 
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
-        public UserAccountController MyUserAccountController;
         public LoginAttemptController MyLoginAttemptController;
-        public UserAccountClient MyUserAccountClient;
         public LoginAttemptClient MyLoginAttemptClient;
         //public LimitPerTimePeriod[] CreditLimits;
         public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
@@ -223,20 +221,17 @@ namespace Simulator
             RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
             MyResponsibleHosts.Add("localhost", localHost);
 
-            MyUserAccountClient = new UserAccountClient(MyResponsibleHosts, localHost);
             MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts, localHost);
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter(hardMemoryLimit: 80L *1024L *1024L *1024L);
             StableStore.LoginAttempts = null;
-            MyUserAccountController = new UserAccountController(MyUserAccountClient,
+            MyUserAccountController = new UserAccountController(
                 MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
-            MyLoginAttemptController = new LoginAttemptController(MyLoginAttemptClient, MyUserAccountClient,
+            MyLoginAttemptController = new LoginAttemptController(MyLoginAttemptClient,
                 memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
 
             MyUserAccountController.SetLoginAttemptClient(MyLoginAttemptClient);
-            MyUserAccountClient.SetLocalUserAccountController(MyUserAccountController);
 
-            MyLoginAttemptController.SetUserAccountClient(MyUserAccountClient);
             MyLoginAttemptClient.SetLocalLoginAttemptController(MyLoginAttemptController);
             //fix outofmemory bug by setting the loginattempt field to null
             StableStore.LoginAttempts = null;
@@ -307,7 +302,7 @@ namespace Simulator
 
                 var dlaoResult = await
                     MyLoginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
-                        cancellationToken);
+                        cancellationToken: cancellationToken);
                 LoginAttempt attemptWithOutcome = dlaoResult.Item1;
                 BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = dlaoResult.Item2;
                 AuthenticationOutcome outcome = attemptWithOutcome.Outcome;

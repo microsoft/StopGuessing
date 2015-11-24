@@ -30,6 +30,7 @@ namespace StopGuessing.Controllers
         private readonly BlockingAlgorithmOptions _options;
         private readonly IBinomialLadderSketch _binomialLadderSketch;
         private readonly IFrequenciesProvider<string> _incorrectPasswordFrequenciesProvider;
+        private readonly IUserAccountContextFactory _userAccountContextFactory;
         //private readonly FixedSizeLruCache<string, LoginAttempt> _loginAttemptCache;
         private readonly AgingMembershipSketch _recentIncorrectPasswords;
 
@@ -38,13 +39,12 @@ namespace StopGuessing.Controllers
 
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
         private readonly LoginAttemptClient _loginAttemptClient;
-        private UserAccountClient _userAccountClient;
-
+        
         private TimeSpan DefaultTimeout { get; } = new TimeSpan(0, 0, 0, 0, 500); // FUTURE use configuration value
 
         public LoginAttemptController(
             LoginAttemptClient loginAttemptClient,
-            UserAccountClient userAccountClient,
+            IUserAccountContextFactory userAccountContextFactory,
             IBinomialLadderSketch binomialLadderSketch,
             IFrequenciesProvider<string> incorrectPasswordFrequenciesProvider,
             MemoryUsageLimiter memoryUsageLimiter,
@@ -57,14 +57,14 @@ namespace StopGuessing.Controllers
             _incorrectPasswordFrequenciesProvider = incorrectPasswordFrequenciesProvider;
 
             _recentIncorrectPasswords = new AgingMembershipSketch(16, 128 * 1024); // FIXME -- more configurable?
-                
-            //_passwordPopularityTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig"
-            //FIXME -- use configuration to get options here"FIXME-uniquekeyfromconfig", thresholdRequiredToTrackPreciseOccurrences: 10);
-            //);
+            _userAccountContextFactory = userAccountContextFactory;
+        //_passwordPopularityTracker = new PasswordPopularityTracker("FIXME-uniquekeyfromconfig"
+        //FIXME -- use configuration to get options here"FIXME-uniquekeyfromconfig", thresholdRequiredToTrackPreciseOccurrences: 10);
+        //);
 
-            //_loginAttemptCache = new FixedSizeLruCache<string, LoginAttempt>(80000);
-            // FIXME -- use configuration file for size
-            _loginAttemptsInProgress =
+        //_loginAttemptCache = new FixedSizeLruCache<string, LoginAttempt>(80000);
+        // FIXME -- use configuration file for size
+        _loginAttemptsInProgress =
                 new Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>();
             _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(
                 (id, cancellationToken) =>
@@ -77,15 +77,9 @@ namespace StopGuessing.Controllers
                 });
             _loginAttemptClient = loginAttemptClient;
             _loginAttemptClient.SetLocalLoginAttemptController(this);
-            SetUserAccountClient(userAccountClient);
             memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }
 
-
-        public void SetUserAccountClient(UserAccountClient userAccountClient)
-        {
-            _userAccountClient = userAccountClient;
-        }
 
         // GET: api/LoginAttempt
         [HttpGet]
@@ -401,7 +395,7 @@ namespace StopGuessing.Controllers
             return penalty;
         }
 
-        public double CalculatePenalty(IpHistory ip, LoginAttempt loginAttempt, UserAccount account)
+        public double CalculatePenalty(IpHistory ip, LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
         {
             // loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount;
             double penalty = 0d;
@@ -425,6 +419,8 @@ namespace StopGuessing.Controllers
                     {
                         double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, ip.CurrentBlockScore);
                         double credit = account.TryGetCredit(desiredCredit);
+                        if (credit > 0)
+                            accountChanged = true;
                         penalty -=credit;
                     }
                     break;
@@ -472,18 +468,15 @@ namespace StopGuessing.Controllers
                 timeout: timeout,
                 cancellationToken: cancellationToken);
 
-
-            List<RemoteHost> serversResponsibleForCachingThisAccount =
-                _userAccountClient.GetServersResponsibleForCachingAnAccount(loginAttempt.UsernameOrAccountId);
-
-            Task<UserAccount> userAccountRequestTask = _userAccountClient.GetAsync(loginAttempt.UsernameOrAccountId,
-                serversResponsibleForCachingThisAccount: serversResponsibleForCachingThisAccount,
-                cancellationToken: cancellationToken);
-
-
+            IStableStoreContext<string, UserAccount> userAccountContext = _userAccountContextFactory.Get();
+            Task<UserAccount> userAccountRequestTask = userAccountContext.ReadAsync(
+                loginAttempt.UsernameOrAccountId,
+                cancellationToken);
+            // FIXME -- need to save changes
 
             // Get a copy of the UserAccount record for the account that the client wants to authenticate as.
             UserAccount account = await userAccountRequestTask;
+            bool accountChanged = false;
 
             //  Move later
             ILadder passwordLadder = await binomialLadderTask;
@@ -581,10 +574,13 @@ namespace StopGuessing.Controllers
                     // We actually have two data structures for catching this: A large sketch of clientsIpHistory/account/password triples and a
                     // tiny LRU cache of recent failed passwords for this account.  We'll check both.
 
-                    // The triple sketch will automatically record that we saw this triple when we check to see if we've seen it before.
                     bool repeatFailureIdentifiedByAccountHashes =
-                        account.PasswordVerificationFailures.Count(failedAttempt =>
-                            failedAttempt.Phase2HashOfIncorrectPassword == phase2HashOfProvidedPassword) > 0;
+                        account.RecentIncorrectPhase2Hashes.Contains(phase2HashOfProvidedPassword);
+                    if (!repeatFailureIdentifiedByAccountHashes)
+                    {
+                        account.RecentIncorrectPhase2Hashes.Add(phase2HashOfProvidedPassword);
+                        accountChanged = true;
+                    }
 
                     loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes || didSketchIndicateThatTheSameGuessHasBeenMadeRecently)
                         ? AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword
@@ -616,7 +612,7 @@ namespace StopGuessing.Controllers
             
             double popularityMultiplier = PopularityPenaltyMultiplier(popularityOfPasswordAmongIncorrectPasswords); ;
             
-            ip.CurrentBlockScore.Add(CalculatePenalty(ip, loginAttempt,account));
+            ip.CurrentBlockScore.Add(CalculatePenalty(ip, loginAttempt,account, ref accountChanged));
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
                 loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
@@ -662,6 +658,12 @@ namespace StopGuessing.Controllers
             // We return the processed login loginAttempt so that the caller can determine its outcome and,
             // in the event that the caller wants to keep a copy of the record, ensure that it has the
             // most up-to-date copy.
+
+            if (accountChanged)
+            {
+                Task backgroundTask = userAccountContext.SaveChangesAsync(new CancellationToken());
+            }
+
             return new Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>(loginAttempt, blockingScoresForEachAlgorithm);
         }
 

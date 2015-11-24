@@ -1,20 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
-    [DataContract]
-    public class UserAccount
+    public class UserAccount : IDisposable
     {
 
         /// <summary>
         /// A string that uniquely identifies the account.
         /// </summary>
-        [DataMember]
         public string UsernameOrAccountId { get; set; }
 
         /// <summary>
@@ -22,33 +19,27 @@ namespace StopGuessing.Models
         /// to ensure that attackers who might obtain the set of account hashes cannot hash a password once and then compare
         /// the hash against every account.
         /// </summary>
-        [DataMember]
         public byte[] SaltUniqueToThisAccount { get; set; }
 
         /// <summary>
         /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
         /// </summary>
-        [DataMember]
         public string PasswordHashPhase1FunctionName { get; set; } = ExpensiveHashFunctionFactory.DefaultFunctionName;
 
         /// <summary>
         /// The number of iterations to use for the phase 1 hash to make it more expensive.
         /// </summary>
-        [DataMember]
         public int NumberOfIterationsToUseForPhase1Hash { get; set; } = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
 
         /// <summary>
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
         /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private symmetricKey.
         /// </summary>
-        [DataMember]
         public ECDiffieHellmanPublicKey EcPublicAccountLogKey { get; set; }
-
 
         /// <summary>
         /// The EC private symmetricKey encrypted with phase 1 (expensive) hash of the password
         /// </summary>        
-        [DataMember]
         public byte[] EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 { get; private set; }
 
         /// <summary>
@@ -56,34 +47,31 @@ namespace StopGuessing.Models
         /// then hasing that Phase1 hash (this time without the salt) using SHA256 so as to make it unnecessary to store the
         /// phase1 hash in this record.  Doing so allows the Phase1 hash to be used as a symmetric encryption symmetricKey for the log. 
         /// </summary>
-        [DataMember]
         public string PasswordHashPhase2 { get; set; }
 
         /// <summary>
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
         /// that have successfully logged into this account.
         /// </summary>
-        [DataMember]
         public CapacityConstrainedSet<string> HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
 
-        /// <summary>
-        /// A length-limited sequence of records describing failed login attempts (invalid passwords) 
-        /// </summary>
-        [DataMember]
-        public Sequence<LoginAttempt> PasswordVerificationFailures { get; set; }
+        ///// <summary>
+        ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 
+        ///// </summary>
+        //public Sequence<LoginAttempt> PasswordVerificationFailures { get; set; }
+
+        public CapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
 
         /// <summary>
         /// The account's credit limit for offsetting penalties for IP addresses from which
         /// the account has logged in successfully.
         /// </summary>
-        [DataMember]
         public double CreditLimit { get; set; }
 
         /// <summary>
         /// A decaying double with the amount of credits consumed against the credit limit
         /// used to offset IP blocking penalties.
         /// </summary>
-        [DataMember]
         public DoubleThatDecaysWithTime ConsumedCredits { get; set; }
 
         ///// <summary>
@@ -298,7 +286,7 @@ namespace StopGuessing.Models
 
 
         private const int DefaultSaltLength = 8;
-        private const int DefaultMaxAccountPasswordVerificationFailuresToTrack = 16;
+        private const int DefaultMaxFailedPhase2HashesToTrack = 8;
         private const int DefaultMaxNumberOfCookiesToTrack = 24;
 
         /// <summary>
@@ -313,8 +301,8 @@ namespace StopGuessing.Models
         /// by parameter <paramref name="saltLength"/>.</param>
         /// <param name="maxNumberOfCookiesToTrack">This class tracks cookies associated with browsers that have 
         /// successfully logged into this account.  This parameter, if set, overrides the default maximum number of such cookies to track.</param>
-        /// <param name="maxAccountPasswordVerificationFailuresToTrack">This class keeps information about failed attempts to login
-        /// to this account that can be examined on the next successful login.  This parameter ovverrides the default number of failures to track.</param>
+        /// <param name="maxFailedPhase2HashesToTrack">Phase2hashes of recent failed passwords so that we can avoid counting
+        /// repeat failures with the same incorrect password against a client.</param>
         /// <param name="phase1HashFunctionName">A hash function that is expensive enough to calculate to make offline dictionary attacks 
         /// expensive, but not so expensive as to slow the authentication system to a halt.  If not specified, a default function will be
         /// used.</param>
@@ -328,7 +316,7 @@ namespace StopGuessing.Models
             int numberOfIterationsToUseForPhase1Hash = ExpensiveHashFunctionFactory.DefaultNumberOfIterations,
             byte[] saltUniqueToThisAccount = null,
             int maxNumberOfCookiesToTrack = DefaultMaxNumberOfCookiesToTrack,
-            int maxAccountPasswordVerificationFailuresToTrack = DefaultMaxAccountPasswordVerificationFailuresToTrack,
+            int maxFailedPhase2HashesToTrack = DefaultMaxFailedPhase2HashesToTrack,
             int saltLength = DefaultSaltLength)
         {
 
@@ -344,8 +332,9 @@ namespace StopGuessing.Models
                 SaltUniqueToThisAccount = saltUniqueToThisAccount,
                 HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount =
                     new CapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
-                PasswordVerificationFailures =
-                    new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
+                //PasswordVerificationFailures =
+                //    new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
+                RecentIncorrectPhase2Hashes = new CapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack),
                 ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife),
                 CreditLimit = creditLimit,
                 PasswordHashPhase1FunctionName = phase1HashFunctionName,
@@ -361,5 +350,9 @@ namespace StopGuessing.Models
             return newAccount;
         }
 
+        public virtual void Dispose()
+        {
+            // Should write data back to storage
+        }
     }
 }
