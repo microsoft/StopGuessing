@@ -11,3 +11,8 @@ Password guessing attacks are separated into two categories:
 #What Does StopGuessing Do?
 StopGuessing protects password guessing attacks by keeping track of the number of failed attempts as well as the most recent login attempts. 
 
+Failed attempts with invalid passwords will receive a penalty whereas successful attempts with the correct password will be rewarded.
+
+#How To Use
+1. Download the zip file or clone the repository on your machine
+2. Navigate to the directory where StopGuessing is downloaded and click on the Visual Studio Solution to open the project.
