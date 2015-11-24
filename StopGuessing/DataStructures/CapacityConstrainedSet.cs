@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
+using Microsoft.AspNet.Razor.Chunks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -83,7 +85,7 @@ namespace StopGuessing.DataStructures
                     if (Count >= Capacity)
                     {
                         // We need to remove the oldest item to make space for the new item
-                        Remove(_recency.Last());
+                        base.Remove(_recency.Last());
                         _recency.RemoveLast();
                     }
                     // Add the new item
@@ -92,6 +94,15 @@ namespace StopGuessing.DataStructures
 
                 }
                 return itemIsAlreadyPresent;
+            }
+        }
+
+        public new bool Remove(T item)
+        {
+            lock (_recency)
+            {
+                _recency.Remove(item);
+                return base.Remove(item);
             }
         }
 

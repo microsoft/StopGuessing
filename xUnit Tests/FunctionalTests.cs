@@ -15,32 +15,52 @@ namespace xUnit_Tests
     public class TestConfiguration
     {
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
-        public LoginAttemptClient MyLoginAttemptClient;
+        //public LoginAttemptClient MyLoginAttemptClient;
         public BlockingAlgorithmOptions MyBlockingAlgorithmOptions;
         public LimitPerTimePeriod[] CreditLimits;
         public MemoryOnlyStableStore StableStore;
+        public IUserAccountContextFactory MyAccountContextFactory;
+        public ILoginAttemptController MyLoginAttemptClient;
     }
 
     public class FunctionalTests
     {
         public static TestConfiguration InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
         {
+            if (options == null)
+                options = new BlockingAlgorithmOptions();
+
             TestConfiguration configuration = new TestConfiguration();
             configuration.MyBlockingAlgorithmOptions = options ?? new BlockingAlgorithmOptions();
 
-            configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
-            RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
-            configuration.MyResponsibleHosts.Add("localhost", localHost);
+            //configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
+            //RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
+            //configuration.MyResponsibleHosts.Add("localhost", localHost);
             IStableStore stableStore = configuration.StableStore = new MemoryOnlyStableStore();
             
-            configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
+            //configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
-            LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient,
-                memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions, stableStore);
+            BinomialLadderSketch localPasswordBinomialLadderSketch =
+            new BinomialLadderSketch(1024 * 1024 * 1024, options.NumberOfRungsInBinomialLadder);
+                MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
+                    new MultiperiodFrequencyTracker<string>(
+                        options.NumberOfPopularityMeasurementPeriods,
+                        options.LengthOfShortestPopularityMeasurementPeriod,
+                        options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
 
-            configuration.MyLoginAttemptClient.SetLocalLoginAttemptController(myLoginAttemptController);
+            configuration.MyAccountContextFactory = new MemoryOnlyAccountContextFactory();
+
+            LoginAttemptController myLoginAttemptController = new LoginAttemptController(
+                configuration.MyAccountContextFactory,
+                localPasswordBinomialLadderSketch,
+                localPasswordFrequencyTracker,
+                memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions);
+
+            configuration.MyLoginAttemptClient = myLoginAttemptController;
+
+            //configuration.MyLoginAttemptClient.SetLocalLoginAttemptController(myLoginAttemptController);
             return configuration;
         }
 
@@ -51,7 +71,7 @@ namespace xUnit_Tests
               configuration.MyBlockingAlgorithmOptions.BlockScoreHalfLife,
               password,
               numberOfIterationsToUseForPhase1Hash: 1);
-            await configuration.MyUserAccountController.PutAsync(account.UsernameOrAccountId, account);
+            await configuration.MyAccountContextFactory.Get().WriteNewAsync(account);
             return account;
         }
 
@@ -151,6 +171,9 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithIpWithBadReputationAsync()
         {
+            //BlockingAlgorithmOptions options = new BlockingAlgorithmOptions();
+            //options.BlockThresholdMultiplierForUnpopularPasswords = 1d;
+            //TestConfiguration configuration = InitTest(options);
             TestConfiguration configuration = InitTest();
             string[] usernames = CreateUserAccounts(configuration, 200);
             await CreateTestAccountAsync(configuration, Username1, Password1);
@@ -183,7 +206,7 @@ namespace xUnit_Tests
             await CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
-            Parallel.ForEach(usernames.Skip(20), async (username) =>
+            await TaskParalllel.ForEach(usernames.Skip(20), async (username) =>
                 await AuthenticateAsync(configuration, username, Password1, clientAddress: AttackersIp));
 
             Thread.Sleep(2000);

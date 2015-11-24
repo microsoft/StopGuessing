@@ -33,19 +33,20 @@ namespace StopGuessing.DataStructures
         ///// </summary>
         protected List<FrequencyTracker<TKey>> PasswordFrequencyEstimatesForDifferentPeriods;
 
-        public uint[] LengthOfPopularityMeasurementPeriods;
+        //public uint[] LengthOfPopularityMeasurementPeriods;
 
         public MultiperiodFrequencyTracker(int numberOfPopularityMeasurementPeriods,
             uint lengthOfShortestPopularityMeasurementPeriod,
             uint factorOfGrowthBetweenPopularityMeasurementPeriods
             )
         {
+            //LengthOfPopularityMeasurementPeriods = new uint[numberOfPopularityMeasurementPeriods];
             PasswordFrequencyEstimatesForDifferentPeriods =
                 new List<FrequencyTracker<TKey>>(numberOfPopularityMeasurementPeriods);
             uint currentPeriodLength = lengthOfShortestPopularityMeasurementPeriod;
             for (int period = 0; period < numberOfPopularityMeasurementPeriods; period++)
             {
-                LengthOfPopularityMeasurementPeriods[period] = currentPeriodLength;
+                //LengthOfPopularityMeasurementPeriods[period] = currentPeriodLength;
                 PasswordFrequencyEstimatesForDifferentPeriods.Add(
                     new FrequencyTracker<TKey>((int) currentPeriodLength));
                 currentPeriodLength *= factorOfGrowthBetweenPopularityMeasurementPeriods;

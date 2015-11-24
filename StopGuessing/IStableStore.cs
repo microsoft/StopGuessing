@@ -54,7 +54,7 @@ namespace StopGuessing
         }
     }
 
-    public class MemoryOnlyAccountStoreFactory : IUserAccountContextFactory
+    public class MemoryOnlyAccountContextFactory : IUserAccountContextFactory
     {
         private readonly MemoryOnlyAccountStore _memoryOnlyAccountStore = new MemoryOnlyAccountStore();
         public IStableStoreContext<string, UserAccount> Get()

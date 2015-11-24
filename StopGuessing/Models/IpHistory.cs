@@ -27,7 +27,7 @@ namespace StopGuessing.Models
         //public Sequence<LoginAttempt> RecentLoginFailures;
 
         const int DefaultNumberOfPotentailTyposToTrack = 8;
-        public Sequence<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos; 
+        public CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos; 
 
         public DateTime TimeOfLastLoginAttemptUtc;
 
@@ -41,28 +41,28 @@ namespace StopGuessing.Models
             Address = address;
             CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
             RecentPotentialTypos =
-                new Sequence<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
+                new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
         }
 
 
-        public void RecordLoginAttempt(LoginAttempt attempt, float penalty)
-        {
-            //Record login attempts
-            if (attempt.Outcome == AuthenticationOutcome.CredentialsValid ||
-                attempt.Outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-            {
-            }
-            else
-            {
-                RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
-                {
-                    UsernameOrAccountId = attempt.UsernameOrAccountId,
-                    Penalty = penalty,
-                    TimeOfAttempt = attempt.TimeOfAttempt.UtcDateTime,
-                    EncryptedIncorrectPassword = attempt.EncryptedIncorrectPassword
-                });
-            }
-        }
+        //public void RecordLoginAttempt(LoginAttempt attempt, double penalty)
+        //{
+        //    //Record login attempts
+        //    if (attempt.Outcome == AuthenticationOutcome.CredentialsValid ||
+        //        attempt.Outcome == AuthenticationOutcome.CredentialsValidButBlocked)
+        //    {
+        //    }
+        //    else
+        //    {
+        //        RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
+        //        {
+        //            UsernameOrAccountId = attempt.UsernameOrAccountId,
+        //            Penalty = penalty,
+        //            TimeOfAttempt = attempt.TimeOfAttempt.UtcDateTime,
+        //            EncryptedIncorrectPassword = attempt.EncryptedIncorrectPassword
+        //        });
+        //    }
+        //}
 
 
         ///// <summary>

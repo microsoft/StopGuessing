@@ -34,6 +34,7 @@ namespace Simulator
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
         public LoginAttemptController MyLoginAttemptController;
         public LoginAttemptClient MyLoginAttemptClient;
+        public IUserAccountContextFactory MyAccountContextFactory;
         //public LimitPerTimePeriod[] CreditLimits;
         public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
         public ExperimentalConfiguration MyExperimentalConfiguration;
@@ -165,7 +166,7 @@ namespace Simulator
                 try
                 {
                     Simulator simulator = new Simulator(config, passwordSelector);
-                    simulator.PrimeWithKnownPasswords(passwordsAlreadyKnownToBePopular);
+                    await simulator.PrimeWithKnownPasswordsAsync(passwordsAlreadyKnownToBePopular);
                     ResultStatistics stats = await simulator.Run(errorWriter);
                     statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}", statisticsCsvLine,
                         stats.FalsePositives, stats.TruePositives,
@@ -203,6 +204,7 @@ namespace Simulator
         public Simulator(ExperimentalConfiguration myExperimentalConfiguration, WeightedSelector<string> passwordSelector)
         {
             MyExperimentalConfiguration = myExperimentalConfiguration;
+            BlockingAlgorithmOptions options = MyExperimentalConfiguration.BlockingOptions;
             PasswordSelector = passwordSelector;
             //CreditLimits = new[]
             //{
@@ -221,16 +223,26 @@ namespace Simulator
             RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
             MyResponsibleHosts.Add("localhost", localHost);
 
+            BinomialLadderSketch localPasswordBinomialLadderSketch =
+                new BinomialLadderSketch(1024 * 1024 * 1024, options.NumberOfRungsInBinomialLadder);
+            MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
+                new MultiperiodFrequencyTracker<string>(
+                    options.NumberOfPopularityMeasurementPeriods,
+                    options.LengthOfShortestPopularityMeasurementPeriod,
+                    options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
+
             MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts, localHost);
+            
+            MyAccountContextFactory = new MemoryOnlyAccountContextFactory();
 
-            MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter(hardMemoryLimit: 80L *1024L *1024L *1024L);
-            StableStore.LoginAttempts = null;
-            MyUserAccountController = new UserAccountController(
-                MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
-            MyLoginAttemptController = new LoginAttemptController(MyLoginAttemptClient,
-                memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
+            MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
+            //MyUserAccountController = new UserAccountController(
+            //    MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
+            MyLoginAttemptController = new LoginAttemptController(//MyLoginAttemptClient,
+                MyAccountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
+                memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions);
 
-            MyUserAccountController.SetLoginAttemptClient(MyLoginAttemptClient);
+            //MyUserAccountController.SetLoginAttemptClient(MyLoginAttemptClient);
 
             MyLoginAttemptClient.SetLocalLoginAttemptController(MyLoginAttemptController);
             //fix outofmemory bug by setting the loginattempt field to null
@@ -255,7 +267,7 @@ namespace Simulator
             List<SimulatedAccount> allAccounts = new List<SimulatedAccount>(BenignAccounts);
             allAccounts.AddRange(MaliciousAccounts);
             await TaskParalllel.ForEach(allAccounts,
-                async (simAccount) =>
+                async simAccount =>
                 {
                     UserAccount account = UserAccount.Create(simAccount.UniqueId,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimit,
@@ -264,8 +276,8 @@ namespace Simulator
                     foreach (string cookie in simAccount.Cookies)
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
                             LoginAttempt.HashCookie(cookie));
-                    await MyUserAccountController.PutAsync(account, cancellationToken: cancellationToken);
-                });
+                    await MyAccountContextFactory.Get().WriteNewAsync(account, cancellationToken: cancellationToken);
+                }, cancellationToken: cancellationToken);
         
 
             outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
@@ -300,11 +312,11 @@ namespace Simulator
                     simAttempt = BenignLoginAttempt();
                 }
 
-                var dlaoResult = await
+                LoginAttempt attemptWithOutcome = await
                     MyLoginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
                         cancellationToken: cancellationToken);
-                LoginAttempt attemptWithOutcome = dlaoResult.Item1;
-                BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = dlaoResult.Item2;
+                //LoginAttempt attemptWithOutcome = dlaoResult.Item1;
+                //BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = dlaoResult.Item2;
                 AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
 
                 lock (outcomeWriter)
@@ -317,9 +329,9 @@ namespace Simulator
                         ipInfo.IsInAttackersIpPool ? "InAttackersIpPool" : "NotUsedByAttacker",
                         ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                         string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
-                        blockingScoresForEachAlgorithm.Ours,
-                        blockingScoresForEachAlgorithm.Industry,
-                        blockingScoresForEachAlgorithm.SSH,
+                        0d,//FIXME blockingScoresForEachAlgorithm.Ours,
+                        0d,//FIXMEblockingScoresForEachAlgorithm.Industry,
+                        0d,//FIXMEblockingScoresForEachAlgorithm.SSH,
                         simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
                         simAttempt.Password
                         );
