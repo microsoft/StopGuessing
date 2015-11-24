@@ -65,7 +65,7 @@ namespace StopGuessing
                     options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
 
 
-            services.AddSingleton<IStableStoreFactory<string, UserAccount>, MemoryOnlyAccountStoreFactory>();
+            services.AddSingleton<IStableStoreFactory<string, UserAccount>, MemoryOnlyAccountContextFactory>();
 
             // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
             services.AddSingleton<IStableStore, MemoryOnlyStableStore>();

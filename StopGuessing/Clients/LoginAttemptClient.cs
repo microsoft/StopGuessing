@@ -12,7 +12,7 @@ namespace StopGuessing.Clients
     /// <summary>
     /// A client class for accessing LoginAttempt records locally or remotely.
     /// </summary>
-    public class LoginAttemptClient
+    public class LoginAttemptClient : ILoginAttemptController
     {
         int NumberOfRedundentHostsToCacheEachLoginAttempt => Math.Min(3, _responsibleHosts.Count); // FUTURE -- use configuration file value
 
@@ -49,6 +49,7 @@ namespace StopGuessing.Clients
         /// <param name="passwordProvidedByClient"></param>
         /// <param name="loginAttempt"></param>
         /// <param name="serversResponsibleForCachingThisLoginAttempt"></param>
+        /// <param name="timeout"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         public async Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt,
@@ -65,12 +66,7 @@ namespace StopGuessing.Clients
             return await RestClientHelper.TryServersUntilOneRespondsWithResult(
                 serversResponsibleForCachingThisLoginAttempt,
                 timeout ?? DefaultTimeout,
-                async (server, localTimeout) => (server.Equals(_localHost)) ?
-                    await _localLoginAttemptController.LocalPutAsync(loginAttempt, passwordProvidedByClient,
-                            serversResponsibleForCachingThisLoginAttempt,
-                            onlyUpdateTheInMemoryCacheOfTheLoginAttempt: false,
-                            cancellationToken: cancellationToken)
-                            :
+                async (server, localTimeout) => 
                     await RestClientHelper.PutAsync<LoginAttempt>(server.Uri,
                         "/api/LoginAttempt/" + Uri.EscapeUriString(loginAttempt.UniqueKey), new Object[]
                         {
@@ -84,35 +80,42 @@ namespace StopGuessing.Clients
             cancellationToken);
         }
 
-        public async Task PutCacheOnlyAsync(LoginAttempt loginAttempt,
-            List<RemoteHost> serversResponsibleForCachingThisLoginAttempt,
-            TimeSpan? timeout,
+        public async Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt,
+            string passwordProvidedByClient = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            await Task.WhenAll(serversResponsibleForCachingThisLoginAttempt.Where( server => !server.Equals(_localHost)).Select( 
-                async server =>
-                await RestClientHelper.PutAsync(server.Uri,
-                    "/api/LoginAttempt/" + Uri.EscapeUriString(loginAttempt.UniqueKey), new Object[]
-                    {
-                        new KeyValuePair<string, LoginAttempt>("loginAttempt", loginAttempt),
-                        new KeyValuePair<string, bool>("onlyUpdateTheInMemoryCacheOfTheLoginAttempt", true),
-                        new KeyValuePair<string, List<RemoteHost>>("serversResponsibleForCachingThisLoginAttempt",
-                            serversResponsibleForCachingThisLoginAttempt),
-                    },
-                    timeout,
-                    cancellationToken)
-                ));
+            return await PutAsync(loginAttempt,passwordProvidedByClient, null, null, cancellationToken);
         }
 
-        public void PutCacheOnlyBackground(LoginAttempt loginAttempt,
-            List<RemoteHost> serversThatCacheThisLoginAttempt,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Task.Run(() => 
-                PutCacheOnlyAsync(loginAttempt, serversThatCacheThisLoginAttempt, timeout, cancellationToken), 
-                                  cancellationToken);
-        }
+        //public async Task PutCacheOnlyAsync(LoginAttempt loginAttempt,
+        //    List<RemoteHost> serversResponsibleForCachingThisLoginAttempt,
+        //    TimeSpan? timeout,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    await Task.WhenAll(serversResponsibleForCachingThisLoginAttempt.Where( server => !server.Equals(_localHost)).Select( 
+        //        async server =>
+        //        await RestClientHelper.PutAsync(server.Uri,
+        //            "/api/LoginAttempt/" + Uri.EscapeUriString(loginAttempt.UniqueKey), new Object[]
+        //            {
+        //                new KeyValuePair<string, LoginAttempt>("loginAttempt", loginAttempt),
+        //                new KeyValuePair<string, bool>("onlyUpdateTheInMemoryCacheOfTheLoginAttempt", true),
+        //                new KeyValuePair<string, List<RemoteHost>>("serversResponsibleForCachingThisLoginAttempt",
+        //                    serversResponsibleForCachingThisLoginAttempt),
+        //            },
+        //            timeout,
+        //            cancellationToken)
+        //        ));
+        //}
+
+        //public void PutCacheOnlyBackground(LoginAttempt loginAttempt,
+        //    List<RemoteHost> serversThatCacheThisLoginAttempt,
+        //    TimeSpan? timeout = null,
+        //    CancellationToken cancellationToken = default(CancellationToken))
+        //{
+        //    Task.Run(() => 
+        //        PutCacheOnlyAsync(loginAttempt, serversThatCacheThisLoginAttempt, timeout, cancellationToken), 
+        //                          cancellationToken);
+        //}
 
 
         ///// <summary>

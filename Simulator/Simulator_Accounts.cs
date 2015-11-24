@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Threading.Tasks;
 
 namespace Simulator
 {
@@ -181,15 +182,11 @@ namespace Simulator
             return knownPopularPasswords;
         }
 
-        public void PrimeWithKnownPasswords(IEnumerable<string> knownPopularPasswords)
+        public async Task PrimeWithKnownPasswordsAsync(IEnumerable<string> knownPopularPasswords)
         {
             foreach (string password in knownPopularPasswords)
             {
-                for (int i = 0; i < 100; i++)
-                {
-                    MyLoginAttemptController._passwordPopularityTracker.GetPopularityOfPasswordAmongFailures(
-                        password, false);
-                }
+                await MyLoginAttemptController.PrimeCommonPasswordAsync(password, 100);
             }
         }
 

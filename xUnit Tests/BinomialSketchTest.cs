@@ -15,7 +15,7 @@ namespace xUnit_Tests
 
             int observationCount = sketch.GetLadder(somethingToObserve).HeightOfKeyInRungs;
 
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 25; i++)
             {
                 int lastCount = sketch.Step(somethingToObserve);
                 Assert.Equal(observationCount, lastCount);

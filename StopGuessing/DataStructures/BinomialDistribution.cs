@@ -71,10 +71,10 @@ namespace StopGuessing.DataStructures
             }
 
             _probabilityThisManyOrFewerSetByChance = new double[outOf + 1];
-            _probabilityThisManyOrFewerSetByChance[outOf] = _probabilityExactlyThisManySetByChance[outOf];
-            for (int k = outOf; k > 0; k--)
-                _probabilityThisManyOrFewerSetByChance[k - 1] =
-                    _probabilityThisManyOrFewerSetByChance[k] + _probabilityExactlyThisManySetByChance[k - 1];
+            _probabilityThisManyOrFewerSetByChance[0] = _probabilityExactlyThisManySetByChance[0];
+            for (int k = 1; k <= outOf; k++)
+                _probabilityThisManyOrFewerSetByChance[k] =
+                    _probabilityThisManyOrFewerSetByChance[k-1] + _probabilityExactlyThisManySetByChance[k];
         }
 
 

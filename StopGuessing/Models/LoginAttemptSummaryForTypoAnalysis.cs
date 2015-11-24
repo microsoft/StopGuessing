@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading.Tasks;
+using StopGuessing.DataStructures;
 
 namespace StopGuessing.Models
 {
     public class LoginAttemptSummaryForTypoAnalysis
     {
-        public float Penalty { get; set; }
+        public DoubleThatDecaysWithTime Penalty { get; set; }
 
         public string UsernameOrAccountId { get; set;  }
 
@@ -20,10 +21,5 @@ namespace StopGuessing.Models
         /// of the correct password--which would indicate it was likely a (benign) typo and not a random guess. 
         /// </summary>
         public string EncryptedIncorrectPassword { get; set; }
-
-        /// <summary>
-        /// The time of the attempt.
-        /// </summary>
-        public DateTimeOffset TimeOfAttempt { get; set; }
     }
 }

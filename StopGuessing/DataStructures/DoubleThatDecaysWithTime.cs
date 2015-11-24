@@ -26,7 +26,7 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// The time period over which a score will decay to half it's current value.
         /// </summary>
-        private TimeSpan HalfLife { get; set; }
+        public TimeSpan HalfLife { get; private set; }
 
         /// <summary>
         /// The last time the value was updated (UTC).
@@ -61,7 +61,7 @@ namespace StopGuessing.DataStructures
         public double GetValue(DateTime? whenUtc = null)
         {
             DateTime whenUtcTime = whenUtc ?? DateTime.UtcNow;
-            TimeSpan timeSinceLastUpdate = LastUpdatedUtc - whenUtcTime;
+            TimeSpan timeSinceLastUpdate = whenUtcTime - LastUpdatedUtc;
             double halfLivesSinceLastUpdate = timeSinceLastUpdate.TotalMilliseconds/HalfLife.TotalMilliseconds;
             return ValueAtTimeOfLastUpdate/Math.Pow(2, halfLivesSinceLastUpdate);
         }
