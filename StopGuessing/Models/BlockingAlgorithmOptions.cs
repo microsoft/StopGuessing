@@ -15,8 +15,9 @@ namespace StopGuessing.Models
 
     public class BlockingAlgorithmOptions
     {
-        public int NumberOfRedundentHostsToCacheIPs = 3;
-        public int NumberOfRedundentHostsToCachePasswordPopularity = 3;
+        public int NumberOfRedundantHostsToCacheIPs = 1;
+        public int NumberOfRedundantHostsToCachePasswordPopularity = 1;
+        public int NumberOfRungsInBinomialLadder = 96;
         
         public int NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos = 8;
 
