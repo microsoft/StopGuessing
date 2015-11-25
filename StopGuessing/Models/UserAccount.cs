@@ -1,4 +1,6 @@
-﻿using System;
+﻿#define Simulation
+// FIXME remove
+using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using StopGuessing.DataStructures;
@@ -73,6 +75,10 @@ namespace StopGuessing.Models
         /// used to offset IP blocking penalties.
         /// </summary>
         public DoubleThatDecaysWithTime ConsumedCredits { get; set; }
+
+#if Simulation
+        public Dictionary<string,DoubleThatDecaysWithTime> ConsumedCreditsForSimulation = new Dictionary<string, DoubleThatDecaysWithTime>();
+#endif
 
         ///// <summary>
         ///// A member used exclusively to set the password.  This is primarily a convenience member for testing.
@@ -280,9 +286,21 @@ namespace StopGuessing.Models
             return amountConsumed;
         }
 
+#if Simulation
+        public double TryGetCreditForSimulation(string simulationName, double amountRequested)
+        {
+            lock (ConsumedCreditsForSimulation)
+            {
+                if (!ConsumedCreditsForSimulation.ContainsKey(simulationName))
+                    ConsumedCreditsForSimulation[simulationName] = new DoubleThatDecaysWithTime(ConsumedCredits.HalfLife);
 
-
-
+                double amountAvailable = CreditLimit - ConsumedCreditsForSimulation[simulationName];
+                double amountConsumed = Math.Min(amountRequested, amountAvailable);
+                ConsumedCreditsForSimulation[simulationName].Add(amountConsumed);
+                return amountConsumed;
+            }
+        }
+#endif
 
 
         private const int DefaultSaltLength = 8;

@@ -93,7 +93,7 @@ namespace xUnit_Tests
             IPAddress serverAddress = null,
             string api = "web",
             string cookieProvidedByBrowser = null,
-            DateTimeOffset? eventTime = null,
+            DateTime? eventTimeUtc = null,
             CancellationToken cancellationToken = default(CancellationToken)
             )
         {
@@ -106,7 +106,7 @@ namespace xUnit_Tests
                 UsernameOrAccountId = username,
                 AddressOfClientInitiatingRequest = clientAddress,
                 AddressOfServerThatInitiallyReceivedLoginAttempt = serverAddress,
-                TimeOfAttempt = eventTime ?? DateTimeOffset.Now,
+                TimeOfAttemptUtc = eventTimeUtc ?? DateTime.UtcNow,
                 Api = api,
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };

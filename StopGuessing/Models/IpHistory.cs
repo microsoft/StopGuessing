@@ -1,11 +1,44 @@
-﻿using System;
+﻿#define Simulation
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using StopGuessing.DataStructures;
 
 namespace StopGuessing.Models
 {
+#if Simulation
+    public class SimulationCondition
+    {
+        public string Name;
+        public DoubleThatDecaysWithTime Score;
+        public CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos;
+        public bool IgnoresRepeats;
+        public bool RewardsClientCookies;
+        public bool CreditsValidLogins;
+        public bool UsesAlphaForAccountFailures;
+        public bool FixesTypos;
+        public bool ProtectsAccountsWithPopularPasswords;
+        public bool PunishesPopularGuesses;
+
+        public SimulationCondition(BlockingAlgorithmOptions options, string name, bool ignoresRepeats, bool rewardsClientCookies, bool creditsValidLogins,
+            bool usesAlphaForAccountFailures, bool fixesTypos, bool protectsAccountsWithPopularPasswords, bool punishesPopularGuesses)
+        {
+            Score = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
+            RecentPotentialTypos = !FixesTypos ? null:
+                new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(
+                    options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
+            Name = name;
+            IgnoresRepeats = ignoresRepeats;
+            RewardsClientCookies = rewardsClientCookies;
+            CreditsValidLogins = creditsValidLogins;
+            UsesAlphaForAccountFailures = usesAlphaForAccountFailures;
+            FixesTypos = fixesTypos;
+            PunishesPopularGuesses = punishesPopularGuesses;
+            ProtectsAccountsWithPopularPasswords = protectsAccountsWithPopularPasswords;
+        }
+    }
+#endif
+
     /// <summary>
     /// This class keeps track of recent login successes and failures for a given client IP so that
     /// we can try to determine if this client should be blocked due to likely-password-guessing
@@ -29,9 +62,10 @@ namespace StopGuessing.Models
         const int DefaultNumberOfPotentailTyposToTrack = 8;
         public CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos; 
 
-        public DateTime TimeOfLastLoginAttemptUtc;
-
         public DoubleThatDecaysWithTime CurrentBlockScore;
+#if Simulation
+        List<SimulationCondition> simScores = new List<SimulationCondition>();
+#endif
 
 
         public IpHistory(//bool isIpAKnownAggregatorThatWeCannotBlock = false,
@@ -40,6 +74,16 @@ namespace StopGuessing.Models
         {
             Address = address;
             CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
+#if Simulation
+            simScores.Add(new SimulationCondition(options, "Baseline", false, false, false, false, false, false, false));
+            simScores.Add(new SimulationCondition(options, "NoRepeats", true, false, false, false, false, false, false));
+            simScores.Add(new SimulationCondition(options, "Cookies", true, true, false, false, false, false, false));
+            simScores.Add(new SimulationCondition(options, "Credits", true, true, true, false, false, false, false));
+            simScores.Add(new SimulationCondition(options, "Alpha", true, true, true, true, false, false, false));
+            simScores.Add(new SimulationCondition(options, "Typos", true, true, true, true, true, false, false));
+            simScores.Add(new SimulationCondition(options, "PopularThreshold", true, true, true, true, true, true, false));
+            simScores.Add(new SimulationCondition(options, "PunishPopularGuesses", true, true, true, true, true, true, true));
+#endif
             RecentPotentialTypos =
                 new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
         }
@@ -58,7 +102,7 @@ namespace StopGuessing.Models
         //        {
         //            UsernameOrAccountId = attempt.UsernameOrAccountId,
         //            Penalty = penalty,
-        //            TimeOfAttempt = attempt.TimeOfAttempt.UtcDateTime,
+        //            TimeOfAttemptUtc = attempt.TimeOfAttemptUtc.UtcDateTime,
         //            EncryptedIncorrectPassword = attempt.EncryptedIncorrectPassword
         //        });
         //    }

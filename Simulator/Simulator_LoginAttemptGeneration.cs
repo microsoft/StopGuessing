@@ -23,7 +23,7 @@ namespace Simulator
             IPAddress clientAddress,
             string cookieProvidedByBrowser,
             string mistakeType,
-            DateTimeOffset eventTime
+            DateTime eventTimeUtc
         )
         {
             string accountId = account != null ? account.UniqueId : StrongRandomNumberGenerator.Get64Bits().ToString();
@@ -34,7 +34,7 @@ namespace Simulator
                 UsernameOrAccountId = accountId,
                 AddressOfClientInitiatingRequest = clientAddress,
                 AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] {127, 1, 1, 1}),
-                TimeOfAttempt = eventTime,
+                TimeOfAttemptUtc = eventTimeUtc,
                 Api = "web",
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };
@@ -116,7 +116,7 @@ namespace Simulator
                 mistake += "WrongAccountName";
             }
 
-            return new SimulatedLoginAttempt(account, password, false, false, clientIp, cookie, mistake, DateTimeOffset.Now);
+            return new SimulatedLoginAttempt(account, password, false, false, clientIp, cookie, mistake, DateTime.UtcNow);
 
         }
 
@@ -136,7 +136,7 @@ namespace Simulator
                 GetRandomMaliciousIp(),
                 StrongRandomNumberGenerator.Get64Bits().ToString(),
                 "",
-                DateTimeOffset.Now);
+                DateTime.UtcNow);
         }
 
         private readonly Object _breadthFirstLock = new object();
@@ -176,7 +176,7 @@ namespace Simulator
                 GetRandomMaliciousIp(),
                 StrongRandomNumberGenerator.Get64Bits().ToString(),
                 mistake,
-                DateTimeOffset.Now);
+                DateTime.UtcNow);
         }
 
         /// <summary>
@@ -190,7 +190,7 @@ namespace Simulator
             return new SimulatedLoginAttempt(simAccount, simAccount.Password,
                 true, false,
                 ipAddressToSanitizeThroughLogin, StrongRandomNumberGenerator.Get64Bits().ToString(), "",
-                DateTimeOffset.Now);
+                DateTime.UtcNow);
         }
 
 
@@ -201,13 +201,13 @@ namespace Simulator
         ///// <param name="password"></param>
         ///// <param name="clientAddress"></param>
         ///// <param name="cookieProvidedByBrowser"></param>
-        ///// <param name="eventTime"></param>
+        ///// <param name="eventTimeUtc"></param>
         ///// <param name="cancellationToken"></param>
         ///// <returns></returns>
         //public Tuple<LoginAttempt,string> CreateLoginAttempt(string username, string password,
         //    IPAddress clientAddress,
         //    string cookieProvidedByBrowser,
-        //    DateTimeOffset eventTime,
+        //    DateTimeOffset eventTimeUtc,
         //    CancellationToken cancellationToken = default(CancellationToken)
         //    )
         //{
@@ -216,7 +216,7 @@ namespace Simulator
         //        UsernameOrAccountId = username,
         //        AddressOfClientInitiatingRequest = clientAddress,
         //        AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] { 127, 1, 1, 1 }),
-        //        TimeOfAttempt = eventTime,
+        //        TimeOfAttemptUtc = eventTimeUtc,
         //        Api = "web",
         //        CookieProvidedByBrowser = cookieProvidedByBrowser
         //    }, password);
