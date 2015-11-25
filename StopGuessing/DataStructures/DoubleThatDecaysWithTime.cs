@@ -98,9 +98,10 @@ namespace StopGuessing.DataStructures
         /// In-place addition
         /// </summary>
         /// <param name="amountToAdd">The amount to add</param>
-        public void Add(double amountToAdd)
+        /// <param name="timeOfAddUtc">When to add it, in UTC time (if NULL, sets it to the current clock time)</param>
+        public void Add(double amountToAdd, DateTime? timeOfAddUtc = null)
         {
-            Value += amountToAdd;
+            SetValue(Value + amountToAdd, timeOfAddUtc);
         }
 
         /// <summary>

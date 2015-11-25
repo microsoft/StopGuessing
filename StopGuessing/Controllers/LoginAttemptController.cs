@@ -1,8 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
+﻿#define Simulation
+// FIXME above
+using System;
 using System.Linq;
 using System.Net;
-using System.Runtime.Remoting.Messaging;
 using System.Threading.Tasks;
 using Microsoft.AspNet.Mvc;
 using StopGuessing.DataStructures;
@@ -11,7 +11,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using Newtonsoft.Json;
-using StopGuessing.Clients;
 using StopGuessing.EncryptionPrimitives;
 
 // For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
@@ -392,44 +391,119 @@ namespace StopGuessing.Controllers
             return penalty;
         }
 
-        protected double CalculatePenalty(IpHistory ip, LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
+        protected void UpdateBlockScore(DoubleThatDecaysWithTime currentBlockScore,
+            CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
+            LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
         {
-            // loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount;
-            double penalty = 0d;
             double passwordsPopularityAmongGuesses = loginAttempt.PasswordsPopularityAmongFailedGuesses;
             double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses);;
             switch (loginAttempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
-                    penalty = _options.PenaltyForInvalidAccount_Alpha * popularityMultiplier;
-                    break;
+                    currentBlockScore.Add(_options.PenaltyForInvalidAccount_Alpha*popularityMultiplier, loginAttempt.TimeOfAttemptUtc);
+                    return;
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
-                    penalty = _options.PenaltyForInvalidPassword_Beta * popularityMultiplier;
-                    break;
+                    double penalty = _options.PenaltyForInvalidPassword_Beta * popularityMultiplier;
+                    currentBlockScore.Add(penalty, loginAttempt.TimeOfAttemptUtc);
+                    if (account != null)
+                    {
+                        recentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
+                        {
+                            EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
+                            Penalty = new DoubleThatDecaysWithTime(currentBlockScore.HalfLife, penalty, loginAttempt.TimeOfAttemptUtc),
+                            UsernameOrAccountId = loginAttempt.UsernameOrAccountId
+                        });
+                    }
+                    return;
                 case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
                     // We ignore repeats of incorrect passwords we've already accounted for
                     // No penalty
-                    penalty = 0;
-                    break;
+                    return;
                 case AuthenticationOutcome.CredentialsValid:
-                    if (ip.CurrentBlockScore > 0)
+                    if (currentBlockScore > 0)
                     {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, ip.CurrentBlockScore);
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, currentBlockScore);
                         double credit = account.TryGetCredit(desiredCredit);
                         if (credit > 0)
                             accountChanged = true;
-                        penalty -=credit;
+                        currentBlockScore.Add(-credit, loginAttempt.TimeOfAttemptUtc);
                     }
                     break;
                 case AuthenticationOutcome.CredentialsValidButBlocked:
-                break;
-                    // case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely:
-                    //    penalty = _options.PenaltyForInvalidPassword_Beta * _options.PenaltyMulitiplierForTypo;
-                    //    break;
-                    // case AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely:
+                default:
+                    return;
             }
-            return penalty;
         }
+
+
+        protected void SimUpdateBlockScores(SimulationCondition[] conditions, LoginAttempt loginAttempt, UserAccount account,
+            ref bool accountChanged)
+        {
+            foreach (SimulationCondition condition in conditions)
+            {
+                SimUpdateBlockScore(condition,loginAttempt,account,ref accountChanged);
+            }
+        }
+
+        protected void SimUpdateBlockScore(SimulationCondition condition, LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
+        {
+            double passwordsPopularityAmongGuesses = loginAttempt.PasswordsPopularityAmongFailedGuesses;
+            double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses); ;
+            switch (loginAttempt.Outcome)
+            {
+                case AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount:
+                case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
+                {
+                    if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount &&
+                        condition.IgnoresRepeats)
+                        return;
+                    double penalty = condition.UsesAlphaForAccountFailures
+                        ? _options.PenaltyForInvalidAccount_Alpha
+                        : _options.PenaltyForInvalidPassword_Beta;
+                    if (condition.PunishesPopularGuesses)
+                        penalty *= popularityMultiplier;
+                    condition.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
+                    return;
+                }
+                case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
+                case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
+                {
+                    if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword &&
+                        condition.IgnoresRepeats)
+                        return;
+                    double penalty = _options.PenaltyForInvalidPassword_Beta;
+                    if (condition.PunishesPopularGuesses)
+                        penalty *= popularityMultiplier;
+                    condition.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
+                    if (account != null)
+                    {
+                        // FIXME - make sure typos are cleaned up.
+                        condition.RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
+                        {
+                            EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
+                            Penalty =
+                                new DoubleThatDecaysWithTime(condition.Score.HalfLife, penalty,
+                                    loginAttempt.TimeOfAttemptUtc),
+                            UsernameOrAccountId = loginAttempt.UsernameOrAccountId
+                        });
+                    }
+                    return;
+                }
+                case AuthenticationOutcome.CredentialsValid:                    
+                    if (condition.Score > 0)
+                    {
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, condition.Score);
+                        double credit = account.TryGetCreditForSimulation(condition.Name, desiredCredit);
+                        if (credit > 0)
+                            accountChanged = true;
+                        condition.Score.Add(-credit, loginAttempt.TimeOfAttemptUtc);
+                    }
+                    return;
+                default:
+                    return;
+            }
+        }
+
 
 
         /// <returns></returns>
@@ -599,31 +673,25 @@ namespace StopGuessing.Controllers
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
             {
+                // We only need to decide whether to block if the credentials provided were valid.
+                // We'll get the blocking threshold, blocking condition, and block if the condition exceeds the threshold.
                 double blockingThreshold = _options.BlockThresholdPopularPassword;
                 if (loginAttempt.PasswordsPopularityAmongFailedGuesses <
                     _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
                     blockingThreshold *= _options.BlockThresholdMultiplierForUnpopularPasswords;
-                if (ip.CurrentBlockScore > blockingThreshold)
+                double blockScore = ip.CurrentBlockScore;
+                // If the client provided a cookie proving a past successful login, we'll ignore the block condition
+                if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+                    blockScore *= 0; // FUTURE
+                if (blockScore > blockingThreshold)
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
             }
             
             double popularityMultiplier = PopularityPenaltyMultiplier(popularityOfPasswordAmongIncorrectPasswords); ;
 
-            double penalty = CalculatePenalty(ip, loginAttempt, account, ref accountChanged);
-            ip.CurrentBlockScore.Add(penalty);
-
-
-            if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword && account != null)
-            {
-                loginAttempt.EncryptAndWriteIncorrectPassword(passwordProvidedByClient, account.EcPublicAccountLogKey);
-                ip.RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
-                {
-                    EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
-                    Penalty = new DoubleThatDecaysWithTime(ip.CurrentBlockScore.HalfLife, penalty, ip.TimeOfLastLoginAttemptUtc),
-                    UsernameOrAccountId = loginAttempt.UsernameOrAccountId
-                });
-            }
-
+            UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, ref accountChanged);
+            //ip.CurrentBlockScore.Add(penalty, loginAttempt.TimeOfAttemptUtc);
+            
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
                 loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
             {
@@ -631,10 +699,12 @@ namespace StopGuessing.Controllers
                     // FIXME with configuration values
                     passwordLadder.CountObservationsForGivenConfidence(1d/(1000d*1000d*1000d)) > 5)
                 {
+                    // FIXME
                     //Task background1 = 
                         await passwordFrequencies.RecordObservationAsync(cancellationToken: cancellationToken);
                 }
 
+                // FIXME
                 //Task background2 = 
                     await passwordLadder.StepAsync(cancellationToken);
             }

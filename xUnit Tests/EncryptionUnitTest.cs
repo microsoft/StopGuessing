@@ -62,16 +62,16 @@ namespace xUnit_Tests
         [Fact]
         public void Testserilization()
         {
-            DateTimeOffset now = DateTimeOffset.Now;
+            DateTime utcNow = DateTime.UtcNow;
             
             LoginAttempt attempt = new LoginAttempt()
             {
-                TimeOfAttempt = now
+                TimeOfAttemptUtc = utcNow
             };
             string serialized = Newtonsoft.Json.JsonConvert.SerializeObject(attempt);
             LoginAttempt deserialized = Newtonsoft.Json.JsonConvert.DeserializeObject<LoginAttempt>(serialized);
-            DateTimeOffset deserializedTimeOfAttempt = deserialized.TimeOfAttempt;
-            Assert.Equal(now, deserializedTimeOfAttempt);
+            DateTimeOffset deserializedTimeOfAttempt = deserialized.TimeOfAttemptUtc;
+            Assert.Equal(utcNow, deserializedTimeOfAttempt);
         }
 
 
