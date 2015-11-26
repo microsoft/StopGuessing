@@ -7,13 +7,6 @@ using System.Threading.Tasks;
 
 namespace PostSimulationAnalysis
 {
-    public enum SystemMode
-    {
-        // ReSharper disable once InconsistentNaming
-        SSH,
-        Basic,
-        StopGuessing
-    };
 
     public class Trial
     {
