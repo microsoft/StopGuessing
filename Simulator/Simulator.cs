@@ -36,42 +36,12 @@ namespace Simulator
         public LoginAttemptClient MyLoginAttemptClient;
         public IUserAccountContextFactory MyAccountContextFactory;
         //public LimitPerTimePeriod[] CreditLimits;
-        public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
+        //public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
         public ExperimentalConfiguration MyExperimentalConfiguration;
 
         public delegate void ExperimentalConfigurationFunction(ExperimentalConfiguration config);
         public delegate void StatisticsWritingFunction(ResultStatistics resultStatistics);
         public delegate void ParameterSettingFunction<in T>(ExperimentalConfiguration config, T iterationParameter);
-
-
-
-        public enum SystemMode
-        {
-            // ReSharper disable once InconsistentNaming
-            SSH,
-            Basic,
-            StopGuessing
-        };
-
-        //public static void SetSystemMode(ExperimentalConfiguration config, SystemMode mode)
-        //{
-        //    if (mode == SystemMode.Basic || mode == SystemMode.SSH)
-        //    {
-        //        //
-        //        // Industrial-best-practice baseline
-        //        //
-        //        // Use the same threshold regardless of the popularity of the account password
-        //        config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 1d;
-        //        // Make all failures increase the count towards the threshold by one
-        //        config.BlockingOptions.PenaltyMulitiplierForTypo = 1d;
-        //        config.BlockingOptions.PenaltyForInvalidAccount_Alpha = config.BlockingOptions.PenaltyForInvalidPassword_Beta;
-        //        // If the below is empty, the multiplier for any popularity level will be 1.
-        //        config.BlockingOptions.PenaltyForReachingEachPopularityThreshold = new List<PenaltyForReachingAPopularityThreshold>();
-        //        // Correct passwords shouldn't help
-        //        config.BlockingOptions.RewardForCorrectPasswordPerAccount_Gamma = 0;
-        //    }
-        //}
-
 
         public interface IParameterSweeper
         {
@@ -112,10 +82,10 @@ namespace Simulator
 
         public static async Task RunExperimentalSweep(
             ExperimentalConfigurationFunction configurationDelegate,
-            IParameterSweeper[] parameterSweeps,
+            IParameterSweeper[] parameterSweeps = null,
             int startingTest = 0)
         {
-            int totalTests =
+            int totalTests = parameterSweeps == null ? 1 :
                 // Get the legnths of each dimension of the multi-dimensional parameter sweep
                 parameterSweeps.Select(ps => ps.GetParameterCount())
                     // Calculates the product of the number of parameters in each dimension
@@ -127,64 +97,38 @@ namespace Simulator
             List<string> passwordsAlreadyKnownToBePopular = Simulator.GetKnownPopularPasswords(baseConfig.PreviouslyKnownPopularPasswordFile);
 
             DateTime now = DateTime.Now;
-            string dirName = @"..\Experiment_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
-            Directory.CreateDirectory(dirName);
-            StreamWriter statsWriter = new StreamWriter(dirName + "\\" + "ResultStatistics.csv");
-                statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}", new string(',', parameterSweeps.Length),
-                "FalsePositives", "TruePositives", "FalsePositiveRate", "TruePositiveRate",
-                "FalseNegatives", "TrueNegatives", "FalseNegativeRate", "TrueNegativeRate",
-                "Precision",
-                "Recall",
-                "BenignErrors",
-                "GuessWasWrong",
-                "TotalExceptions",
-                "TotalLoopIterations");
+            string dirName = @"..\..\Experiment_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
+            if (parameterSweeps != null)
+                Directory.CreateDirectory(dirName);
             for (int testIndex = startingTest; testIndex < totalTests; testIndex++)
             {
-                string statisticsCsvLine = testIndex.ToString();
-
                 // Start with the default configuration from the provided configuration factory
                 ExperimentalConfiguration config = new ExperimentalConfiguration();
                 configurationDelegate(config);
 
                 // Next set the parameters for this test in the swwep
-                string path = dirName + "\\Exp" + testIndex.ToString();
+                string path = dirName +  (parameterSweeps == null ? "" : ("\\Expermient" + testIndex.ToString()) );
                 int parameterIndexer = testIndex;
-                for (int dimension = parameterSweeps.Length - 1; dimension >= 0; dimension--)
+                if (parameterSweeps != null)
                 {
-                    IParameterSweeper sweep = parameterSweeps[dimension];
-                    int parameterIndex = parameterIndexer%sweep.GetParameterCount();
-                    parameterIndexer /= sweep.GetParameterCount();
-                    sweep.SetParameter(config, parameterIndex);
-                    path += "_" + sweep.GetParameterString(parameterIndex).Replace(".", "_");
-                    statisticsCsvLine += "," +
-                                         sweep.GetParameterString(parameterIndex).Replace(",", "_");
+                    for (int dimension = parameterSweeps.Length - 1; dimension >= 0; dimension--)
+                    {
+                        IParameterSweeper sweep = parameterSweeps[dimension];
+                        int parameterIndex = parameterIndexer%sweep.GetParameterCount();
+                        parameterIndexer /= sweep.GetParameterCount();
+                        sweep.SetParameter(config, parameterIndex);
+                        path += "_" + sweep.GetParameterString(parameterIndex).Replace(".", "_");
+                    }
                 }
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
-                StreamWriter errorWriter = new StreamWriter(path + ".txt");
+                StreamWriter dataWriter = new StreamWriter(path + ".txt");
+                StreamWriter errorWriter = new StreamWriter(path + ".error.txt");
                 try
                 {
                     Simulator simulator = new Simulator(config, passwordSelector);
                     await simulator.PrimeWithKnownPasswordsAsync(passwordsAlreadyKnownToBePopular);
-                    ResultStatistics stats = await simulator.Run(errorWriter);
-                    statsWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}", statisticsCsvLine,
-                        stats.FalsePositives, stats.TruePositives,
-                        Fraction(stats.FalsePositives, stats.FalsePositives + stats.TruePositives),
-                        Fraction(stats.TruePositives, stats.FalsePositives + stats.TruePositives),
-                        stats.FalseNegatives, stats.TrueNegatives,
-                        Fraction(stats.FalseNegatives, stats.FalseNegatives + stats.TrueNegatives),
-                        Fraction(stats.TrueNegatives, stats.FalseNegatives + stats.TrueNegatives),
-                        // Precision
-                        Fraction(stats.TruePositives, stats.TruePositives + stats.FalsePositives),
-                        // Recall
-                        Fraction(stats.TruePositives, stats.TruePositives + stats.FalseNegatives),
-                        stats.BenignErrors,
-                        stats.GuessWasWrong,
-                        stats.TotalExceptions,
-                        stats.TotalLoopIterations
-                        );
-                    statsWriter.Flush();
+                    await simulator.Run(dataWriter);
                 }
                 catch (Exception e)
                 {
@@ -236,17 +180,11 @@ namespace Simulator
             MyAccountContextFactory = new MemoryOnlyAccountContextFactory();
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
-            //MyUserAccountController = new UserAccountController(
-            //    MyLoginAttemptClient, memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StableStore);
             MyLoginAttemptController = new LoginAttemptController(//MyLoginAttemptClient,
                 MyAccountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
                 memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions);
 
-            //MyUserAccountController.SetLoginAttemptClient(MyLoginAttemptClient);
-
             MyLoginAttemptClient.SetLocalLoginAttemptController(MyLoginAttemptController);
-            //fix outofmemory bug by setting the loginattempt field to null
-            StableStore.LoginAttempts = null;
         }
 
 
@@ -254,7 +192,7 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task<ResultStatistics> Run(StreamWriter outcomeWriter,
+        public async Task Run(StreamWriter outcomeWriter,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             //1.Create account from Rockyou 
@@ -280,25 +218,21 @@ namespace Simulator
                 }, cancellationToken: cancellationToken);
         
 
-            outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
+            outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
                 "IsIpInAttackersPool",
                 "IsClientAProxyIP",
                 "TypeOfMistake",
-                "OurBlockScore",
-                "IndustryBlockScore",
-                "SSHBlockScore",
                 "UserID",
-                "Password");
+                "Password",
+                "Scores");
 
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
-
-            ResultStatistics resultStatistics = new ResultStatistics();
-
+            
             await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async () =>
             {
                 SimulatedLoginAttempt simAttempt;
@@ -312,95 +246,33 @@ namespace Simulator
                     simAttempt = BenignLoginAttempt();
                 }
 
-                LoginAttempt attemptWithOutcome = await
+                double[] scores = await
                     MyLoginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
                         cancellationToken: cancellationToken);
                 //LoginAttempt attemptWithOutcome = dlaoResult.Item1;
                 //BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = dlaoResult.Item2;
-                AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
+                //AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
 
                 lock (outcomeWriter)
                 {
                     var ipInfo = GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                    outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
+                    outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                         simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                         simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                         simAttempt.IsGuess ? "IsGuess" : "NotGuess",
                         ipInfo.IsInAttackersIpPool ? "InAttackersIpPool" : "NotUsedByAttacker",
                         ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                         string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
-                        0d,//FIXME blockingScoresForEachAlgorithm.Ours,
-                        0d,//FIXMEblockingScoresForEachAlgorithm.Industry,
-                        0d,//FIXMEblockingScoresForEachAlgorithm.SSH,
                         simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
-                        simAttempt.Password
+                        simAttempt.Password,
+                        string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
                         );
                     outcomeWriter.Flush();
-                }
-
-                lock (resultStatistics)
-                {
-                    resultStatistics.TotalLoopIterations++;
-                    if (simAttempt.IsGuess)
-                    {
-                        if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                            resultStatistics.TruePositives++;
-                        else if (outcome == AuthenticationOutcome.CredentialsValid)
-                        {
-                            resultStatistics.FalseNegatives++;
-                            //var addressDebugInfo =
-                            //    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                            //string jsonOfIp;
-                            //lock (addressDebugInfo)
-                            //{
-                            //    jsonOfIp =
-                            //        JsonConvert.SerializeObject(addressDebugInfo);
-                            //}
-                            //errorWriter.WriteLine("False Negative\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
-                            //    simAttempt.Password,
-                            //    jsonOfIp,
-                            //    JsonConvert.SerializeObject(attemptWithOutcome));
-                            //errorWriter.Flush();
-                        }
-                        else
-                            resultStatistics.GuessWasWrong++;
-                    }
-                    else
-                    {
-                        if (outcome == AuthenticationOutcome.CredentialsValid)
-                            resultStatistics.TrueNegatives++;
-                        else if (outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-                        {
-                            //resultStatistics.FalsePositives++;
-                            //var addressDebugInfo =
-                            //    GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                            //string jsonOfIp;
-                            //lock (addressDebugInfo)
-                            //{
-                            //    jsonOfIp =
-                            //        JsonConvert.SerializeObject(addressDebugInfo);
-                            //}
-                            //string jsonOfattempt =
-                            //    JsonConvert.SerializeObject(attemptWithOutcome);
-                            //errorWriter.WriteLine("False Positive\r\n{0}\r\n{1}\r\n{2}\r\n\r\n",
-                            //    simAttempt.Password,
-                            //    jsonOfIp, jsonOfattempt);
-                            //errorWriter.Flush();
-                        }
-                        else
-                            resultStatistics.BenignErrors++;
-                    }
-                }
+                }                
             },
-            (e) => { 
-                    lock (resultStatistics)
-                    {
-                        resultStatistics.TotalExceptions++;
-                    }
-                    Console.Error.WriteLine(e.ToString());
+            (e) => {
             });
-
-            return resultStatistics;
+            
         }
     }
 }

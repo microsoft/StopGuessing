@@ -68,7 +68,7 @@ namespace StopGuessing
             services.AddSingleton<IStableStoreFactory<string, UserAccount>, MemoryOnlyAccountContextFactory>();
 
             // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
-            services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
+            //services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
 
 
             services.AddSingleton<MemoryUsageLimiter, MemoryUsageLimiter>();

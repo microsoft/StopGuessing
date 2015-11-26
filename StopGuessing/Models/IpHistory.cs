@@ -1,14 +1,20 @@
 ﻿#define Simulation
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using Newtonsoft.Json;
 using StopGuessing.DataStructures;
+using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
 #if Simulation
     public class SimulationCondition
     {
+        private readonly BlockingAlgorithmOptions _options;
         public string Name;
         public DoubleThatDecaysWithTime Score;
         public CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos;
@@ -20,10 +26,21 @@ namespace StopGuessing.Models
         public bool ProtectsAccountsWithPopularPasswords;
         public bool PunishesPopularGuesses;
 
+        public double GetThresholdAdjustedScore(double popularityOfPassword, bool hasCookieProvingPriorLogin)
+        {
+            double score = Score;
+            if (hasCookieProvingPriorLogin && RewardsClientCookies)
+                score = 0;
+            else if (ProtectsAccountsWithPopularPasswords && popularityOfPassword > _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
+                score /= _options.BlockThresholdMultiplierForUnpopularPasswords;
+            return score;
+        }
+
         public SimulationCondition(BlockingAlgorithmOptions options, string name, bool ignoresRepeats, bool rewardsClientCookies, bool creditsValidLogins,
             bool usesAlphaForAccountFailures, bool fixesTypos, bool protectsAccountsWithPopularPasswords, bool punishesPopularGuesses)
         {
-            Score = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
+            _options = options;
+               Score = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
             RecentPotentialTypos = !FixesTypos ? null:
                 new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(
                     options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
@@ -35,6 +52,76 @@ namespace StopGuessing.Models
             FixesTypos = fixesTypos;
             PunishesPopularGuesses = punishesPopularGuesses;
             ProtectsAccountsWithPopularPasswords = protectsAccountsWithPopularPasswords;
+        }
+
+        public void AdjustScoreForPastTyposTreatedAsFullFailures(
+            SimulationCondition condition,
+            ref ECDiffieHellmanCng ecPrivateAccountLogKey,
+            UserAccount account,
+            DateTime whenUtc,
+            string correctPassword, 
+            byte[] phase1HashOfCorrectPassword)
+        {
+            if (condition.RecentPotentialTypos == null || condition.FixesTypos == false)
+                return;
+            LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = condition.RecentPotentialTypos.ToArray();
+            double credit = 0;
+            foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
+            {
+                if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
+                    continue;
+
+                if (ecPrivateAccountLogKey == null)
+                {
+                    // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                    try
+                    {
+                        ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
+                            account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
+                            phase1HashOfCorrectPassword);
+                    }
+                    catch (Exception)
+                    {
+                        // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
+                        return;
+                    }
+                }
+
+                // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
+                try
+                {
+                    // Attempt to decrypt the password.
+                    EcEncryptedMessageAesCbcHmacSha256 messageDeserializedFromJson =
+                        JsonConvert.DeserializeObject<EcEncryptedMessageAesCbcHmacSha256>(potentialTypo.EncryptedIncorrectPassword);
+                    byte[] passwordAsUtf8 = messageDeserializedFromJson.Decrypt(ecPrivateAccountLogKey);
+                    string incorrectPasswordFromPreviousAttempt = Encoding.UTF8.GetString(passwordAsUtf8);
+
+                    // Use an edit distance calculation to determine if it was a likely typo
+                    bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
+                                        _options.MaxEditDistanceConsideredATypo;
+
+                    // Update the outcome based on this information.
+                    AuthenticationOutcome newOutocme = likelyTypo
+                        ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
+                        : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
+
+                    // Add this to the list of changed attempts
+                    credit += potentialTypo.Penalty.GetValue(whenUtc) * (1d - _options.PenaltyMulitiplierForTypo);
+
+                    // FUTURE -- find and update the login attempt in the background
+
+                }
+                catch (Exception)
+                {
+                    // An exception is likely due to an incorrect key (perhaps outdated).
+                    // Since we simply can't do anything with a record we can't Decrypt, we carry on
+                    // as if nothing ever happened.  No.  Really.  Nothing to see here.
+                }
+
+                condition.RecentPotentialTypos.Remove(potentialTypo);
+            }
+            Score.Add(-credit, whenUtc);
+            return;
         }
     }
 #endif
@@ -64,7 +151,7 @@ namespace StopGuessing.Models
 
         public DoubleThatDecaysWithTime CurrentBlockScore;
 #if Simulation
-        List<SimulationCondition> simScores = new List<SimulationCondition>();
+        public List<SimulationCondition> SimulationConditions = new List<SimulationCondition>();
 #endif
 
 
@@ -75,72 +162,18 @@ namespace StopGuessing.Models
             Address = address;
             CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
 #if Simulation
-            simScores.Add(new SimulationCondition(options, "Baseline", false, false, false, false, false, false, false));
-            simScores.Add(new SimulationCondition(options, "NoRepeats", true, false, false, false, false, false, false));
-            simScores.Add(new SimulationCondition(options, "Cookies", true, true, false, false, false, false, false));
-            simScores.Add(new SimulationCondition(options, "Credits", true, true, true, false, false, false, false));
-            simScores.Add(new SimulationCondition(options, "Alpha", true, true, true, true, false, false, false));
-            simScores.Add(new SimulationCondition(options, "Typos", true, true, true, true, true, false, false));
-            simScores.Add(new SimulationCondition(options, "PopularThreshold", true, true, true, true, true, true, false));
-            simScores.Add(new SimulationCondition(options, "PunishPopularGuesses", true, true, true, true, true, true, true));
+            SimulationConditions.Add(new SimulationCondition(options, "Baseline", false, false, false, false, false, false, false));
+            SimulationConditions.Add(new SimulationCondition(options, "NoRepeats", true, false, false, false, false, false, false));
+            SimulationConditions.Add(new SimulationCondition(options, "Cookies", true, true, false, false, false, false, false));
+            SimulationConditions.Add(new SimulationCondition(options, "Credits", true, true, true, false, false, false, false));
+            SimulationConditions.Add(new SimulationCondition(options, "Alpha", true, true, true, true, false, false, false));
+            SimulationConditions.Add(new SimulationCondition(options, "Typos", true, true, true, true, true, false, false));
+            SimulationConditions.Add(new SimulationCondition(options, "PopularThreshold", true, true, true, true, true, true, false));
+            SimulationConditions.Add(new SimulationCondition(options, "PunishPopularGuesses", true, true, true, true, true, true, true));
 #endif
             RecentPotentialTypos =
                 new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
         }
-
-
-        //public void RecordLoginAttempt(LoginAttempt attempt, double penalty)
-        //{
-        //    //Record login attempts
-        //    if (attempt.Outcome == AuthenticationOutcome.CredentialsValid ||
-        //        attempt.Outcome == AuthenticationOutcome.CredentialsValidButBlocked)
-        //    {
-        //    }
-        //    else
-        //    {
-        //        RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
-        //        {
-        //            UsernameOrAccountId = attempt.UsernameOrAccountId,
-        //            Penalty = penalty,
-        //            TimeOfAttemptUtc = attempt.TimeOfAttemptUtc.UtcDateTime,
-        //            EncryptedIncorrectPassword = attempt.EncryptedIncorrectPassword
-        //        });
-        //    }
-        //}
-
-
-        ///// <summary>
-        ///// Update LoginAttempts cached for this IP with new outcomes
-        ///// </summary>
-        ///// <param name="changedLoginAttempts">Copies of the login attempts that have changed</param>
-        ///// <returns></returns>
-        //public int UpdateLoginAttemptsWithNewOutcomes(IEnumerable<LoginAttempt> changedLoginAttempts)
-        //{
-        //    // Fot the attempts provided in the paramters, create a dictionary mapping the attempt keys to
-        //    // the attempt so that we can look them up quickly when going through the recent failures
-        //    // for this IP.
-        //    Dictionary<string, LoginAttempt> keyToChangedAttempts = new Dictionary<string, LoginAttempt>();
-        //    foreach (LoginAttempt attempt in changedLoginAttempts)
-        //    {
-        //        keyToChangedAttempts[attempt.UniqueKey] = attempt;
-        //    }
-
-        //    // Now walk through the failures for this IP and, if any match the keys for the
-        //    // accounts in the changedLoginAttempts parameter, change the outcome to match the 
-        //    // one provided.
-        //    List<LoginAttempt> attemptsThatNeedToBeUpdated =
-        //        RecentLoginFailures.MostRecentToOldest.Where(
-        //            attempt => keyToChangedAttempts.ContainsKey(attempt.UniqueKey)).ToList();
-        //    foreach (LoginAttempt attemptThatNeedsToBeUpdated in attemptsThatNeedToBeUpdated)
-        //    {
-        //        LoginAttempt changedAttempt = keyToChangedAttempts[attemptThatNeedsToBeUpdated.UniqueKey];
-        //        // This is where we update the attempt that needs to be updated with the outcome in the attempt that's already
-        //        // been changed to include the latest outcome.
-        //        attemptThatNeedsToBeUpdated.Outcome = changedAttempt.Outcome;
-        //    }
-        //    return attemptsThatNeedToBeUpdated.Count;
-        //}
-
-
+        
     }
 }
