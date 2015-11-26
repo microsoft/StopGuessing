@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,15 +23,12 @@ namespace StopGuessing
         IStableStoreContext<TId, TValue> Get();
     }
 
-    public interface IUserAccountContext : IStableStoreContext<string, UserAccount>
-    {}
-
     public interface IUserAccountContextFactory : IStableStoreFactory<string, UserAccount>
     { }
 
-    public class MemoryOnlyAccountStore : IUserAccountContext
+    public class MemoryOnlyAccountStore : IStableStoreContext<string, UserAccount>
     {
-        private readonly Dictionary<string, UserAccount> _store = new Dictionary<string, UserAccount>();
+        private readonly ConcurrentDictionary<string, UserAccount> _store = new ConcurrentDictionary<string, UserAccount>();
 
         public async Task<UserAccount> ReadAsync(string usernameOrAccountId, CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -61,26 +59,6 @@ namespace StopGuessing
         {
             return _memoryOnlyAccountStore;
         }
-    }
-
-
-    public interface IAccountStableStore
-    {
-        Task<UserAccount> GetAccountAsync(string usernameOrAccountId, CancellationToken cancellationToken);
-        Task WriteNewAccountAsync(UserAccount account, CancellationToken cancellationToken);
-    }
-
-    public interface IStableStore
-    {
-        Task WriteAccountAsync(UserAccount account, CancellationToken cancellationToken);
-        Task<UserAccount> ReadAccountAsync(string usernameOrAccountId, CancellationToken cancellationToken);
-        Task WriteLoginAttemptAsync(LoginAttempt attempt, CancellationToken cancellationToken);
-        Task<LoginAttempt> ReadLoginAttemptAsync(string key, CancellationToken cancellationToken);
-        Task<IEnumerable<LoginAttempt>> ReadMostRecentLoginAttemptsAsync(string usernameOrAccountId, int numberToRead, bool includeSuccesses = true,
-            bool includeFailures = true, CancellationToken cancellationToken = default (CancellationToken));
-        Task<IEnumerable<LoginAttempt>> ReadMostRecentLoginAttemptsAsync(System.Net.IPAddress clientIpAddress, int numberToRead, bool includeSuccesses = true, 
-            bool includeFailures = true, CancellationToken cancellationToken = default(CancellationToken));
-        Task<bool> IsIpAddressAlwaysPermittedAsync(System.Net.IPAddress clientIpAddress, CancellationToken cancellationToken);
     }
 
 

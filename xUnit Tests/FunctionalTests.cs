@@ -18,7 +18,7 @@ namespace xUnit_Tests
         //public LoginAttemptClient MyLoginAttemptClient;
         public BlockingAlgorithmOptions MyBlockingAlgorithmOptions;
         public LimitPerTimePeriod[] CreditLimits;
-        public MemoryOnlyStableStore StableStore;
+        //public MemoryOnlyStableStore StableStore;
         public IUserAccountContextFactory MyAccountContextFactory;
         public ILoginAttemptController MyLoginAttemptClient;
     }
@@ -36,7 +36,7 @@ namespace xUnit_Tests
             //configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             //RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
             //configuration.MyResponsibleHosts.Add("localhost", localHost);
-            IStableStore stableStore = configuration.StableStore = new MemoryOnlyStableStore();
+            //IStableStore stableStore = configuration.StableStore = new MemoryOnlyStableStore();
             
             //configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
 

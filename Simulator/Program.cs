@@ -20,7 +20,7 @@ namespace Simulator
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test
-                ulong totalLoginAttempts = 5 * Million;
+                ulong totalLoginAttempts = 5*Thousand; // * Million;
 
                 // Figure out parameters from scale
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
@@ -58,25 +58,6 @@ namespace Simulator
         // Blocking parameters
         // Make typos almost entirely ignored
         config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
-            }, new Simulator.IParameterSweeper[]
-            {
-                new Simulator.ParameterSweeper<double>
-                {
-                    Name = "BlockThresholdPopularPassword",
-                    Parameters = new double[] {
-                        //3,
-                        //5,
-                        //8,
-                        //12,
-                        //18,
-                        //28,
-                        //40,
-                        //60,
-                        //80,
-                        500 },
-                    ParameterSetter =
-                        (config, thresholdForThisExp) => config.BlockingOptions.BlockThresholdPopularPassword = thresholdForThisExp
-                }
             });
 
 
