@@ -11,18 +11,12 @@ EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "StopGuessing", "StopGuessing\StopGuessing.xproj", "{BA64F492-2BE9-422C-B899-9CFEA0D1A048}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{22C611CE-29B3-4F1E-A741-13B8B5CC0DCC}"
-	ProjectSection(SolutionItems) = preProject
-		Performance1.psess = Performance1.psess
-	EndProjectSection
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "Simulator", "Simulator\Simulator.xproj", "{13E79588-59C0-47F5-B757-DCD8766EDBA0}"
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "PostSimulationAnalysis", "PostSimulationAnalysis\PostSimulationAnalysis.xproj", "{4CD3A6E1-2E18-4BE8-9027-E5A2FDDDE02D}"
 EndProject
 Global
-	GlobalSection(Performance) = preSolution
-		HasPerformanceSessions = true
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU

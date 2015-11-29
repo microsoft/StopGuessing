@@ -16,11 +16,11 @@ namespace PostSimulationAnalysis
         public bool IsIpInAttackersPool;
         public bool IsClientAProxyIP;
         public string TypeOfMistake;
-        public double OurBlockScore;
         public double IndustryBlockScore;
         public double SSHBlockScore;
         public string UserID;
         public string Password;
+        public double[] scoreForEachCondition;
 
         public Trial(string[] fields)
         {
@@ -31,32 +31,22 @@ namespace PostSimulationAnalysis
             IsIpInAttackersPool = fields[field++] == "InAttackersIpPool";
             IsClientAProxyIP = fields[field++] == "ProxyIP";
             TypeOfMistake = fields[field++];
-            double.TryParse(fields[field++], out OurBlockScore);
-            double.TryParse(fields[field++], out IndustryBlockScore);
-            double.TryParse(fields[field++], out SSHBlockScore);
             UserID = fields[field++];
-            Password = fields[field];
+            Password = fields[field++];
+            scoreForEachCondition = new double[fields.Length - field];
+            for (;field < fields.Length;field++)
+                double.TryParse(fields[field], out scoreForEachCondition[field]);
         }
 
-        public double GetScoreForMode(SystemMode mode)
+        public double GetScoreForCondition(int condition)
         {
-            switch (mode)
-            {
-                case SystemMode.StopGuessing:
-                    return OurBlockScore;
-                case SystemMode.Basic:
-                    return IndustryBlockScore;
-                case SystemMode.SSH:
-                    return SSHBlockScore;
-                default:
-                    return 0;
-            }
+            return scoreForEachCondition[condition];
         }
 
-        public int CompareTo(Trial other ,SystemMode mode )
+        public int CompareTo(Trial other ,int condition)
         {
-            double myScore = GetScoreForMode(mode);
-            double othersScore = other.GetScoreForMode(mode);
+            double myScore = GetScoreForCondition(condition);
+            double othersScore = other.GetScoreForCondition(condition);
             if (myScore < othersScore)
                 return -1;
             if (myScore > othersScore)
@@ -127,10 +117,11 @@ namespace PostSimulationAnalysis
             List<Trial> trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToList();
             List<Trial> trialsUsersCorrectPassword = trialsWithCorrectPassword.Where(t => !t.IsFromAttacker || !t.IsAGuess).ToList();
             List<Trial> trialsGuessesCorrectPassword = trialsWithCorrectPassword.Where(t => t.IsFromAttacker && t.IsAGuess).ToList();
+            int numConditions = trialsWithCorrectPassword.First().scoreForEachCondition.Length;
             
-            foreach (SystemMode mode in new SystemMode[] { SystemMode.StopGuessing, SystemMode.Basic, SystemMode.SSH })
+            for (int conditionNumber = 0; conditionNumber < numConditions; conditionNumber++)
             {
-                using (StreamWriter writer = new StreamWriter(path + mode.ToString() + ".csv"))
+                using (StreamWriter writer = new StreamWriter(path + conditionNumber.ToString() + ".csv"))
                 {
                     writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                         "False +",
@@ -145,13 +136,13 @@ namespace PostSimulationAnalysis
 
                     List<Trial> originalMalicious = new List<Trial>(trialsGuessesCorrectPassword);
                     List<Trial> originalBenign = new List<Trial>(trialsUsersCorrectPassword);
-                    originalMalicious.Sort((a, b) => -a.CompareTo(b, mode));
-                    originalBenign.Sort((a, b) => -a.CompareTo(b, mode));
+                    originalMalicious.Sort((a, b) => -a.CompareTo(b, conditionNumber));
+                    originalBenign.Sort((a, b) => -a.CompareTo(b, conditionNumber));
 
                     Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
                     Queue<Trial> benign = new Queue<Trial>(originalBenign);
 
-                    double blockThreshold = malicious.Peek().GetScoreForMode(mode);
+                    double blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
                     List<ROCPoint> rocPoints = new List<ROCPoint>
                     {
                         new ROCPoint(0, 0, originalMalicious.Count, originalBenign.Count, blockThreshold)
@@ -159,13 +150,13 @@ namespace PostSimulationAnalysis
                     while (malicious.Count > 0)
                     {
                         // Remove all malicious requests above this new threshold
-                        while (malicious.Count > 0 && malicious.Peek().GetScoreForMode(mode) >= blockThreshold)
+                        while (malicious.Count > 0 && malicious.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
                         {
                             malicious.Dequeue();
                         }
 
                         // Remove all benign requests above this new threshold
-                        while (benign.Count > 0 && benign.Peek().GetScoreForMode(mode) >= blockThreshold)
+                        while (benign.Count > 0 && benign.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
                         {
                             benign.Dequeue();
                         }
@@ -175,7 +166,7 @@ namespace PostSimulationAnalysis
 
                         // Identify next threshold
                         if (malicious.Count > 0)
-                            blockThreshold = malicious.Peek().GetScoreForMode(mode);
+                            blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
                     }
 
                     List<ROCPoint> finalROCPoints = new List<ROCPoint>();
