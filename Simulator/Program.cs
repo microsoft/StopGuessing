@@ -20,7 +20,7 @@ namespace Simulator
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test
-                ulong totalLoginAttempts = 500*Thousand; // * Million;
+                ulong totalLoginAttempts = 1*Million; // * Million;
 
                 // Figure out parameters from scale
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
@@ -54,7 +54,26 @@ namespace Simulator
 
                 //config.BlockingOptions.NumberOfSuccessesToTrackPerIp = 15;
                 //config.BlockingOptions.NumberOfFailuresToTrackPerIp = 50;
-
+                config.BlockingOptions.Conditions = new[]
+                {
+                    new SimulationCondition(config.BlockingOptions, 0, "Baseline", false, false, false, false, false,
+                        false, false),
+                    new SimulationCondition(config.BlockingOptions, 1, "NoRepeats", true, false, false, false, false,
+                        false, false),
+                    new SimulationCondition(config.BlockingOptions, 2, "Cookies", true, true, false, false, false, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 3, "Credits", true, true, true, false, false, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 4, "Alpha", true, true, true, true, false, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 5, "Typos", true, true, true, true, true, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 6, "PopularThreshold", true, true, true, true, true,
+                        true, false),
+                    new SimulationCondition(config.BlockingOptions, 6, "PunishPopularGuesses", true, true, true, true,
+                        true, true, true)
+                };
+                
         // Blocking parameters
         // Make typos almost entirely ignored
         config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;

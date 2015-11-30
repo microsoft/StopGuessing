@@ -22,10 +22,10 @@ namespace StopGuessing.Controllers
     //    public UserAccountController(
     //        LoginAttemptClient loginAttemptClient,
     //        MemoryUsageLimiter memoryUsageLimiter,
-    //        BlockingAlgorithmOptions options,
+    //        BlockingAlgorithmOptions Options,
     //        IStableStore stableStore)
     //    {
-    //        _options = options;
+    //        _options = Options;
     //        _stableStore = stableStore;
     //        _userAccountCache = new SelfLoadingCache<string, UserAccount>(_stableStore.ReadAccountAsync);
     //        SetLoginAttemptClient(loginAttemptClient);

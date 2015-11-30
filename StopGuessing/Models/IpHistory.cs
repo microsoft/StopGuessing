@@ -14,10 +14,7 @@ namespace StopGuessing.Models
 #if Simulation
     public class SimulationCondition
     {
-        private readonly BlockingAlgorithmOptions _options;
-        public string Name;
-        public DoubleThatDecaysWithTime Score;
-        public CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos;
+        public BlockingAlgorithmOptions Options;
         public bool IgnoresRepeats;
         public bool RewardsClientCookies;
         public bool CreditsValidLogins;
@@ -25,25 +22,18 @@ namespace StopGuessing.Models
         public bool FixesTypos;
         public bool ProtectsAccountsWithPopularPasswords;
         public bool PunishesPopularGuesses;
+        public string Name;
+        public int Index;
 
-        public double GetThresholdAdjustedScore(double popularityOfPassword, bool hasCookieProvingPriorLogin)
+        public SimulationCondition(BlockingAlgorithmOptions options, int index, string name, bool ignoresRepeats, bool rewardsClientCookies, bool creditsValidLogins,
+    bool usesAlphaForAccountFailures, bool fixesTypos, bool protectsAccountsWithPopularPasswords, bool punishesPopularGuesses)
         {
-            double score = Score;
-            if (hasCookieProvingPriorLogin && RewardsClientCookies)
-                score = 0;
-            else if (ProtectsAccountsWithPopularPasswords && popularityOfPassword > _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
-                score /= _options.BlockThresholdMultiplierForUnpopularPasswords;
-            return score;
-        }
-
-        public SimulationCondition(BlockingAlgorithmOptions options, string name, bool ignoresRepeats, bool rewardsClientCookies, bool creditsValidLogins,
-            bool usesAlphaForAccountFailures, bool fixesTypos, bool protectsAccountsWithPopularPasswords, bool punishesPopularGuesses)
-        {
-            _options = options;
-               Score = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
-            RecentPotentialTypos = !FixesTypos ? null:
-                new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(
-                    options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
+            Options = options;
+            //Score = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
+            //RecentPotentialTypos = !FixesTypos ? null :
+            //    new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(
+            //        options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
+            Index = index;
             Name = name;
             IgnoresRepeats = ignoresRepeats;
             RewardsClientCookies = rewardsClientCookies;
@@ -53,18 +43,45 @@ namespace StopGuessing.Models
             PunishesPopularGuesses = punishesPopularGuesses;
             ProtectsAccountsWithPopularPasswords = protectsAccountsWithPopularPasswords;
         }
+    }
+
+
+    public class SimulationConditionData
+    {
+        public SimulationCondition Condition;
+        public DoubleThatDecaysWithTime Score;
+        public SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos;
+
+        public double GetThresholdAdjustedScore(double popularityOfPassword, bool hasCookieProvingPriorLogin)
+        {
+            double score = Score;
+            if (hasCookieProvingPriorLogin && Condition.RewardsClientCookies)
+                score = 0;
+            else if (Condition.ProtectsAccountsWithPopularPasswords && popularityOfPassword > Condition.Options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
+                score /= Condition.Options.BlockThresholdMultiplierForUnpopularPasswords;
+            return score;
+        }
+
+        public SimulationConditionData(SimulationCondition condition)
+        {
+            Condition = condition;   
+            Score = new DoubleThatDecaysWithTime(Condition.Options.BlockScoreHalfLife);
+            RecentPotentialTypos = !Condition.FixesTypos ? null:
+                new SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(
+                    Condition.Options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
+
+        }
 
         public void AdjustScoreForPastTyposTreatedAsFullFailures(
-            SimulationCondition condition,
             ref ECDiffieHellmanCng ecPrivateAccountLogKey,
             UserAccount account,
             DateTime whenUtc,
             string correctPassword, 
             byte[] phase1HashOfCorrectPassword)
         {
-            if (condition.RecentPotentialTypos == null || condition.FixesTypos == false)
+            if (RecentPotentialTypos == null || Condition.FixesTypos == false)
                 return;
-            LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = condition.RecentPotentialTypos.ToArray();
+            LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = RecentPotentialTypos.LeastRecentFirst.ToArray();
             double credit = 0;
             foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
             {
@@ -98,7 +115,7 @@ namespace StopGuessing.Models
 
                     // Use an edit distance calculation to determine if it was a likely typo
                     bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
-                                        _options.MaxEditDistanceConsideredATypo;
+                                        Condition.Options.MaxEditDistanceConsideredATypo;
 
                     // Update the outcome based on this information.
                     AuthenticationOutcome newOutocme = likelyTypo
@@ -106,7 +123,7 @@ namespace StopGuessing.Models
                         : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
 
                     // Add this to the list of changed attempts
-                    credit += potentialTypo.Penalty.GetValue(whenUtc) * (1d - _options.PenaltyMulitiplierForTypo);
+                    credit += potentialTypo.Penalty.GetValue(whenUtc) * (1d - Condition.Options.PenaltyMulitiplierForTypo);
 
                     // FUTURE -- find and update the login attempt in the background
 
@@ -118,7 +135,7 @@ namespace StopGuessing.Models
                     // as if nothing ever happened.  No.  Really.  Nothing to see here.
                 }
 
-                condition.RecentPotentialTypos.Remove(potentialTypo);
+                RecentPotentialTypos.Remove(potentialTypo);
             }
             Score.Add(-credit, whenUtc);
             return;
@@ -151,7 +168,7 @@ namespace StopGuessing.Models
 
         public DoubleThatDecaysWithTime CurrentBlockScore;
 #if Simulation
-        public List<SimulationCondition> SimulationConditions = new List<SimulationCondition>();
+        public SimulationConditionData[] SimulationConditions;
 #endif
 
 
@@ -162,14 +179,9 @@ namespace StopGuessing.Models
             Address = address;
             CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
 #if Simulation
-            SimulationConditions.Add(new SimulationCondition(options, "Baseline", false, false, false, false, false, false, false));
-            SimulationConditions.Add(new SimulationCondition(options, "NoRepeats", true, false, false, false, false, false, false));
-            SimulationConditions.Add(new SimulationCondition(options, "Cookies", true, true, false, false, false, false, false));
-            SimulationConditions.Add(new SimulationCondition(options, "Credits", true, true, true, false, false, false, false));
-            SimulationConditions.Add(new SimulationCondition(options, "Alpha", true, true, true, true, false, false, false));
-            SimulationConditions.Add(new SimulationCondition(options, "Typos", true, true, true, true, true, false, false));
-            SimulationConditions.Add(new SimulationCondition(options, "PopularThreshold", true, true, true, true, true, true, false));
-            SimulationConditions.Add(new SimulationCondition(options, "PunishPopularGuesses", true, true, true, true, true, true, true));
+            SimulationConditions = new SimulationConditionData[options.Conditions.Length];
+            for (int i=0; i < SimulationConditions.Length; i++)
+                SimulationConditions[i] = new SimulationConditionData(options.Conditions[i]);
 #endif
             RecentPotentialTypos =
                 new CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);

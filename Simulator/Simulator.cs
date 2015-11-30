@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -33,7 +34,7 @@ namespace Simulator
 
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
         public LoginAttemptController MyLoginAttemptController;
-        public LoginAttemptClient MyLoginAttemptClient;
+        //public LoginAttemptClient MyLoginAttemptClient;
         public IUserAccountContextFactory MyAccountContextFactory;
         //public LimitPerTimePeriod[] CreditLimits;
         //public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
@@ -49,6 +50,7 @@ namespace Simulator
             void SetParameter(ExperimentalConfiguration config, int parameterIndex);
             string GetParameterString(int parameterIndex);
         }
+
 
         public class ParameterSweeper<T> : IParameterSweeper
         {
@@ -78,6 +80,39 @@ namespace Simulator
                 return "NaN";
             else
                 return (((double)numerator)/(double)denominmator).ToString(CultureInfo.InvariantCulture);
+        }
+
+        private StreamWriter _errorWriter;
+        private DateTime whenStarted = DateTime.UtcNow;
+        private long lastMemory = 0;
+        private DateTime lastEventTime;
+        public void WriteStatus(string status, params Object[] args)
+        {
+            DateTime now = DateTime.UtcNow;
+            TimeSpan eventTime = now - whenStarted;
+            TimeSpan sinceLastEvent = now - lastEventTime;
+            long eventMemory = GC.GetTotalMemory(false);
+            long memDiff = eventMemory - lastMemory;
+            long eventMemoryMB = eventMemory/(1024L*1024L);
+            long memDiffMB = memDiff/(1024L*1024L);
+            lastMemory = eventMemory;
+            lastEventTime = now;
+            Console.Out.WriteLine("Time: {0:00}:{1:00}:{2:00}.{3:000} seconds ({4:0.000}),  Memory: {5}MB (increased by {6}MB)",
+                eventTime.Hours,
+                eventTime.Minutes,
+                eventTime.Seconds,
+                eventTime.Milliseconds,
+                sinceLastEvent.TotalSeconds,
+                eventMemoryMB, memDiffMB);
+            Console.Out.WriteLine(status, args);
+            _errorWriter.WriteLine("Time: {0:00}:{1:00}:{2:00}.{3:000} seconds ({4:0.000}),  Memory: {5}MB (increased by {6}MB)",
+                eventTime.Hours,
+                eventTime.Minutes,
+                eventTime.Seconds,
+                eventTime.Milliseconds,
+                sinceLastEvent.Milliseconds,
+                eventMemoryMB, memDiffMB);
+            _errorWriter.WriteLine(status, args);
         }
 
         public static async Task RunExperimentalSweep(
@@ -126,7 +161,7 @@ namespace Simulator
                 StreamWriter errorWriter = new StreamWriter(path + ".error.txt");
                 try
                 {
-                    Simulator simulator = new Simulator(config, passwordSelector);
+                    Simulator simulator = new Simulator(errorWriter,config, passwordSelector);
                     await simulator.PrimeWithKnownPasswordsAsync(passwordsAlreadyKnownToBePopular);
                     await simulator.Run(dataWriter);
                 }
@@ -144,9 +179,10 @@ namespace Simulator
             }
         }
 
-
-        public Simulator(ExperimentalConfiguration myExperimentalConfiguration, WeightedSelector<string> passwordSelector)
+        public Simulator(StreamWriter errorWriter, ExperimentalConfiguration myExperimentalConfiguration, WeightedSelector<string> passwordSelector)
         {
+            _errorWriter = errorWriter;
+            WriteStatus("Entered Simulator constructor");
             MyExperimentalConfiguration = myExperimentalConfiguration;
             BlockingAlgorithmOptions options = MyExperimentalConfiguration.BlockingOptions;
             PasswordSelector = passwordSelector;
@@ -162,11 +198,13 @@ namespace Simulator
             //    new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
             //};
             //We are testing with local server now
+            WriteStatus("Creating responsible hosts");
             MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             //configuration.MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
             RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
             MyResponsibleHosts.Add("localhost", localHost);
 
+            WriteStatus("Creating binomial ladder");
             BinomialLadderSketch localPasswordBinomialLadderSketch =
                 new BinomialLadderSketch(1024 * 1024 * 1024, options.NumberOfRungsInBinomialLadder);
             MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
@@ -174,9 +212,10 @@ namespace Simulator
                     options.NumberOfPopularityMeasurementPeriods,
                     options.LengthOfShortestPopularityMeasurementPeriod,
                     options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
+            WriteStatus("Finished creating binomial ladder");
 
-            MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts, localHost);
-            
+            //MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts, localHost);
+
             MyAccountContextFactory = new MemoryOnlyAccountContextFactory();
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
@@ -184,7 +223,10 @@ namespace Simulator
                 MyAccountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
                 memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions);
 
-            MyLoginAttemptClient.SetLocalLoginAttemptController(MyLoginAttemptController);
+            WriteStatus("Creating login attempt controller");
+            //MyLoginAttemptClient.SetLocalLoginAttemptController(MyLoginAttemptController);
+            WriteStatus("Finished creating login attempt controller");
+            WriteStatus("Exiting Simulator constructor");
         }
 
 
@@ -195,6 +237,7 @@ namespace Simulator
         public async Task Run(StreamWriter outcomeWriter,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            WriteStatus("In Run");
             //1.Create account from Rockyou 
             //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
 
@@ -202,21 +245,34 @@ namespace Simulator
 
             GenerateSimulatedAccounts();
 
-            List<SimulatedAccount> allAccounts = new List<SimulatedAccount>(BenignAccounts);
-            allAccounts.AddRange(MaliciousAccounts);
-            await TaskParalllel.ForEach(allAccounts,
-                async simAccount =>
+            WriteStatus("Creating user accounts for each simluated account record");
+            List<SimulatedAccount> allSimAccounts = new List<SimulatedAccount>(BenignAccounts);
+            allSimAccounts.AddRange(MaliciousAccounts);
+            ConcurrentBag<UserAccount> userAccounts = new ConcurrentBag<UserAccount>();
+            await TaskParalllel.ForEach(allSimAccounts,
+                simAccount =>
                 {
                     UserAccount account = UserAccount.Create(simAccount.UniqueId,
+                        MyExperimentalConfiguration.BlockingOptions.Conditions.Length,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimit,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
                         simAccount.Password, "PBKDF2_SHA256", 1);
                     foreach (string cookie in simAccount.Cookies)
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
                             LoginAttempt.HashCookie(cookie));
+                    userAccounts.Add(account);
+                }, cancellationToken: cancellationToken);
+            WriteStatus("Finished creating user accounts for each simluated account record");
+
+
+            WriteStatus("Performing a PUT on each account");
+            await TaskParalllel.ForEach(userAccounts,
+                async account =>
+                {
                     await MyAccountContextFactory.Get().WriteNewAsync(account, cancellationToken: cancellationToken);
                 }, cancellationToken: cancellationToken);
-        
+            WriteStatus("Done performing a PUT on each account");
+
 
             outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                 "IsPasswordCorrect",
@@ -233,8 +289,10 @@ namespace Simulator
             Stopwatch sw = new Stopwatch();
             sw.Start();
             
-            await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async () =>
+            await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (count) =>
             {
+                if (count % 10000 == 0)
+                    WriteStatus("Login Attempt {0:N0}", count);
                 SimulatedLoginAttempt simAttempt;
                 if (StrongRandomNumberGenerator.GetFraction() <
                     MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
