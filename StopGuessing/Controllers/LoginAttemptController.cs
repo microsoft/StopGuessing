@@ -323,8 +323,8 @@ namespace StopGuessing.Controllers
             LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = clientsIpHistory.RecentPotentialTypos.ToArray();
             ECDiffieHellmanCng ecPrivateAccountLogKey = null;
 #if Simulation
-            foreach (SimulationCondition cond in clientsIpHistory.SimulationConditions)
-                cond.AdjustScoreForPastTyposTreatedAsFullFailures(cond, ref ecPrivateAccountLogKey, account,
+            foreach (SimulationConditionData cond in clientsIpHistory.SimulationConditions)
+                cond.AdjustScoreForPastTyposTreatedAsFullFailures(ref ecPrivateAccountLogKey, account,
                     whenUtc, correctPassword, phase1HashOfCorrectPassword);
 #endif
             foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
@@ -448,16 +448,16 @@ namespace StopGuessing.Controllers
         }
 
 
-        protected void SimUpdateBlockScores(IEnumerable<SimulationCondition> conditions, LoginAttempt loginAttempt, UserAccount account,
+        protected void SimUpdateBlockScores(IEnumerable<SimulationConditionData> conditions, LoginAttempt loginAttempt, UserAccount account,
             ref bool accountChanged)
         {
-            foreach (SimulationCondition condition in conditions)
+            foreach (SimulationConditionData condition in conditions)
             {
                 SimUpdateBlockScore(condition,loginAttempt,account,ref accountChanged);
             }
         }
 
-        protected void SimUpdateBlockScore(SimulationCondition condition, LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
+        protected void SimUpdateBlockScore(SimulationConditionData cond, LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
         {
             double passwordsPopularityAmongGuesses = loginAttempt.PasswordsPopularityAmongFailedGuesses;
             double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses); ;
@@ -467,33 +467,33 @@ namespace StopGuessing.Controllers
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
                 {
                     if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount &&
-                        condition.IgnoresRepeats)
+                        cond.Condition.IgnoresRepeats)
                         return;
-                    double penalty = condition.UsesAlphaForAccountFailures
+                    double penalty = cond.Condition.UsesAlphaForAccountFailures
                         ? _options.PenaltyForInvalidAccount_Alpha
                         : _options.PenaltyForInvalidPassword_Beta;
-                    if (condition.PunishesPopularGuesses)
+                    if (cond.Condition.PunishesPopularGuesses)
                         penalty *= popularityMultiplier;
-                    condition.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
+                    cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 }
                 case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                 {
                     if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword &&
-                        condition.IgnoresRepeats)
+                        cond.Condition.IgnoresRepeats)
                         return;
                     double penalty = _options.PenaltyForInvalidPassword_Beta;
-                    if (condition.PunishesPopularGuesses)
+                    if (cond.Condition.PunishesPopularGuesses)
                         penalty *= popularityMultiplier;
-                    condition.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
-                    if (account != null && condition.RecentPotentialTypos != null)
+                    cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
+                    if (account != null && cond.RecentPotentialTypos != null)
                     {
-                        condition.RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
+                        cond.RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
                         {
                             EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
                             Penalty = new DoubleThatDecaysWithTime(
-                                condition.Score.HalfLife,
+                                cond.Score.HalfLife,
                                 penalty,
                                 loginAttempt.TimeOfAttemptUtc),
                             UsernameOrAccountId = loginAttempt.UsernameOrAccountId
@@ -502,13 +502,13 @@ namespace StopGuessing.Controllers
                     return;
                 }
                 case AuthenticationOutcome.CredentialsValid:                    
-                    if (condition.Score > 0)
+                    if (cond.Score > 0)
                     {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, condition.Score);
-                        double credit = account.TryGetCreditForSimulation(condition.Name, desiredCredit);
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, cond.Score);
+                        double credit = account.TryGetCreditForSimulation(cond.Condition.Index, desiredCredit);
                         if (credit > 0)
                             accountChanged = true;
-                        condition.Score.Add(-credit, loginAttempt.TimeOfAttemptUtc);
+                        cond.Score.Add(-credit, loginAttempt.TimeOfAttemptUtc);
                     }
                     return;
                 default:

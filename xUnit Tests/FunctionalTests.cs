@@ -67,6 +67,7 @@ namespace xUnit_Tests
         public async static Task<UserAccount> CreateTestAccountAsync(TestConfiguration configuration, string usernameOrAccountId, string password)
         {
             UserAccount account = UserAccount.Create(usernameOrAccountId,
+              configuration.MyBlockingAlgorithmOptions.Conditions.Length,
               configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
               configuration.MyBlockingAlgorithmOptions.BlockScoreHalfLife,
               password,
@@ -171,9 +172,9 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithIpWithBadReputationAsync()
         {
-            //BlockingAlgorithmOptions options = new BlockingAlgorithmOptions();
-            //options.BlockThresholdMultiplierForUnpopularPasswords = 1d;
-            //TestConfiguration configuration = InitTest(options);
+            //BlockingAlgorithmOptions Options = new BlockingAlgorithmOptions();
+            //Options.BlockThresholdMultiplierForUnpopularPasswords = 1d;
+            //TestConfiguration configuration = InitTest(Options);
             TestConfiguration configuration = InitTest();
             string[] usernames = CreateUserAccounts(configuration, 200);
             await CreateTestAccountAsync(configuration, Username1, Password1);

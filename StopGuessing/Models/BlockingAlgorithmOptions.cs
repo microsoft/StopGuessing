@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define Simulation
+using System;
 using System.Collections.Generic;
 using StopGuessing.EncryptionPrimitives;
 
@@ -68,6 +69,9 @@ namespace StopGuessing.Models
             new PenaltyForReachingAPopularityThreshold { PopularityThreshold = 1d/(100d), Penalty = 30},
         };
 
+#if Simulation
+        public SimulationCondition[] Conditions;
+#endif
 
     }
 }

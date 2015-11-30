@@ -55,14 +55,14 @@ namespace StopGuessing.Models
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
         /// that have successfully logged into this account.
         /// </summary>
-        public CapacityConstrainedSet<string> HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
+        public SmallCapacityConstrainedSet<string> HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
 
         ///// <summary>
         ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 
         ///// </summary>
         //public Sequence<LoginAttempt> PasswordVerificationFailures { get; set; }
 
-        public CapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
+        public SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
 
         /// <summary>
         /// The account's credit limit for offsetting penalties for IP addresses from which
@@ -77,7 +77,7 @@ namespace StopGuessing.Models
         public DoubleThatDecaysWithTime ConsumedCredits { get; set; }
 
 #if Simulation
-        public Dictionary<string,DoubleThatDecaysWithTime> ConsumedCreditsForSimulation = new Dictionary<string, DoubleThatDecaysWithTime>();
+        public DoubleThatDecaysWithTime[] ConsumedCreditsForSimulation;
 #endif
 
         ///// <summary>
@@ -287,16 +287,13 @@ namespace StopGuessing.Models
         }
 
 #if Simulation
-        public double TryGetCreditForSimulation(string simulationName, double amountRequested)
+        public double TryGetCreditForSimulation(int simulationIndex, double amountRequested)
         {
             lock (ConsumedCreditsForSimulation)
             {
-                if (!ConsumedCreditsForSimulation.ContainsKey(simulationName))
-                    ConsumedCreditsForSimulation[simulationName] = new DoubleThatDecaysWithTime(ConsumedCredits.HalfLife);
-
-                double amountAvailable = CreditLimit - ConsumedCreditsForSimulation[simulationName];
+                double amountAvailable = CreditLimit - ConsumedCreditsForSimulation[simulationIndex];
                 double amountConsumed = Math.Min(amountRequested, amountAvailable);
-                ConsumedCreditsForSimulation[simulationName].Add(amountConsumed);
+                ConsumedCreditsForSimulation[simulationIndex].Add(amountConsumed);
                 return amountConsumed;
             }
         }
@@ -327,6 +324,9 @@ namespace StopGuessing.Models
         /// <param name="saltLength">If <paramref name="saltUniqueToThisAccount"/>is not specified or null, the constructor will create
         /// a random salt of this length.  If this length is not specified, a default will be used.</param>
         public static UserAccount Create(string usernameOrAccountId,
+#if Simulation
+            int numberOfConditions,
+#endif
             double creditLimit,
             TimeSpan creditHalfLife,
             string password = null,
@@ -349,16 +349,19 @@ namespace StopGuessing.Models
                 UsernameOrAccountId = usernameOrAccountId,
                 SaltUniqueToThisAccount = saltUniqueToThisAccount,
                 HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount =
-                    new CapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
+                    new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
                 //PasswordVerificationFailures =
                 //    new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
-                RecentIncorrectPhase2Hashes = new CapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack),
+                RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack),
                 ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife),
                 CreditLimit = creditLimit,
                 PasswordHashPhase1FunctionName = phase1HashFunctionName,
                 NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash
                 //Password = password
-            };
+#if Simulation
+        , ConsumedCreditsForSimulation = new DoubleThatDecaysWithTime[numberOfConditions]
+#endif
+    };
 
             if (password != null)
             {

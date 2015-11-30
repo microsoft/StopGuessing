@@ -115,6 +115,7 @@ namespace Simulator
         private readonly List<IPAddress> _maliciousIpAddresses = new List<IPAddress>();
         public void GenerateMaliciousIps()
         {
+            WriteStatus("Creating {0} malicious IPs", MyExperimentalConfiguration.NumberOfIpAddressesControlledByAttacker);
             List<IPAddress> listOfIpAddressesInUseByBenignUsers = _ipAddresssesInUseByBenignUsers.ToList();
             uint numberOfOverlappingIps = (uint) 
                 (MyExperimentalConfiguration.NumberOfIpAddressesControlledByAttacker*
@@ -142,6 +143,7 @@ namespace Simulator
                 }
                 _maliciousIpAddresses.Add(address);
             }
+            WriteStatus("Finished reating {0} malicious IPs", MyExperimentalConfiguration.NumberOfIpAddressesControlledByAttacker);
         }
 
 
@@ -184,10 +186,12 @@ namespace Simulator
 
         public async Task PrimeWithKnownPasswordsAsync(IEnumerable<string> knownPopularPasswords)
         {
+            WriteStatus("Started priming with common passwords");
             foreach (string password in knownPopularPasswords)
             {
                 await MyLoginAttemptController.PrimeCommonPasswordAsync(password, 100);
             }
+            WriteStatus("Finished riming with common passwords");
         }
 
         public static WeightedSelector<string> GetPasswordSelector(string PathToWeightedFrequencyFile)
@@ -224,17 +228,25 @@ namespace Simulator
         /// </summary>
         public void GenerateSimulatedAccounts()
         {
+            WriteStatus("Creating common password selector");
             CommonPasswordSelector =
                 PasswordSelector.TrimToInitialItems(
                     (int) MyExperimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
+            WriteStatus("Finished creating common password selector");
+
+            WriteStatus("Creating list of most common passwords");
             OrderedListOfMostCommonPasswords =
                 PasswordSelector.GetItems((int) MyExperimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
+            WriteStatus("Finished creating list of most common passwords");
 
+            WriteStatus("Creating {0:G} benign accounts", MyExperimentalConfiguration.NumberOfBenignAccounts);
             int totalAccounts = 0;
 
             // Generate benign accounts
             for (uint i = 0; i < MyExperimentalConfiguration.NumberOfBenignAccounts; i++)
             {
+                if (i>0 && i % 10000 == 0)
+                    WriteStatus("Created {0:N0} benign accounts", i);
                 SimulatedAccount account = new SimulatedAccount()
                 {
                     UniqueId = (totalAccounts++).ToString(),
@@ -251,11 +263,14 @@ namespace Simulator
                 double frequency = 1/inverseFrequency;
                 BenignAccountSelector.AddItem(account, frequency);
             }
+            WriteStatus("Finished creating {0:N0} benign accounts", MyExperimentalConfiguration.NumberOfBenignAccounts);
 
 
             // Right after creating benign accounts we can create malicious ones. 
             // (we'll needed to wait for the the benign IPs to be generated create some overlap)
             GenerateMaliciousIps();
+
+            WriteStatus("Creating {0} attacker accounts", MyExperimentalConfiguration.NumberOfAttackerControlledAccounts);
 
             // Generate attacker accounts
             for (ulong i = 0; i < MyExperimentalConfiguration.NumberOfAttackerControlledAccounts; i++)
@@ -268,6 +283,7 @@ namespace Simulator
                 account.ClientAddresses.Add(GetRandomMaliciousIp());
                 MaliciousAccounts.Add(account);
             }
+            WriteStatus("Finished creating {0} attacker accounts", MyExperimentalConfiguration.NumberOfAttackerControlledAccounts);
         }
     }
 

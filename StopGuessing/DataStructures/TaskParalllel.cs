@@ -122,7 +122,7 @@ namespace StopGuessing.DataStructures
 
         public static async Task ParallelRepeat(
             ulong numberOfTimesToRepeat,
-            Action actionToRun,
+            Action<ulong> actionToRun,
             Action<Exception> callOnException = null,
             int maxConcurrentTasks = 1000)
         {
@@ -134,7 +134,8 @@ namespace StopGuessing.DataStructures
             // Phase 1 -- start maxConcurrentTasks executing
             while (tasksStarted < (ulong)activeTasks.Length && tasksStarted < numberOfTimesToRepeat)
             {
-                Task startedTask = Task.Run(actionToRun);
+                ulong taskId = tasksStarted;
+                Task startedTask = Task.Run( () => actionToRun(taskId) );
                 activeTasks[tasksStarted] = startedTask;
                 taskToIndex[startedTask] = (int)tasksStarted;
                 tasksStarted++;
@@ -144,6 +145,7 @@ namespace StopGuessing.DataStructures
             //            in our array of active tasks
             while (tasksStarted < numberOfTimesToRepeat)
             {
+                ulong taskId = tasksStarted;
                 // Wait for a task to complete
                 Task completedTask = await Task.WhenAny(activeTasks.ToArray());
                 int indexOfTaskToReplace = taskToIndex[completedTask];
@@ -167,7 +169,7 @@ namespace StopGuessing.DataStructures
                 if (callExceptionHandler)
                     replacementTask = Task.Run(() => callOnException(completedTask.Exception));
                 else
-                    replacementTask = Task.Run(actionToRun);
+                    replacementTask = Task.Run(() => actionToRun(taskId));
                 // Track exception handling tasks so that we can make sure we don't call the exception handler
                 // on a failed exception handler.
                 if (callExceptionHandler)
