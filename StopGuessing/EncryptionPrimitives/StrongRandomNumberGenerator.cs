@@ -21,13 +21,13 @@ namespace StopGuessing.EncryptionPrimitives
                 FIXME_memoryLeakHack = 0;
                 RNGCryptoServiceProvider toDispose = LocalRandomNumberGenerator;
                 LocalRandomNumberGenerator = new RNGCryptoServiceProvider();
+                toDispose.Dispose();
             }
             LocalRandomNumberGenerator.GetBytes(bytes);
         }
 
         public static ulong Get64Bits(ulong? mod = null)
         {
-            // We'll need the randomness to determine which bit to set and which to clear 
             byte[] randBytes = new byte[8];
             GetBytes(randBytes);
 

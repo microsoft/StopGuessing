@@ -34,8 +34,9 @@ namespace PostSimulationAnalysis
             UserID = fields[field++];
             Password = fields[field++];
             scoreForEachCondition = new double[fields.Length - field];
+            int condition = 0;
             for (;field < fields.Length;field++)
-                double.TryParse(fields[field], out scoreForEachCondition[field]);
+                double.TryParse(fields[field], out scoreForEachCondition[condition++]);
         }
 
         public double GetScoreForCondition(int condition)
