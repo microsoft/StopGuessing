@@ -110,7 +110,7 @@ namespace Simulator
                 eventTime.Minutes,
                 eventTime.Seconds,
                 eventTime.Milliseconds,
-                sinceLastEvent.Milliseconds,
+                sinceLastEvent.TotalSeconds,
                 eventMemoryMB, memDiffMB);
             _errorWriter.WriteLine(status, args);
             _errorWriter.Flush();
