@@ -337,7 +337,7 @@ namespace Simulator
                 }                
             },
             (e) => {
-            });
+            }, cancellationToken: cancellationToken);
             
         }
     }
