@@ -291,11 +291,15 @@ namespace Simulator
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
+            DateTime startTimeUtc = new DateTime(2016,01,01,0,0,0, DateTimeKind.Utc);
+            TimeSpan testTimeSpan = MyExperimentalConfiguration.TestTimeSpan;
+            double ticksBetweenLogins = ((double)testTimeSpan.Ticks)/(double)MyExperimentalConfiguration.TotalLoginAttemptsToIssue;
             
             await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (count) =>
             {
                 if (count % 10000 == 0)
                     WriteStatus("Login Attempt {0:N0}", count);
+                DateTime eventTimeUtc = startTimeUtc.AddTicks((long) (ticksBetweenLogins * count));
                 SimulatedLoginAttempt simAttempt;
                 if (StrongRandomNumberGenerator.GetFraction() <
                     MyExperimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
@@ -306,6 +310,7 @@ namespace Simulator
                 {
                     simAttempt = BenignLoginAttempt();
                 }
+                simAttempt.Attempt.TimeOfAttemptUtc = eventTimeUtc;
 
                 double[] scores = await
                     MyLoginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
