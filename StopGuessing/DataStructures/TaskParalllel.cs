@@ -8,6 +8,69 @@ namespace StopGuessing.DataStructures
 {
     public static class TaskParalllel
     {
+        
+        public static async Task ForEach<T>(
+            IEnumerable<T> items,
+            Action<T, ulong> actionToRun,
+            Action<Exception> callOnException = null,
+            uint waveSize = 500,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            ulong taskIndex = 0;
+            Queue<T> itemQueue = new Queue<T>(items);
+            int firstWaveSize = (int)Math.Min((ulong)waveSize, (ulong)itemQueue.Count);
+            Task[] currentWave = new Task[firstWaveSize];
+            Task[] nextWave = null;
+            
+            // Start first wave
+            for (int i = 0; i < firstWaveSize; i++)
+            {
+                T item = itemQueue.Dequeue();
+                ulong myTaskIndex = taskIndex++;
+                currentWave[i] = Task.Run(() => actionToRun(item, myTaskIndex), cancellationToken);
+            }
+
+            while (currentWave != null)
+            {
+                // Invariant entering this loop: the nextWave has no tasks left to run
+
+                // Fill the next wave
+                if (itemQueue.Count > 0)
+                {
+                    int nextWaveSize = (int)Math.Min((ulong)waveSize, (ulong) itemQueue.Count);
+                    if (nextWave == null || nextWaveSize != nextWave.Length)
+                        nextWave = new Task[nextWaveSize];
+                    for (int i = 0; i < nextWave.Length; i++)
+                    {
+                        T item = itemQueue.Dequeue();
+                        ulong myTaskIndex = taskIndex++;
+                        currentWave[i] = Task.Run(() => actionToRun(item, myTaskIndex), cancellationToken);
+                    }
+                }
+                else
+                {
+                    nextWave = null;
+                }
+
+                // Wait for the current wave to finish
+                await Task.WhenAll(currentWave);
+
+                // Trigger exception handlers for any tasks that resulted in exceptions
+                if (callOnException != null)
+                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
+#pragma warning disable 4014
+                        Task.Run(() => callOnException(exceptionTask.Exception), default(CancellationToken));
+#pragma warning restore 4014
+
+                // The current wave becomes the next wave...
+                Task[] tempWave = currentWave;
+                currentWave = nextWave;
+                // ... and the buffer for what had been the current wave can now be
+                // used for the next wave (if it is the right size)
+                nextWave = tempWave;
+            }
+        }
+
         public static async Task ForEach<T>(
             IEnumerable<T> items,
             Action<T> actionToRun,
@@ -19,7 +82,7 @@ namespace StopGuessing.DataStructures
             int firstWaveSize = (int)Math.Min((ulong)waveSize, (ulong)itemQueue.Count);
             Task[] currentWave = new Task[firstWaveSize];
             Task[] nextWave = null;
-            
+
             // Start first wave
             for (int i = 0; i < firstWaveSize; i++)
             {
@@ -34,7 +97,7 @@ namespace StopGuessing.DataStructures
                 // Fill the next wave
                 if (itemQueue.Count > 0)
                 {
-                    int nextWaveSize = (int)Math.Min((ulong)waveSize, (ulong) itemQueue.Count);
+                    int nextWaveSize = (int)Math.Min((ulong)waveSize, (ulong)itemQueue.Count);
                     if (nextWave == null || nextWaveSize != nextWave.Length)
                         nextWave = new Task[nextWaveSize];
                     for (int i = 0; i < nextWave.Length; i++)
@@ -54,8 +117,9 @@ namespace StopGuessing.DataStructures
                 // Trigger exception handlers for any tasks that resulted in exceptions
                 if (callOnException != null)
                     foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                        await Task.Run(() => callOnException(exceptionTask.Exception));
+#pragma warning disable 4014
+                        Task.Run(() => callOnException(exceptionTask.Exception), default(CancellationToken));
+#pragma warning restore 4014
 
                 // The current wave becomes the next wave...
                 Task[] tempWave = currentWave;
@@ -66,130 +130,135 @@ namespace StopGuessing.DataStructures
             }
         }
 
-//        public static async Task ParallelRepeatUsingWaves(
-//            ulong numberOfTimesToRepeat,
-//            Action actionToRun,
-//            Action<Exception> callOnException = null,
-//            uint waveSize = 500)
-//        {
-//            int firstWaveSize = (int) Math.Min((ulong) waveSize, numberOfTimesToRepeat);
-//            Task[] currentWave = new Task[firstWaveSize];
-//            Task[] nextWave = null;
-
-//            ulong tasksStarted = 0;
-//            // Start first wave
-//            for (int i = 0; i < firstWaveSize; i++)
-//                currentWave[tasksStarted++] = Task.Run(actionToRun);
-
-//            while (currentWave != null)
-//            {
-//                // Invariant entering this loop: the nextWave has no tasks left to run
-
-//                // Fill the next wave
-//                if (tasksStarted < numberOfTimesToRepeat)
-//                {
-//                    int nextWaveSize = (int) Math.Min((ulong) waveSize, numberOfTimesToRepeat - tasksStarted);
-//                    if (nextWave == null || nextWaveSize != nextWave.Length)
-//                        nextWave = new Task[nextWaveSize];
-//                    for (int i = 0; i < nextWaveSize; i++)
-//                    {
-//                        currentWave[i] = Task.Run(actionToRun);
-//                        tasksStarted++;
-//                    }
-//                }
-//                else
-//                {
-//                    nextWave = null;
-//                }
-
-//                // Wait for the current wave to finish
-//                await Task.WhenAll(currentWave);
-
-//                // Trigger exception handlers for any tasks that resulted in exceptions
-//                if (callOnException != null)
-//                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
-//#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-//                        Task.Run(() => callOnException(exceptionTask.Exception));
-
-//                // The next wave becomes the current wave...
-//                Task[] tempWave = currentWave;
-//                nextWave = currentWave;
-//                // ... and the buffer for what had been the current wave can now be
-//                // used for the next wave (if it is the right size)
-//                currentWave = nextWave;
-//            }
-//        }
-
         public static async Task ParallelRepeat(
             ulong numberOfTimesToRepeat,
             Action<ulong> actionToRun,
             Action<Exception> callOnException = null,
-            int maxConcurrentTasks = 1000)
+            uint waveSize = 1000,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
-            Task[] activeTasks = new Task[(int) Math.Min((ulong)maxConcurrentTasks, numberOfTimesToRepeat)];
-            Dictionary<Task, int> taskToIndex = new Dictionary<Task, int>();
-            HashSet<Task> exceptionHandlingTasks = new HashSet<Task>();
+            ulong taskIndex = 0;
+            int firstWaveSize = (int)Math.Min((ulong)waveSize, numberOfTimesToRepeat);
+            Task[] currentWave = new Task[firstWaveSize];
+            Task[] nextWave = null;
 
-            ulong tasksStarted = 0;
-            // Phase 1 -- start maxConcurrentTasks executing
-            while (tasksStarted < (ulong)activeTasks.Length && tasksStarted < numberOfTimesToRepeat)
+            // Start first wave
+            for (int i = 0; i < firstWaveSize; i++)
             {
-                ulong taskId = tasksStarted;
-                Task startedTask = Task.Run( () => actionToRun(taskId) );
-                activeTasks[tasksStarted] = startedTask;
-                taskToIndex[startedTask] = (int)tasksStarted;
-                tasksStarted++;
+                ulong myTaskIndex = taskIndex++;
+                currentWave[i] = Task.Run(() => actionToRun(myTaskIndex), cancellationToken);
             }
 
-            // Phase 2 -- A stable stat in which there are always the maximum number of tasks
-            //            in our array of active tasks
-            while (tasksStarted < numberOfTimesToRepeat)
+            while (currentWave != null)
             {
-                ulong taskId = tasksStarted;
-                // Wait for a task to complete
-                Task completedTask = await Task.WhenAny(activeTasks.ToArray());
-                int indexOfTaskToReplace = taskToIndex[completedTask];
-                // Replace the task that completed with a new task...
-                // If there was an exception, the replacement should be a task to handle
-                // that exception.  Otherwise, it should be the next work item.
-                bool callExceptionHandler = false;
-                if (callOnException != null)
+                // Invariant entering this loop: the nextWave has no tasks left to run
+
+                // Fill the next wave
+                if (taskIndex < numberOfTimesToRepeat)
                 {
-                    bool completedTaskWasExceptionHandler = exceptionHandlingTasks.Contains(completedTask);
-                    // We'll want to run a task with the caller's exception handler...
-                    callExceptionHandler = completedTask.IsFaulted;
-                    if (completedTaskWasExceptionHandler)
+                    int nextWaveSize = (int)Math.Min((ulong)waveSize, numberOfTimesToRepeat-taskIndex);
+                    if (nextWave == null || nextWaveSize != nextWave.Length)
+                        nextWave = new Task[nextWaveSize];
+                    for (int i = 0; i < nextWave.Length; i++)
                     {
-                        // unless it was the caller's exception handler that faulted
-                        exceptionHandlingTasks.Remove(completedTask);
-                        callExceptionHandler = false;
+                        ulong myTaskIndex = taskIndex++;
+                        currentWave[i] = Task.Run(() => actionToRun(myTaskIndex), cancellationToken);
                     }
                 }
-                Task replacementTask;
-                if (callExceptionHandler)
-                    replacementTask = Task.Run(() => callOnException(completedTask.Exception));
                 else
-                    replacementTask = Task.Run(() => actionToRun(taskId));
-                // Track exception handling tasks so that we can make sure we don't call the exception handler
-                // on a failed exception handler.
-                if (callExceptionHandler)
-                    exceptionHandlingTasks.Add(replacementTask);
-                // Put the replacement task at the same index in the array as the prior task
-                activeTasks[indexOfTaskToReplace] = replacementTask;
-                taskToIndex.Remove(completedTask);
-                taskToIndex[replacementTask] = indexOfTaskToReplace;
-                tasksStarted++;
-            }
+                {
+                    nextWave = null;
+                }
 
-            // Phase 3 -- A final phase in which we empty out exceptions
-            await Task.WhenAll(activeTasks);
-            if (callOnException != null)
-            {
-                foreach (Task exceptionTask in activeTasks.Where(t => t.IsFaulted))
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                    Task.Run(() => callOnException(exceptionTask.Exception));
+                // Wait for the current wave to finish
+                await Task.WhenAll(currentWave);
+
+                // Trigger exception handlers for any tasks that resulted in exceptions
+                if (callOnException != null)
+                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
+#pragma warning disable 4014
+                        Task.Run(() => callOnException(exceptionTask.Exception), default(CancellationToken));
+#pragma warning restore 4014
+
+                // The current wave becomes the next wave...
+                Task[] tempWave = currentWave;
+                currentWave = nextWave;
+                // ... and the buffer for what had been the current wave can now be
+                // used for the next wave (if it is the right size)
+                nextWave = tempWave;
             }
         }
+
+//        public static async Task ParallelRepeat(
+//            ulong numberOfTimesToRepeat,
+//            Action<ulong> actionToRun,
+//            Action<Exception> callOnException = null,
+//            int maxConcurrentTasks = 1000)
+//        {
+//            Task[] activeTasks = new Task[(int) Math.Min((ulong)maxConcurrentTasks, numberOfTimesToRepeat)];
+//            Dictionary<Task, int> taskToIndex = new Dictionary<Task, int>();
+//            HashSet<Task> exceptionHandlingTasks = new HashSet<Task>();
+
+//            ulong tasksStarted = 0;
+//            // Phase 1 -- start maxConcurrentTasks executing
+//            while (tasksStarted < (ulong)activeTasks.Length && tasksStarted < numberOfTimesToRepeat)
+//            {
+//                ulong taskId = tasksStarted;
+//                Task startedTask = Task.Run( () => actionToRun(taskId) );
+//                activeTasks[tasksStarted] = startedTask;
+//                taskToIndex[startedTask] = (int)tasksStarted;
+//                tasksStarted++;
+//            }
+
+//            // Phase 2 -- A stable stat in which there are always the maximum number of tasks
+//            //            in our array of active tasks
+//            while (tasksStarted < numberOfTimesToRepeat)
+//            {
+//                ulong taskId = tasksStarted;
+//                // Wait for a task to complete
+//                Task completedTask = await Task.WhenAny(activeTasks.ToArray());
+//                int indexOfTaskToReplace = taskToIndex[completedTask];
+//                // Replace the task that completed with a new task...
+//                // If there was an exception, the replacement should be a task to handle
+//                // that exception.  Otherwise, it should be the next work item.
+//                bool callExceptionHandler = false;
+//                if (callOnException != null)
+//                {
+//                    bool completedTaskWasExceptionHandler = exceptionHandlingTasks.Contains(completedTask);
+//                    // We'll want to run a task with the caller's exception handler...
+//                    callExceptionHandler = completedTask.IsFaulted;
+//                    if (completedTaskWasExceptionHandler)
+//                    {
+//                        // unless it was the caller's exception handler that faulted
+//                        exceptionHandlingTasks.Remove(completedTask);
+//                        callExceptionHandler = false;
+//                    }
+//                }
+//                Task replacementTask;
+//                if (callExceptionHandler)
+//                    replacementTask = Task.Run(() => callOnException(completedTask.Exception));
+//                else
+//                    replacementTask = Task.Run(() => actionToRun(taskId));
+//                // Track exception handling tasks so that we can make sure we don't call the exception handler
+//                // on a failed exception handler.
+//                if (callExceptionHandler)
+//                    exceptionHandlingTasks.Add(replacementTask);
+//                // Put the replacement task at the same index in the array as the prior task
+//                activeTasks[indexOfTaskToReplace] = replacementTask;
+//                taskToIndex.Remove(completedTask);
+//                taskToIndex[replacementTask] = indexOfTaskToReplace;
+//                tasksStarted++;
+//            }
+
+//            // Phase 3 -- A final phase in which we empty out exceptions
+//            await Task.WhenAll(activeTasks);
+//            if (callOnException != null)
+//            {
+//                foreach (Task exceptionTask in activeTasks.Where(t => t.IsFaulted))
+//#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+//                    Task.Run(() => callOnException(exceptionTask.Exception));
+//            }
+//        }
 
 
 
