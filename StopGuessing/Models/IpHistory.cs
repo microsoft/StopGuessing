@@ -57,7 +57,7 @@ namespace StopGuessing.Models
             double score = Score;
             if (hasCookieProvingPriorLogin && Condition.RewardsClientCookies)
                 score = 0;
-            else if (Condition.ProtectsAccountsWithPopularPasswords && popularityOfPassword > Condition.Options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
+            else if (Condition.ProtectsAccountsWithPopularPasswords && popularityOfPassword < Condition.Options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
                 score /= Condition.Options.BlockThresholdMultiplierForUnpopularPasswords;
             return score;
         }

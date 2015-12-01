@@ -113,6 +113,7 @@ namespace Simulator
                 sinceLastEvent.Milliseconds,
                 eventMemoryMB, memDiffMB);
             _errorWriter.WriteLine(status, args);
+            _errorWriter.Flush();
         }
 
         public static async Task RunExperimentalSweep(
@@ -143,6 +144,8 @@ namespace Simulator
 
                 // Next set the parameters for this test in the swwep
                 string path = dirName +  (parameterSweeps == null ? "" : ("\\Expermient" + testIndex.ToString()) );
+                Directory.CreateDirectory(path);
+                path += @"\";
                 int parameterIndexer = testIndex;
                 if (parameterSweeps != null)
                 {
@@ -157,8 +160,8 @@ namespace Simulator
                 }
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
-                StreamWriter dataWriter = new StreamWriter(path + ".txt");
-                StreamWriter errorWriter = new StreamWriter(path + ".error.txt");
+                StreamWriter dataWriter = new StreamWriter(path + "data.txt");
+                StreamWriter errorWriter = new StreamWriter(path + "error.txt");
                 try
                 {
                     Simulator simulator = new Simulator(errorWriter,config, passwordSelector);
