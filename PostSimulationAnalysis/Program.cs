@@ -112,8 +112,8 @@ namespace PostSimulationAnalysis
 
         public void Main(string[] args)
         {
-            List<Trial> trials = LoadData("testinput.txt");
-            string path = "PointsFor_";
+            string path = @"C:\Users\stus\Documents\GitHubVisualStudio\Experiment_11_30_16_57\";
+            List<Trial> trials = LoadData(path + "data.txt");
 
             List<Trial> trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToList();
             List<Trial> trialsUsersCorrectPassword = trialsWithCorrectPassword.Where(t => !t.IsFromAttacker || !t.IsAGuess).ToList();
@@ -122,7 +122,7 @@ namespace PostSimulationAnalysis
             
             for (int conditionNumber = 0; conditionNumber < numConditions; conditionNumber++)
             {
-                using (StreamWriter writer = new StreamWriter(path + conditionNumber.ToString() + ".csv"))
+                using (StreamWriter writer = new StreamWriter(path + "PointsFor_" + conditionNumber.ToString() + ".csv"))
                 {
                     writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                         "False +",

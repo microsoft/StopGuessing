@@ -50,7 +50,7 @@ namespace Simulator
                 // Additional sources of false positives/negatives
                 config.FractionOfBenignIPsBehindProxies = 0.1d;
                 config.ProxySizeInUniqueClientIPs = 1000;
-                config.FractionOfMaliciousIPsToOverlapWithBenign = 0d; // 0.1;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.01d; // 0.1;
 
                 //config.BlockingOptions.NumberOfSuccessesToTrackPerIp = 15;
                 //config.BlockingOptions.NumberOfFailuresToTrackPerIp = 50;
@@ -70,7 +70,7 @@ namespace Simulator
                         false),
                     new SimulationCondition(config.BlockingOptions, 6, "PopularThreshold", true, true, true, true, true,
                         true, false),
-                    new SimulationCondition(config.BlockingOptions, 6, "PunishPopularGuesses", true, true, true, true,
+                    new SimulationCondition(config.BlockingOptions, 7, "PunishPopularGuesses", true, true, true, true,
                         true, true, true)
                 };
                 
