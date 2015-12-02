@@ -40,8 +40,8 @@ namespace StopGuessing.Models
         public  uint FactorOfGrowthBetweenPopularityMeasurementPeriods = 10;
         public  int NumberOfPopularityMeasurementPeriods = 4;
 
-        public string DefaultExpensiveHashingFunction = ExpensiveHashFunctionFactory.DefaultFunctionName;
-        public int DefaultExpensiveHashingFunctionIterations = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
+        public string DefaultExpensiveHashingFunction { get; set; } = ExpensiveHashFunctionFactory.DefaultFunctionName;
+        public int ExpensiveHashingFunctionIterations { get; set; } = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
 
         public double AccountCreditLimit { get; set; } = 50d;
         public TimeSpan AccountCreditLimitHalfLife = new TimeSpan(12,0,0); // 12 hours

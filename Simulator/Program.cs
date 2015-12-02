@@ -54,6 +54,7 @@ namespace Simulator
 
                 //config.BlockingOptions.NumberOfSuccessesToTrackPerIp = 15;
                 //config.BlockingOptions.NumberOfFailuresToTrackPerIp = 50;
+                config.BlockingOptions.ExpensiveHashingFunctionIterations = 1;
                 config.BlockingOptions.Conditions = new[]
                 {
                     new SimulationCondition(config.BlockingOptions, 0, "Baseline", false, false, false, false, false,

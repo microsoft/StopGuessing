@@ -259,7 +259,9 @@ namespace Simulator
                         MyExperimentalConfiguration.BlockingOptions.Conditions.Length,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimit,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
-                        simAccount.Password, "PBKDF2_SHA256", 1);
+                        simAccount.Password,                 
+                        "PBKDF2_SHA256",
+                        MyExperimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations);
                     foreach (string cookie in simAccount.Cookies)
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
                             LoginAttempt.HashCookie(cookie));

@@ -98,10 +98,10 @@ namespace StopGuessing.DataStructures
         /// In-place addition
         /// </summary>
         /// <param name="amountToAdd">The amount to add</param>
-        /// <param name="timeOfAddUtc">When to add it, in UTC time (if NULL, sets it to the current clock time)</param>
-        public void Add(double amountToAdd, DateTime? timeOfAddUtc = null)
+        /// <param name="timeOfEventUtc">When to add it, in UTC time (if NULL, sets it to the current clock time)</param>
+        public void Add(double amountToAdd, DateTime? timeOfEventUtc = null)
         {
-            SetValue(Value + amountToAdd, timeOfAddUtc);
+            SetValue(GetValue(timeOfEventUtc) + amountToAdd, timeOfEventUtc);
         }
 
         /// <summary>
@@ -117,9 +117,10 @@ namespace StopGuessing.DataStructures
         /// In place subtraction
         /// </summary>
         /// <param name="amountToSubtract">The amount to subtract</param>
-        public void Subtract(double amountToSubtract)
+        /// <param name="timeOfEventUtc">When to subtract it, in UTC time (if NULL, sets it to the current clock time)</param>
+        public void Subtract(double amountToSubtract, DateTime? timeOfEventUtc = null)
         {
-            Value -= amountToSubtract;
+            SetValue(GetValue(timeOfEventUtc) - amountToSubtract, timeOfEventUtc);
         }
 
 
