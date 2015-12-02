@@ -35,7 +35,11 @@ namespace StopGuessing.Controllers
     }
 
     [Route("api/[controller]")]
-    public class LoginAttemptController : Controller, ILoginAttemptController
+    public class LoginAttemptController :
+#if !Simulation
+        Controller, 
+#endif
+        ILoginAttemptController
     {
         //private readonly IStableStore _stableStore;
         private readonly BlockingAlgorithmOptions _options;
@@ -593,15 +597,13 @@ namespace StopGuessing.Controllers
                     _options.ExpensiveHashingFunctionIterations);
             string phase1HashOfProvidedPasswordAsString = Convert.ToBase64String(phase1HashOfProvidedPassword);
 
-            bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently = _recentIncorrectPasswords.AddMember(phase1HashOfProvidedPasswordAsString);
-
-
             // Preform an analysis of the IPs past beavhior to determine if the IP has been performing so many failed guesses
             // that we disallow logins even if it got the right password.  We call this even when the submitted password is
             // correct lest we create a timing indicator (slower responses for correct passwords) that attackers could use
             // to guess passwords even if we'd blocked their IPs.
             IpHistory ip = await ipHistoryGetTask;
 
+            bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently = _recentIncorrectPasswords.AddMember(phase1HashOfProvidedPasswordAsString);
 
             // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
             // as we are most concerned about frequently-guessed passwords.
