@@ -52,9 +52,9 @@ namespace StopGuessing.Models
         public DoubleThatDecaysWithTime Score;
         public SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos;
 
-        public double GetThresholdAdjustedScore(double popularityOfPassword, bool hasCookieProvingPriorLogin)
+        public double GetThresholdAdjustedScore(double popularityOfPassword, bool hasCookieProvingPriorLogin, DateTime timeOfAttemptUtc)
         {
-            double score = Score;
+            double score = Score.GetValue(timeOfAttemptUtc);
             if (hasCookieProvingPriorLogin && Condition.RewardsClientCookies)
                 score = 0;
             else if (Condition.ProtectsAccountsWithPopularPasswords && popularityOfPassword < Condition.Options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)

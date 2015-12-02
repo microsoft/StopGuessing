@@ -37,7 +37,8 @@ namespace StopGuessing.Models
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
         /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private symmetricKey.
         /// </summary>
-        public ECDiffieHellmanPublicKey EcPublicAccountLogKey { get; set; }
+        //public ECDiffieHellmanPublicKey EcPublicAccountLogKey { get; set; }
+        public byte[] EcPublicAccountLogKey { get; set; }
 
         /// <summary>
         /// The EC private symmetricKey encrypted with phase 1 (expensive) hash of the password
@@ -275,14 +276,17 @@ namespace StopGuessing.Models
         {
             EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = Encryption.EncryptEcPrivateKeyWithAesCbc(ecAccountLogKey,
                 phase1HashOfCorrectPassword);
-            EcPublicAccountLogKey = ecAccountLogKey.PublicKey;
+            using (ECDiffieHellmanPublicKey publicKey = ecAccountLogKey.PublicKey)
+            {
+                EcPublicAccountLogKey = publicKey.ToByteArray();
+            }
         }
 
 
 
-        public double TryGetCredit(double amountRequested)
+        public double TryGetCredit(double amountRequested, DateTime timeOfRequestUtc)
         {
-            double amountAvailable = CreditLimit - ConsumedCredits;
+            double amountAvailable = CreditLimit - ConsumedCredits.GetValue(timeOfRequestUtc);
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
             ConsumedCredits.Add(amountConsumed);
 
@@ -290,11 +294,11 @@ namespace StopGuessing.Models
         }
 
 #if Simulation
-        public double TryGetCreditForSimulation(int simulationIndex, double amountRequested)
+        public double TryGetCreditForSimulation(int simulationIndex, double amountRequested, DateTime timeOfRequestUtc)
         {
             lock (ConsumedCreditsForSimulation)
             {
-                double amountAvailable = CreditLimit - ConsumedCreditsForSimulation[simulationIndex];
+                double amountAvailable = CreditLimit - ConsumedCreditsForSimulation[simulationIndex].GetValue(timeOfRequestUtc);
                 double amountConsumed = Math.Min(amountRequested, amountAvailable);
                 ConsumedCreditsForSimulation[simulationIndex].Add(amountConsumed);
                 return amountConsumed;

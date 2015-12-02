@@ -443,8 +443,8 @@ namespace StopGuessing.Controllers
                 case AuthenticationOutcome.CredentialsValid:
                     if (currentBlockScore > 0)
                     {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, currentBlockScore);
-                        double credit = account.TryGetCredit(desiredCredit);
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, currentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc));
+                        double credit = account.TryGetCredit(desiredCredit, loginAttempt.TimeOfAttemptUtc);
                         if (credit > 0)
                             accountChanged = true;
                         currentBlockScore.Add(-credit, loginAttempt.TimeOfAttemptUtc);
@@ -513,8 +513,8 @@ namespace StopGuessing.Controllers
                 case AuthenticationOutcome.CredentialsValid:                    
                     if (cond.Score > 0)
                     {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, cond.Score);
-                        double credit = account.TryGetCreditForSimulation(cond.Condition.Index, desiredCredit);
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, cond.Score.GetValue(loginAttempt.TimeOfAttemptUtc));
+                        double credit = account.TryGetCreditForSimulation(cond.Condition.Index, desiredCredit, loginAttempt.TimeOfAttemptUtc);
                         if (credit > 0)
                             accountChanged = true;
                         cond.Score.Add(-credit, loginAttempt.TimeOfAttemptUtc);
@@ -550,13 +550,25 @@ namespace StopGuessing.Controllers
             CancellationToken cancellationToken = default(CancellationToken))
         {
 
-            // We'll need to know more about the IP making this loginAttempt, so let's get the historical information
-            // we've been keeping about it.
+            //
+            // In parallel fetch information we'll need to determine the outcome
+            //
+
+            // Get information about the client's IP
             Task<IpHistory> ipHistoryGetTask = _ipHistoryCache.GetAsync(loginAttempt.AddressOfClientInitiatingRequest,
                 cancellationToken);
-            Task<ILadder> binomialLadderTask = _binomialLadderSketch.GetLadderAsync(passwordProvidedByClient, 
+
+            // Get information about the account the client is trying to login to
+            IStableStoreContext<string, UserAccount> userAccountContext = _userAccountContextFactory.Get();
+            Task<UserAccount> userAccountRequestTask = userAccountContext.ReadAsync(
+                loginAttempt.UsernameOrAccountId,
+                cancellationToken);
+
+            // Get a binomial ladder to estimate if the password is common
+            Task<ILadder> binomialLadderTask = _binomialLadderSketch.GetLadderAsync(passwordProvidedByClient,
                 cancellationToken: cancellationToken);
 
+            // Get a more-accurate count of the passwords' frequency if it is already known to be common
             string easyHashOfPassword =
                 Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordProvidedByClient)));
             Task<IFrequencies> passwordFrequencyTask = _incorrectPasswordFrequenciesProvider.GetFrequenciesAsync(
@@ -564,30 +576,31 @@ namespace StopGuessing.Controllers
                 timeout: timeout,
                 cancellationToken: cancellationToken);
 
-            IStableStoreContext<string, UserAccount> userAccountContext = _userAccountContextFactory.Get();
-            Task<UserAccount> userAccountRequestTask = userAccountContext.ReadAsync(
-                loginAttempt.UsernameOrAccountId,
-                cancellationToken);
+            //
+            // End parallel operations
+            //
 
-            // Get a copy of the UserAccount record for the account that the client wants to authenticate as.
+            // We'll need the salt from the account record before we can calculate the expensive hash,
+            // so await that task first 
             UserAccount account = await userAccountRequestTask;
             bool accountChanged = false;
-
-            // Preform an analysis of the IPs past beavhior to determine if the IP has been performing so many failed guesses
-            // that we disallow logins even if it got the right password.  We call this even when the submitted password is
-            // correct lest we create a timing indicator (slower responses for correct passwords) that attackers could use
-            // to guess passwords even if we'd blocked their IPs.
-            IpHistory ip = await ipHistoryGetTask;
 
             byte[] phase1HashOfProvidedPassword = account != null
                 ? account.ComputePhase1Hash(passwordProvidedByClient)
                 : ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
                     passwordProvidedByClient,
                     Encoding.UTF8.GetBytes(loginAttempt.AddressOfClientInitiatingRequest.ToString()),
-                    _options.DefaultExpensiveHashingFunctionIterations);
+                    _options.ExpensiveHashingFunctionIterations);
             string phase1HashOfProvidedPasswordAsString = Convert.ToBase64String(phase1HashOfProvidedPassword);
 
             bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently = _recentIncorrectPasswords.AddMember(phase1HashOfProvidedPasswordAsString);
+
+
+            // Preform an analysis of the IPs past beavhior to determine if the IP has been performing so many failed guesses
+            // that we disallow logins even if it got the right password.  We call this even when the submitted password is
+            // correct lest we create a timing indicator (slower responses for correct passwords) that attackers could use
+            // to guess passwords even if we'd blocked their IPs.
+            IpHistory ip = await ipHistoryGetTask;
 
 
             // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
@@ -635,7 +648,7 @@ namespace StopGuessing.Controllers
                 // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
                 // hash of the phase1 hash.
                 string phase2HashOfProvidedPassword =
-                    Convert.ToBase64String(ManagedSHA256.Hash((phase1HashOfProvidedPassword)));
+                    Convert.ToBase64String(ManagedSHA256.Hash(phase1HashOfProvidedPassword));
 
                 // To determine if the password is correct, compare the phase2 has we just generated (phase2HashOfProvidedPassword)
                 // with the one generated from the correct password when the user chose their password (account.PasswordHashPhase2).  
@@ -698,7 +711,7 @@ namespace StopGuessing.Controllers
 
             double[] conditionScores = ip.SimulationConditions.Select( cond =>
                     cond.GetThresholdAdjustedScore(loginAttempt.PasswordsPopularityAmongFailedGuesses,
-                        loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)).ToArray();
+                        loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount, loginAttempt.TimeOfAttemptUtc)).ToArray();
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
             {
@@ -708,7 +721,7 @@ namespace StopGuessing.Controllers
                 if (loginAttempt.PasswordsPopularityAmongFailedGuesses <
                     _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
                     blockingThreshold *= _options.BlockThresholdMultiplierForUnpopularPasswords;
-                double blockScore = ip.CurrentBlockScore;
+                double blockScore = ip.CurrentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc);
                 // If the client provided a cookie proving a past successful login, we'll ignore the block condition
                 if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
                     blockScore *= 0; // FUTURE
