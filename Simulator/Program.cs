@@ -71,7 +71,21 @@ namespace Simulator
                     new SimulationCondition(config.BlockingOptions, 6, "PopularThreshold", true, true, true, true, true,
                         true, false),
                     new SimulationCondition(config.BlockingOptions, 7, "PunishPopularGuesses", true, true, true, true,
-                        true, true, true)
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 8, "AllButRepeats", false, true, true, true,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 9, "AllButCookies", true, false, true, true,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 10, "AllButCredits", true, true, false, true,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 11, "AllButAlpha", true, true, true, false,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 12, "AllButTypos", true, true, true, true,
+                        false, true, true),
+                    new SimulationCondition(config.BlockingOptions, 13, "AllButThreshold", true, true, true, true,
+                        true, false, true),
+                    new SimulationCondition(config.BlockingOptions, 14, "AllButPunishPopular", true, true, true, true,
+                        true, true, false)
                 };
                 
         // Blocking parameters
