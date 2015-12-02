@@ -162,8 +162,7 @@ namespace StopGuessing.Models
         /// Past login failures, ordered from most recent to least recent, with a fixed limit on the history stored.
         /// </summary>
         //public Sequence<LoginAttempt> RecentLoginFailures;
-
-        const int DefaultNumberOfPotentailTyposToTrack = 8;
+        
         public CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos; 
 
         public DoubleThatDecaysWithTime CurrentBlockScore;

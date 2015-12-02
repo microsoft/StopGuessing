@@ -44,7 +44,7 @@ namespace StopGuessing.DataStructures
                     {
                         T item = itemQueue.Dequeue();
                         ulong myTaskIndex = taskIndex++;
-                        currentWave[i] = Task.Run(() => actionToRun(item, myTaskIndex), cancellationToken);
+                        nextWave[i] = Task.Run(() => actionToRun(item, myTaskIndex), cancellationToken);
                     }
                 }
                 else
@@ -103,7 +103,7 @@ namespace StopGuessing.DataStructures
                     for (int i = 0; i < nextWave.Length; i++)
                     {
                         T item = itemQueue.Dequeue();
-                        currentWave[i] = Task.Run(() => actionToRun(item), cancellationToken);
+                        nextWave[i] = Task.Run(() => actionToRun(item), cancellationToken);
                     }
                 }
                 else
@@ -162,7 +162,7 @@ namespace StopGuessing.DataStructures
                     for (int i = 0; i < nextWave.Length; i++)
                     {
                         ulong myTaskIndex = taskIndex++;
-                        currentWave[i] = Task.Run(() => actionToRun(myTaskIndex), cancellationToken);
+                        nextWave[i] = Task.Run(() => actionToRun(myTaskIndex), cancellationToken);
                     }
                 }
                 else

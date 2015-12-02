@@ -32,7 +32,7 @@ namespace Simulator
             public ulong TotalExceptions = 0;
         }
 
-        public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
+        //public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
         public LoginAttemptController MyLoginAttemptController;
         //public LoginAttemptClient MyLoginAttemptClient;
         public IUserAccountContextFactory MyAccountContextFactory;
@@ -202,10 +202,10 @@ namespace Simulator
             //};
             //We are testing with local server now
             WriteStatus("Creating responsible hosts");
-            MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
+            //MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             //configuration.MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
-            RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
-            MyResponsibleHosts.Add("localhost", localHost);
+            //RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
+            //MyResponsibleHosts.Add("localhost", localHost);
 
             WriteStatus("Creating binomial ladder");
             BinomialLadderSketch localPasswordBinomialLadderSketch =
@@ -222,7 +222,7 @@ namespace Simulator
             MyAccountContextFactory = new MemoryOnlyAccountContextFactory();
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
-            MyLoginAttemptController = new LoginAttemptController(//MyLoginAttemptClient,
+            MyLoginAttemptController = new LoginAttemptController(
                 MyAccountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
                 memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions);
 
@@ -241,10 +241,6 @@ namespace Simulator
             CancellationToken cancellationToken = default(CancellationToken))
         {
             WriteStatus("In Run");
-            //1.Create account from Rockyou 
-            //Create 2*accountnumber accounts, first half is benign accounts, and second half is correct accounts owned by attackers
-
-            //Record the accounts into stable store 
 
             GenerateSimulatedAccounts();
 
@@ -253,8 +249,10 @@ namespace Simulator
             allSimAccounts.AddRange(MaliciousAccounts);
             ConcurrentBag<UserAccount> userAccounts = new ConcurrentBag<UserAccount>();
             await TaskParalllel.ForEach(allSimAccounts,
-                simAccount =>
+                (simAccount, index) =>
                 {
+                    if (index % 10000 == 0)
+                        WriteStatus("Created account {0:N}", index);
                     UserAccount account = UserAccount.Create(simAccount.UniqueId,
                         MyExperimentalConfiguration.BlockingOptions.Conditions.Length,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimit,
@@ -272,8 +270,10 @@ namespace Simulator
 
             WriteStatus("Performing a PUT on each account");
             await TaskParalllel.ForEach(userAccounts,
-                async account =>
+                async (account,index) =>
                 {
+                    if (index % 10000 == 0)
+                        WriteStatus("PUT account {0:N}", index);
                     await MyAccountContextFactory.Get().WriteNewAsync(account, cancellationToken: cancellationToken);
                 }, cancellationToken: cancellationToken);
             WriteStatus("Done performing a PUT on each account");
@@ -288,7 +288,7 @@ namespace Simulator
                 "TypeOfMistake",
                 "UserID",
                 "Password",
-                "Scores");
+                string.Join(",", MyExperimentalConfiguration.BlockingOptions.Conditions.Select( cond => cond.Name )));
 
 
             Stopwatch sw = new Stopwatch();
