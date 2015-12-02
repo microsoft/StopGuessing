@@ -322,65 +322,74 @@ namespace StopGuessing.Controllers
 
             LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = clientsIpHistory.RecentPotentialTypos.ToArray();
             ECDiffieHellmanCng ecPrivateAccountLogKey = null;
-#if Simulation
-            foreach (SimulationConditionData cond in clientsIpHistory.SimulationConditions)
-                cond.AdjustScoreForPastTyposTreatedAsFullFailures(ref ecPrivateAccountLogKey, account,
-                    whenUtc, correctPassword, phase1HashOfCorrectPassword);
-#endif
-            foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
+            try
             {
-                if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
-                    continue;
-
-                if (ecPrivateAccountLogKey == null)
+#if Simulation
+                foreach (SimulationConditionData cond in clientsIpHistory.SimulationConditions)
+                    cond.AdjustScoreForPastTyposTreatedAsFullFailures(ref ecPrivateAccountLogKey, account,
+                        whenUtc, correctPassword, phase1HashOfCorrectPassword);
+#endif
+                foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
                 {
-                    // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                    if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
+                        continue;
+
+                    if (ecPrivateAccountLogKey == null)
+                    {
+                        // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                        try
+                        {
+                            ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
+                                account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
+                                phase1HashOfCorrectPassword);
+                        }
+                        catch (Exception)
+                        {
+                            // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
+                            return;
+                        }
+                    }
+
+                    // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
                     try
                     {
-                        ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
-                            account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, 
-                            phase1HashOfCorrectPassword);
+                        // Attempt to decrypt the password.
+                        EcEncryptedMessageAesCbcHmacSha256 messageDeserializedFromJson =
+                            JsonConvert.DeserializeObject<EcEncryptedMessageAesCbcHmacSha256>(
+                                potentialTypo.EncryptedIncorrectPassword);
+                        byte[] passwordAsUtf8 = messageDeserializedFromJson.Decrypt(ecPrivateAccountLogKey);
+                        string incorrectPasswordFromPreviousAttempt = Encoding.UTF8.GetString(passwordAsUtf8);
+
+                        // Use an edit distance calculation to determine if it was a likely typo
+                        bool likelyTypo =
+                            EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
+                            _options.MaxEditDistanceConsideredATypo;
+
+                        // Update the outcome based on this information.
+                        AuthenticationOutcome newOutocme = likelyTypo
+                            ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
+                            : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
+
+                        // Add this to the list of changed attempts
+                        credit += potentialTypo.Penalty.GetValue(whenUtc)*(1d - _options.PenaltyMulitiplierForTypo);
+
+                        // FUTURE -- find and update the login attempt in the background
+
                     }
                     catch (Exception)
                     {
-                        // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
-                        return;
+                        // An exception is likely due to an incorrect key (perhaps outdated).
+                        // Since we simply can't do anything with a record we can't Decrypt, we carry on
+                        // as if nothing ever happened.  No.  Really.  Nothing to see here.
                     }
+                    clientsIpHistory.RecentPotentialTypos.Remove(potentialTypo);
                 }
-
-                // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
-                try
-                {
-                    // Attempt to decrypt the password.
-                    EcEncryptedMessageAesCbcHmacSha256 messageDeserializedFromJson =
-                        JsonConvert.DeserializeObject<EcEncryptedMessageAesCbcHmacSha256>(potentialTypo.EncryptedIncorrectPassword);
-                    byte[] passwordAsUtf8 = messageDeserializedFromJson.Decrypt(ecPrivateAccountLogKey);
-                    string incorrectPasswordFromPreviousAttempt =  Encoding.UTF8.GetString(passwordAsUtf8);
-
-                    // Use an edit distance calculation to determine if it was a likely typo
-                    bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
-                                        _options.MaxEditDistanceConsideredATypo;
-
-                    // Update the outcome based on this information.
-                    AuthenticationOutcome newOutocme = likelyTypo
-                        ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
-                        : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
-
-                    // Add this to the list of changed attempts
-                    credit += potentialTypo.Penalty.GetValue(whenUtc) * (1d - _options.PenaltyMulitiplierForTypo);
-
-                    // FUTURE -- find and update the login attempt in the background
-
-                }
-                catch (Exception)
-                {
-                    // An exception is likely due to an incorrect key (perhaps outdated).
-                    // Since we simply can't do anything with a record we can't Decrypt, we carry on
-                    // as if nothing ever happened.  No.  Really.  Nothing to see here.
-                }
-                clientsIpHistory.RecentPotentialTypos.Remove(potentialTypo);
+                clientsIpHistory.CurrentBlockScore.Add(-credit, whenUtc);
             }
-            clientsIpHistory.CurrentBlockScore.Add(-credit, whenUtc);
+            finally
+            {
+                ecPrivateAccountLogKey?.Dispose();
+            }
         }
 
         /// <summary>

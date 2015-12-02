@@ -197,33 +197,7 @@ namespace StopGuessing.Models
             string nameOfExpensiveHashFunctionToUse = null,
             int? numberOfIterationsToUseForPhase1Hash = null)
         {
-            ECDiffieHellmanCng ecAccountLogKey = null;
             byte[] oldPasswordHashPhase1;
-
-
-            if (oldPassword != null &&
-                ComputerPhase2HashFromPhase1Hash(oldPasswordHashPhase1 = ComputePhase1Hash(oldPassword)) == PasswordHashPhase2)
-            {
-                // If we have a valid old password, Decrypt the private log decryption symmetricKey so we can re-encrypt it
-                // with the new password and continue to use it on future logins. 
-                try
-                {
-                    ecAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
-                            oldPasswordHashPhase1);
-                }
-                catch (Exception)
-                {
-                    // Ignore crypto failures.  They just mean we were unsuccessful in decrypting the symmetricKey and should create a new one.
-                }
-            }
-            if (ecAccountLogKey == null)
-            {
-                // We were unable to use an old EC UsernameOrAccountId Log Key,
-                // so we'll create a new one
-                ecAccountLogKey =
-                    new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null,
-                        new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport }));
-            }
 
             // If the caller also wants to change the hash function or the number of iterations,
             // make that change here now that we're done hashing the old password and are about to hash the new one.
@@ -247,7 +221,36 @@ namespace StopGuessing.Models
             PasswordHashPhase2 = ComputerPhase2HashFromPhase1Hash(newPasswordHashPhase1);
 
             // Store the EC UsernameOrAccountId log symmetricKey encrypted with the phase 1 hash.
-            SetAccountLogKey(ecAccountLogKey, newPasswordHashPhase1);
+            if (oldPassword != null &&
+                ComputerPhase2HashFromPhase1Hash(oldPasswordHashPhase1 = ComputePhase1Hash(oldPassword)) ==
+                PasswordHashPhase2)
+            {
+                // If we have a valid old password, Decrypt the private log decryption symmetricKey so we can re-encrypt it
+                // with the new password and continue to use it on future logins. 
+                try
+                {
+                    using (ECDiffieHellmanCng ecAccountLogKey =
+                        Encryption.DecryptAesCbcEncryptedEcPrivateKey(
+                            EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
+                            oldPasswordHashPhase1))
+                    {
+                        SetAccountLogKey(ecAccountLogKey, newPasswordHashPhase1);
+                        return;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Ignore crypto failures.  They just mean we were unsuccessful in decrypting the symmetricKey and should create a new one.
+                }
+            }
+            // We were unable to use an old EC UsernameOrAccountId Log Key,
+            // so we'll create a new one
+            using (ECDiffieHellmanCng ecAccountLogKey =
+                new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null,
+                    new CngKeyCreationParameters {ExportPolicy = CngExportPolicies.AllowPlaintextExport})))
+            {
+                SetAccountLogKey(ecAccountLogKey, newPasswordHashPhase1);
+            }
         }
 
 
