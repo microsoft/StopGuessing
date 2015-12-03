@@ -30,25 +30,29 @@ namespace StopGuessing
     {
         private readonly ConcurrentDictionary<string, UserAccount> _store = new ConcurrentDictionary<string, UserAccount>();
 
+#pragma warning disable 1998
         public async Task<UserAccount> ReadAsync(string usernameOrAccountId, CancellationToken cancellationToken = default(CancellationToken))
+#pragma warning restore 1998
         {
-            return await Task.Run(() =>
-            {
-                UserAccount account = null;
-                _store.TryGetValue(usernameOrAccountId, out account);
-                return account;
-            }, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            UserAccount account = null;
+            _store.TryGetValue(usernameOrAccountId, out account);
+            return account;
         }
 
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
         public async Task WriteNewAsync(UserAccount account, CancellationToken cancellationToken = new CancellationToken())
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         {
-            await Task.Run(() =>
-                _store[account.UsernameOrAccountId] = account, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _store[account.UsernameOrAccountId] = account;
         }
-
+        
+#pragma warning disable 1998
         public async Task SaveChangesAsync(CancellationToken cancellationToken = new CancellationToken())
+#pragma warning restore 1998
         {
-            await Task.Run(() => { }, cancellationToken);
+            // FUTURE -- remove async and return Task.CompletedTask when this .NET 4.6 property is availble
         }
     }
 

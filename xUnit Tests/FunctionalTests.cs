@@ -207,8 +207,8 @@ namespace xUnit_Tests
             await CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
-            await TaskParalllel.ForEach(usernames.Skip(20), async (username) =>
-                await AuthenticateAsync(configuration, username, Password1, clientAddress: AttackersIp));
+            await TaskParalllel.ForEachWithWorkers(usernames.Skip(20), async (username, itemNumber, cancelToken) =>
+                await AuthenticateAsync(configuration, username, Password1, clientAddress: AttackersIp, cancellationToken: cancelToken));
 
             Thread.Sleep(2000);
             

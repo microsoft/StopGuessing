@@ -74,7 +74,7 @@ namespace StopGuessing.Controllers
 
             _recentIncorrectPasswords = new AgingMembershipSketch(16, 128*1024); // FIXME -- more configurable?
             _userAccountContextFactory = userAccountContextFactory;
-            _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>( (address, cancellationToken) => Task.Run( () => new IpHistory(address, _options)));
+            _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(address => new IpHistory(address, _options));
 
             memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }

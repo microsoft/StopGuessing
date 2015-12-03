@@ -46,8 +46,8 @@ namespace StopGuessing.Clients
             int rungsCalculated = 0;
             object rungLock = new object();
 
-            await TaskParalllel.ForEach(hosts,
-                async host =>
+            await TaskParalllel.ForEachWithWorkers(hosts,
+                async (host, itemNumber, iterationCancellationToken) =>
                 {
                     int[] indexesOfRungsNotYetClimbed = await RestClientHelper.GetAsync<int[]>(
                         host.Uri,
@@ -64,10 +64,11 @@ namespace StopGuessing.Clients
                         rungsCalculated += rungsPerHost;
                     }
                 },
-                e =>
-                {
-                    // FIXME -- what to do with exceptions?
-                }, cancellationToken: cancellationToken);
+                //(e, exceptionCancellationToken) =>
+                //{
+                //    // FIXME -- what to do with exceptions?
+                //}, 
+                cancellationToken: cancellationToken);
 
             return new DistributedBinomialLadder(rungsNotYetClimbed, rungsCalculated);
         }
