@@ -77,7 +77,7 @@ namespace StopGuessing.DataStructures
             IEnumerable<T> items,
             Func<T, ulong, CancellationToken, Task> actionToRunAsync,
             Action<Exception> callOnException = null,
-            int numWorkers = 32,
+            int numWorkers = 64,
             int maxTasksPerWorker = 50,
             CancellationToken cancellationToken = default(CancellationToken))
         {
