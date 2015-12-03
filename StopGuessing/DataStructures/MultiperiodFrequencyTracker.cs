@@ -87,11 +87,13 @@ namespace StopGuessing.DataStructures
 
             public Proportion[] Proportions { get; protected set; }
 
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
             public async Task RecordObservationAsync(
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
                 TimeSpan? timeout = null,
                 CancellationToken cancellationToken = default(CancellationToken))
             {
-                await Task.Run(() => Tracker.RecordObservation(Key), cancellationToken);
+                Tracker.RecordObservation(Key);
             }
 
             public FrequencyTrackerFrequencies(MultiperiodFrequencyTracker<TKey> tracker, TKey key, Proportion[] proportions)

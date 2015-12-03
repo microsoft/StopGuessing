@@ -199,7 +199,6 @@ namespace StopGuessing.Models
             string nameOfExpensiveHashFunctionToUse = null,
             int? numberOfIterationsToUseForPhase1Hash = null)
         {
-            byte[] oldPasswordHashPhase1;
 
             // If the caller also wants to change the hash function or the number of iterations,
             // make that change here now that we're done hashing the old password and are about to hash the new one.
@@ -224,6 +223,7 @@ namespace StopGuessing.Models
 
 #if !Simulation
             // Store the EC UsernameOrAccountId log symmetricKey encrypted with the phase 1 hash.
+            byte[] oldPasswordHashPhase1;
             if (oldPassword != null &&
                 ComputerPhase2HashFromPhase1Hash(oldPasswordHashPhase1 = ComputePhase1Hash(oldPassword)) ==
                 PasswordHashPhase2)
