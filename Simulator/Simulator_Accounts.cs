@@ -56,18 +56,11 @@ namespace Simulator
             public bool IsInAttackersIpPool;
         }
 
-        private readonly Dictionary<IPAddress,IPAddressDebugInfo> _debugInformationAboutIpAddresses = new Dictionary<IPAddress, IPAddressDebugInfo>();
+        private readonly ConcurrentDictionary<IPAddress,IPAddressDebugInfo> _debugInformationAboutIpAddresses = new ConcurrentDictionary<IPAddress, IPAddressDebugInfo>();
 
         public IPAddressDebugInfo GetIpAddressDebugInfo(IPAddress address)
         {
-            lock (_debugInformationAboutIpAddresses)
-            {
-                if (!_debugInformationAboutIpAddresses.ContainsKey(address))
-                {
-                    _debugInformationAboutIpAddresses[address] = new IPAddressDebugInfo();
-                }
-                return _debugInformationAboutIpAddresses[address];
-            }
+            return _debugInformationAboutIpAddresses.GetOrAdd(address, a => new IPAddressDebugInfo());
         }
 
 
@@ -241,6 +234,7 @@ namespace Simulator
 
             WriteStatus("Creating {0:N0} benign accounts", MyExperimentalConfiguration.NumberOfBenignAccounts);
             int totalAccounts = 0;
+
 
             // Generate benign accounts
             for (uint i = 0; i < MyExperimentalConfiguration.NumberOfBenignAccounts; i++)

@@ -45,7 +45,12 @@ namespace StopGuessing.DataStructures
             private set {_sumOfAmountsOverAllKeys = value; } }
 
         // The count of the number of items is the number of elements we're tracking the count of
-        public int Count => _keyCounts.Count;
+        private int _numberOfElements = 0;
+        public int Count
+        {
+            get { return _numberOfElements; }
+            private set { _numberOfElements = value; }
+        }
 
 
         /// <summary>
@@ -64,7 +69,7 @@ namespace StopGuessing.DataStructures
         protected long ReducedAmountToTargetWhenTotalAmountReached { get; }
 
         // For scaling up before reaching steady-state capacity
-        private int _periodBetweenIncrementGrowth;
+        private readonly int _periodBetweenIncrementGrowth;
         private int _capacityAtWhichToIncreaseTheIncrement;
 
         // The amount to increment on each observation.  This starts at one, and grows linearly
@@ -156,7 +161,11 @@ namespace StopGuessing.DataStructures
         public Proportion Observe(TKey key)
         {
             // Perform locked conccurrent add to _keyCounts[key]
-            uint count = _keyCounts.AddOrUpdate(key, (k) => _increment, (k, priorValue) => priorValue + _increment);
+            uint increment = _increment;
+            uint countForThisKeyAfter = _keyCounts.AddOrUpdate(key, (k) => increment, (k, priorValue) => priorValue + increment);
+            uint countForThisKeyBefore = countForThisKeyAfter - increment;
+            if (countForThisKeyBefore > 0)
+                Interlocked.Add(ref _numberOfElements, 1);
             // Perform a locked add to the total for all the key counts
             Interlocked.Add(ref _sumOfAmountsOverAllKeys, _increment);
 
@@ -167,7 +176,7 @@ namespace StopGuessing.DataStructures
                 lock (_capacityLockObj)
                 {
                     if (_capacityAtWhichToIncreaseTheIncrement >= 0 &&
-                        Count >= _capacityAtWhichToIncreaseTheIncrement)
+                        _numberOfElements >= _capacityAtWhichToIncreaseTheIncrement)
                     {
                         // We can grow the increment amount so that newer observations have higher
                         // values than older observations, facilitating future clean-up.
@@ -188,7 +197,7 @@ namespace StopGuessing.DataStructures
             if (_recoveryTask == null)
             {
                 // No recovery tasks are running.  Check to see if one is needed.
-                if (_keyCounts.Count > MaxCapacity)
+                if (_numberOfElements > MaxCapacity)
                 {
                     // We're above our space budget.  Start a reduction operation with the goal
                     // of recovering space
@@ -203,7 +212,7 @@ namespace StopGuessing.DataStructures
                 }
             }
 
-            return new Proportion(count, (ulong) SumOfAmountsOverAllKeys);
+            return new Proportion(countForThisKeyBefore, (ulong) SumOfAmountsOverAllKeys);
         }
 
         /// <summary>
@@ -261,6 +270,7 @@ namespace StopGuessing.DataStructures
                     {
                         _keyCounts.TryRemove(key, out count);
                         Interlocked.Add(ref _sumOfAmountsOverAllKeys, -count);
+                        Interlocked.Add(ref _numberOfElements, -1);
                     }
                     else
                     {
