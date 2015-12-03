@@ -286,7 +286,7 @@ namespace Simulator
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
-                "IsIpInAttackersPool",
+                "IPInOposingPool",
                 "IsClientAProxyIP",
                 "TypeOfMistake",
                 "UserID",
@@ -326,7 +326,8 @@ namespace Simulator
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                     simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                     simAttempt.IsGuess ? "IsGuess" : "NotGuess",
-                    ipInfo.IsInAttackersIpPool ? "InAttackersIpPool" : "NotUsedByAttacker",
+                    simAttempt.IsFromAttacker ? (ipInfo.IsInAttackersIpPool ? "InAttackersIpPool" : "NotUsedByAttacker") :
+                                                (ipInfo.UserIdsOfBenignUsers.Count > 0 ? "IsInBenignPool" : "NotUsedByBenign"),
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
                     simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
