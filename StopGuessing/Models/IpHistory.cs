@@ -87,7 +87,7 @@ namespace StopGuessing.Models
             {
                 if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
                     continue;
-
+#if !Simulation
                 if (ecPrivateAccountLogKey == null)
                 {
                     // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
@@ -103,16 +103,19 @@ namespace StopGuessing.Models
                         return;
                     }
                 }
-
+#endif
                 // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
                 try
                 {
+#if Simulation
+                    string incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword;
+#else
                     // Attempt to decrypt the password.
                     EcEncryptedMessageAesCbcHmacSha256 messageDeserializedFromJson =
                         JsonConvert.DeserializeObject<EcEncryptedMessageAesCbcHmacSha256>(potentialTypo.EncryptedIncorrectPassword);
                     byte[] passwordAsUtf8 = messageDeserializedFromJson.Decrypt(ecPrivateAccountLogKey);
                     string incorrectPasswordFromPreviousAttempt = Encoding.UTF8.GetString(passwordAsUtf8);
-
+#endif
                     // Use an edit distance calculation to determine if it was a likely typo
                     bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
                                         Condition.Options.MaxEditDistanceConsideredATypo;
@@ -143,12 +146,12 @@ namespace StopGuessing.Models
     }
 #endif
 
-    /// <summary>
-    /// This class keeps track of recent login successes and failures for a given client IP so that
-    /// we can try to determine if this client should be blocked due to likely-password-guessing
-    /// behaviors.
-    /// </summary>
-    public class IpHistory
+                    /// <summary>
+                    /// This class keeps track of recent login successes and failures for a given client IP so that
+                    /// we can try to determine if this client should be blocked due to likely-password-guessing
+                    /// behaviors.
+                    /// </summary>
+        public class IpHistory
     {
         public IPAddress Address;
 

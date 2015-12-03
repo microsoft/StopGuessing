@@ -338,6 +338,7 @@ namespace StopGuessing.Controllers
                     if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
                         continue;
 
+#if !Simulation
                     if (ecPrivateAccountLogKey == null)
                     {
                         // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
@@ -353,16 +354,20 @@ namespace StopGuessing.Controllers
                             return;
                         }
                     }
-
+#endif
                     // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
                     try
                     {
+#if Simulation
+                        string incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword;
+#else
                         // Attempt to decrypt the password.
                         EcEncryptedMessageAesCbcHmacSha256 messageDeserializedFromJson =
                             JsonConvert.DeserializeObject<EcEncryptedMessageAesCbcHmacSha256>(
                                 potentialTypo.EncryptedIncorrectPassword);
                         byte[] passwordAsUtf8 = messageDeserializedFromJson.Decrypt(ecPrivateAccountLogKey);
                         string incorrectPasswordFromPreviousAttempt = Encoding.UTF8.GetString(passwordAsUtf8);
+#endif
 
                         // Use an edit distance calculation to determine if it was a likely typo
                         bool likelyTypo =
@@ -681,9 +686,12 @@ namespace StopGuessing.Controllers
                     //  correct password, so you can't get to the plaintext of the incorrect password if you
                     //  don't already know the correct password.)
                     loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
+#if Simulation
+                    loginAttempt.EncryptedIncorrectPassword = passwordProvidedByClient;
+#else
                     loginAttempt.EncryptAndWriteIncorrectPassword(passwordProvidedByClient,
                         account.EcPublicAccountLogKey);
-
+#endif
                     // Next, if it's possible to declare more about this outcome than simply that the 
                     // user provided the incorrect password, let's do so.
                     // Since users who are unsure of their passwords may enter the same username/password twice, but attackers
