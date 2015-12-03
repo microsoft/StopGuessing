@@ -147,6 +147,7 @@ namespace StopGuessing.DataStructures
         }
 
 
+        private readonly object _capacityLockObj = new object();
         /// <summary>
         /// Add an observation of a given key, returning the estimated frequency of that key before the observation.
         /// </summary>
@@ -154,7 +155,6 @@ namespace StopGuessing.DataStructures
         /// <returns>The proportion (frequency) with which that observation occurred, aged over time.</returns>
         public Proportion Observe(TKey key)
         {
-            object lockObj = new object();
             // Perform locked conccurrent add to _keyCounts[key]
             uint count = _keyCounts.AddOrUpdate(key, (k) => _increment, (k, priorValue) => priorValue + _increment);
             // Perform a locked add to the total for all the key counts
@@ -164,7 +164,7 @@ namespace StopGuessing.DataStructures
             // the increment amount over time.
             if (_capacityAtWhichToIncreaseTheIncrement >= 0 && Count >= _capacityAtWhichToIncreaseTheIncrement)
             {
-                lock (lockObj)
+                lock (_capacityLockObj)
                 {
                     if (_capacityAtWhichToIncreaseTheIncrement >= 0 &&
                         Count >= _capacityAtWhichToIncreaseTheIncrement)
