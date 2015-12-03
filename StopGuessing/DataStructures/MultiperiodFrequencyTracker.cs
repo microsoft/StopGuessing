@@ -68,11 +68,14 @@ namespace StopGuessing.DataStructures
                 ft.Observe(key);
         }
 
+#pragma warning disable 1998
         public async Task<IFrequencies> GetFrequenciesAsync(TKey key,
+#pragma warning restore 1998
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            return await Task.Run(() => new FrequencyTrackerFrequencies(this, key, Get(key)), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new FrequencyTrackerFrequencies(this, key, Get(key));
         }
     
 

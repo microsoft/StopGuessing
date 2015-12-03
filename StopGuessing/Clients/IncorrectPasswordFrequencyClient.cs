@@ -28,20 +28,21 @@ namespace StopGuessing.Clients
 
             ConcurrentBag<Proportion[]> proportionsForEachHost = new ConcurrentBag<Proportion[]>();
 
-            await TaskParalllel.ForEach(hostsResponsibleForThisHash,
-                async host =>
+            await TaskParalllel.ForEachWithWorkers(hostsResponsibleForThisHash,
+                async (host, itemNumber, cancelToken) =>
                 {
                     Proportion[] proportionsForThisHost = await RestClientHelper.GetAsync<Proportion[]>(
                         host.Uri,
                         "IncorrectPasswordFrequency/" +
                         Microsoft.Framework.WebEncoders.UrlEncoder.Default.UrlEncode(passwordHash),
-                        timeout: timeout, cancellationToken: cancellationToken);
+                        timeout: timeout, cancellationToken: cancelToken);
                     proportionsForEachHost.Add(proportionsForThisHost);
                 },
-                e =>
-                {
-                    // FIXME -- what to do with exceptions?
-                }, cancellationToken: cancellationToken);
+                //e =>
+                //{
+                //    // FIXME -- what to do with exceptions?
+                //},
+                cancellationToken: cancellationToken);
 
             List<Proportion> proportions = new List<Proportion>();
             foreach (Proportion[] proportionsForHost in proportionsForEachHost)
@@ -68,8 +69,8 @@ namespace StopGuessing.Clients
                 hostsResponsibleForThisHash = _responsibleHosts.FindMembersResponsible(passwordHash,
                     HostsPerIncorrectPassword);
 
-            await TaskParalllel.ForEach(hostsResponsibleForThisHash,
-                async host =>
+            await TaskParalllel.ForEachWithWorkers(hostsResponsibleForThisHash,
+                async (host, itemNumber, cancelToken) =>
                 {
                     await RestClientHelper.PostAsync(
                         host.Uri,
@@ -77,12 +78,13 @@ namespace StopGuessing.Clients
                         Microsoft.Framework.WebEncoders.UrlEncoder.Default.UrlEncode(passwordHash),
                         null,
                         timeout: timeout,
-                        cancellationToken: cancellationToken);
+                        cancellationToken: cancelToken);
                 },
-                e =>
-                {
-                    // FIXME -- what to do with exceptions?
-                }, cancellationToken: cancellationToken);
+                //e =>
+                //{
+                //    // FIXME -- what to do with exceptions?
+                //},
+                cancellationToken: cancellationToken);
         }
 
 

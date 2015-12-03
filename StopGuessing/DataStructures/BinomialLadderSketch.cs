@@ -195,11 +195,14 @@ namespace StopGuessing.DataStructures
             return new BinomialLadder(this, GetRungsAbove(key, heightOfLadderInRungsOrDefault), heightOfLadderInRungsOrDefault);
         }
 
+#pragma warning disable 1998
         public async Task<ILadder> GetLadderAsync(string key,
+#pragma warning restore 1998
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            return await Task.Run(() => GetLadder(key), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return GetLadder(key);
         }
 
 
@@ -212,13 +215,12 @@ namespace StopGuessing.DataStructures
                 Sketch = sketch;
             }
 
+#pragma warning disable 1998
             protected override async Task StepAsync(int rungToClimb, CancellationToken cancellationToken = new CancellationToken())
+#pragma warning restore 1998
             {
-                await Task.Run(() =>
-                {
-                    Sketch.Step(rungToClimb);
-                }, cancellationToken);
-
+                cancellationToken.ThrowIfCancellationRequested();
+                Sketch.Step(rungToClimb);
             }
         }
 

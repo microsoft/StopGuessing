@@ -160,7 +160,7 @@ namespace Simulator
                 }
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
-                StreamWriter dataWriter = new StreamWriter(path + "data.txt");
+                TextWriter dataWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "data.txt"));
                 StreamWriter errorWriter = new StreamWriter(path + "error.txt");
                 try
                 {
@@ -237,7 +237,7 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task Run(StreamWriter outcomeWriter,
+        public async Task Run(TextWriter synchronizedOutcomeWriter,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             WriteStatus("In Run");
@@ -248,11 +248,13 @@ namespace Simulator
             List<SimulatedAccount> allSimAccounts = new List<SimulatedAccount>(BenignAccounts);
             allSimAccounts.AddRange(MaliciousAccounts);
             ConcurrentBag<UserAccount> userAccounts = new ConcurrentBag<UserAccount>();
-            await TaskParalllel.ForEach(allSimAccounts,
-                (simAccount, index) =>
+            await TaskParalllel.ForEachWithWorkers(allSimAccounts,
+#pragma warning disable 1998
+                async (simAccount, index, cancelToken) =>
+#pragma warning restore 1998
                 {
                     if (index % 10000 == 0)
-                        WriteStatus("Created account {0:N}", index);
+                        WriteStatus("Created account {0:N0}", index);
                     UserAccount account = UserAccount.Create(simAccount.UniqueId,
                         MyExperimentalConfiguration.BlockingOptions.Conditions.Length,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimit,
@@ -264,22 +266,23 @@ namespace Simulator
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
                             LoginAttempt.HashCookie(cookie));
                     userAccounts.Add(account);
-                }, cancellationToken: cancellationToken);
+                },
+                cancellationToken: cancellationToken);
             WriteStatus("Finished creating user accounts for each simluated account record");
 
 
             WriteStatus("Performing a PUT on each account");
-            await TaskParalllel.ForEach(userAccounts,
-                async (account,index) =>
+            await TaskParalllel.ForEachWithWorkers(userAccounts,
+                async (account,index,cancelToken) =>
                 {
                     if (index % 10000 == 0)
-                        WriteStatus("PUT account {0:N}", index);
+                        WriteStatus("PUT account {0:N0}", index);
                     await MyAccountContextFactory.Get().WriteNewAsync(account, cancellationToken: cancellationToken);
                 }, cancellationToken: cancellationToken);
             WriteStatus("Done performing a PUT on each account");
 
 
-            outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+            synchronizedOutcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
@@ -297,7 +300,7 @@ namespace Simulator
             TimeSpan testTimeSpan = MyExperimentalConfiguration.TestTimeSpan;
             double ticksBetweenLogins = ((double)testTimeSpan.Ticks)/(double)MyExperimentalConfiguration.TotalLoginAttemptsToIssue;
             
-            await TaskParalllel.ParallelRepeat(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (count) =>
+            await TaskParalllel.RepeatWithWorkers(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (count, cancelToken) =>
             {
                 if (count % 10000 == 0)
                     WriteStatus("Login Attempt {0:N0}", count);
@@ -317,29 +320,25 @@ namespace Simulator
                 double[] scores = await
                     MyLoginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
                         cancellationToken: cancellationToken);
-                //LoginAttempt attemptWithOutcome = dlaoResult.Item1;
-                //BlockingScoresForEachAlgorithm blockingScoresForEachAlgorithm = dlaoResult.Item2;
-                //AuthenticationOutcome outcome = attemptWithOutcome.Outcome;
 
-                lock (outcomeWriter)
-                {
-                    var ipInfo = GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                    outcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
-                        simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
-                        simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
-                        simAttempt.IsGuess ? "IsGuess" : "NotGuess",
-                        ipInfo.IsInAttackersIpPool ? "InAttackersIpPool" : "NotUsedByAttacker",
-                        ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
-                        string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
-                        simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
-                        simAttempt.Password,
-                        string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
-                        );
-                    outcomeWriter.Flush();
-                }                
+                var ipInfo = GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
+                string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+                    simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
+                    simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
+                    simAttempt.IsGuess ? "IsGuess" : "NotGuess",
+                    ipInfo.IsInAttackersIpPool ? "InAttackersIpPool" : "NotUsedByAttacker",
+                    ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
+                    string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
+                    simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
+                    simAttempt.Password,
+                    string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray()));
+
+                await synchronizedOutcomeWriter.WriteLineAsync(outputString);
+                await synchronizedOutcomeWriter.FlushAsync();
             },
-            (e) => {
-            }, cancellationToken: cancellationToken);
+            //(e) => {
+            //},
+            cancellationToken: cancellationToken);
             
         }
     }

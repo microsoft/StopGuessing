@@ -20,7 +20,7 @@ namespace Simulator
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test
-                ulong totalLoginAttempts = 50 * Thousand; // * Million;
+                ulong totalLoginAttempts = 200 * Thousand; // * Million;
 
                 // Figure out parameters from scale
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
