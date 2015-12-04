@@ -16,11 +16,11 @@ namespace PostSimulationAnalysis
         public bool IsIpInAttackersPool = false;
         public bool IsIpInBenignPool = false;
         public bool IsClientAProxyIP;
-        public string TypeOfMistake;
+        //public string TypeOfMistake;
         public double IndustryBlockScore;
         public double SSHBlockScore;
-        public string UserID;
-        public string Password;
+        //public string UserID;
+        //public string Password;
         public double[] scoreForEachCondition;
 
         public Trial(string[] fields)
@@ -30,13 +30,13 @@ namespace PostSimulationAnalysis
             IsFromAttacker = fields[field++] == "FromAttacker";
             IsAGuess = fields[field++] == "IsGuess";
             if (IsFromAttacker)
-                IsIpInAttackersPool = fields[field++] == "InAttackersIpPool";
-            else
                 IsIpInBenignPool = fields[field++] == "IsInBenignPool";
+            else
+                IsIpInAttackersPool = fields[field++] == "InAttackersIpPool";
             IsClientAProxyIP = fields[field++] == "ProxyIP";
-            TypeOfMistake = fields[field++];
-            UserID = fields[field++];
-            Password = fields[field++];
+            field++; // TypeOfMistake = fields[field++];
+            field++; // UserID = fields[field++];
+            field++; // Password = fields[field++];
             scoreForEachCondition = new double[fields.Length - field];
             int condition = 0;
             for (;field < fields.Length;field++)
@@ -98,11 +98,11 @@ namespace PostSimulationAnalysis
             public long FalseNegativesWithBenignProxyIp;
 
             public ROCPoint(int falsePositives, int truePositives, int falseNegatives, int trueNegatives,
-                int falsePositivesWithProxy,
                 int falsePositivesWithAttackerIp,
+                int falsePositivesWithProxy,
                 int falsePositivesWithProxyAndAttackerIp,
-                long falseNegativesWithProxy, 
                 long falseNegativesWithBenignIp,
+                long falseNegativesWithProxy, 
                 long falseNegativesWithBenignProxyIp,
                 double blockingThreshold)
             {
@@ -190,9 +190,9 @@ namespace PostSimulationAnalysis
                     double blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
                     List<ROCPoint> rocPoints = new List<ROCPoint>
                     {
-                        new ROCPoint(0, 0, originalMalicious.Count, originalBenign.Count, 
-                        falsePositivesWithProxy, falsePositivesWithAttackerIp, falsePositivesWithProxyAndAttackerIp,
-                        falseNegativeWithProxy, falseNegativeBenignIp, falseNegativeBenignProxyIp,
+                        new ROCPoint(0, 0, originalMalicious.Count, originalBenign.Count,
+                        falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,
+                        falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
                         blockThreshold)
                     };
                     while (malicious.Count > 0)
@@ -203,11 +203,9 @@ namespace PostSimulationAnalysis
                             Trial t = malicious.Dequeue();
                             if (t.IsClientAProxyIP)
                                 falseNegativeWithProxy--;
-                            if (t.IsIpInAttackersPool)
+                            if (t.IsIpInBenignPool)
                                 falseNegativeBenignIp--;
-                            if (t.IsClientAProxyIP)
-                                falseNegativeWithProxy--;
-                            if (t.IsIpInAttackersPool && t.IsClientAProxyIP)
+                            if (t.IsIpInBenignPool && t.IsClientAProxyIP)
                                 falseNegativeBenignProxyIp--;
                         }
 
@@ -224,9 +222,9 @@ namespace PostSimulationAnalysis
                         }
 
                         rocPoints.Add(new ROCPoint(originalBenign.Count - benign.Count, originalMalicious.Count - malicious.Count,
-                            malicious.Count, benign.Count, 
-                            falsePositivesWithProxy, falsePositivesWithAttackerIp, falsePositivesWithProxyAndAttackerIp,
-                            falseNegativeWithProxy, falseNegativeBenignIp, falseNegativeBenignProxyIp,
+                            malicious.Count, benign.Count,
+                            falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,
+                            falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
                             blockThreshold));
 
                         // Identify next threshold
