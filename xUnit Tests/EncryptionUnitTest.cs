@@ -20,7 +20,7 @@ namespace xUnit_Tests
             //          byte[] encrypteddata = EncryptAesCbc(plaintext, key, null, false);
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, iv, false);
-            byte[] decryptedtext = Encryption.DecryptAescbc(cipertext, keyfrompwd, iv, false);
+            byte[] decryptedtext = Encryption.DecryptAesCbc(cipertext, keyfrompwd, iv, false);
             string decryptedstring = System.Text.Encoding.Default.GetString(decryptedtext);
             Assert.Equal(plaintextstring, decryptedstring);
         }
@@ -37,7 +37,7 @@ namespace xUnit_Tests
             //          byte[] encrypteddata = EncryptAesCbc(plaintext, key, null, false);
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, addHmac: false);
-            byte[] decryptedtext = Encryption.DecryptAescbc(cipertext, keyfrompwd, checkAndRemoveHmac: false);
+            byte[] decryptedtext = Encryption.DecryptAesCbc(cipertext, keyfrompwd, checkAndRemoveHmac: false);
             string decryptedstring = System.Text.Encoding.Default.GetString(decryptedtext);
             Assert.Equal(plaintextstring, decryptedstring);
         }
@@ -54,7 +54,7 @@ namespace xUnit_Tests
             //          byte[] encrypteddata = EncryptAesCbc(plaintext, key, null, false);
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, addHmac: true);
-            byte[] decryptedtext = Encryption.DecryptAescbc(cipertext, keyfrompwd, checkAndRemoveHmac: true);
+            byte[] decryptedtext = Encryption.DecryptAesCbc(cipertext, keyfrompwd, checkAndRemoveHmac: true);
             string decryptedstring = System.Text.Encoding.Default.GetString(decryptedtext);
             Assert.Equal(plaintextstring, decryptedstring);
         }

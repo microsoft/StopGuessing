@@ -32,7 +32,7 @@ namespace PostSimulationAnalysis
             if (IsFromAttacker)
                 IsIpInBenignPool = fields[field++] == "IsInBenignPool";
             else
-                IsIpInAttackersPool = fields[field++] == "InAttackersIpPool";
+                IsIpInAttackersPool = fields[field++].Contains("InAttackersIpPool");
             IsClientAProxyIP = fields[field++] == "ProxyIP";
             field++; // TypeOfMistake = fields[field++];
             field++; // UserID = fields[field++];
