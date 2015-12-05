@@ -425,22 +425,23 @@ namespace StopGuessing.Controllers
             CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
             LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
         {
-            double passwordsPopularityAmongGuesses = loginAttempt.PasswordsPopularityAmongFailedGuesses;
-            double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses);;
             switch (loginAttempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
-                    currentBlockScore.Add(_options.PenaltyForInvalidAccount_Alpha*popularityMultiplier, loginAttempt.TimeOfAttemptUtc);
+                    double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
+                                     PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
+                    currentBlockScore.Add(invalidAccontPenalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
-                    double penalty = _options.PenaltyForInvalidPassword_Beta * popularityMultiplier;
-                    currentBlockScore.Add(penalty, loginAttempt.TimeOfAttemptUtc);
+                    double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta *
+                                    PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
+                    currentBlockScore.Add(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null)
                     {
                         recentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
                         {
                             EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
-                            Penalty = new DoubleThatDecaysWithTime(currentBlockScore.HalfLife, penalty, loginAttempt.TimeOfAttemptUtc),
+                            Penalty = new DoubleThatDecaysWithTime(currentBlockScore.HalfLife, invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc),
                             UsernameOrAccountId = loginAttempt.UsernameOrAccountId
                         });
                     }
@@ -477,8 +478,6 @@ namespace StopGuessing.Controllers
 
         protected void SimUpdateBlockScore(SimulationConditionData cond, LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
         {
-            double passwordsPopularityAmongGuesses = loginAttempt.PasswordsPopularityAmongFailedGuesses;
-            double popularityMultiplier = PopularityPenaltyMultiplier(passwordsPopularityAmongGuesses); ;
             switch (loginAttempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount:
@@ -491,7 +490,7 @@ namespace StopGuessing.Controllers
                         ? _options.PenaltyForInvalidAccount_Alpha
                         : _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= popularityMultiplier;
+                        penalty *= PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 }
@@ -503,7 +502,7 @@ namespace StopGuessing.Controllers
                         return;
                     double penalty = _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= popularityMultiplier;
+                        penalty *= PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null && cond.RecentPotentialTypos != null)
                     {
@@ -739,11 +738,8 @@ namespace StopGuessing.Controllers
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
             }
             
-            double popularityMultiplier = PopularityPenaltyMultiplier(popularityOfPasswordAmongIncorrectPasswords); ;
-
             UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, ref accountChanged);
             SimUpdateBlockScores(ip.SimulationConditions, loginAttempt, account, ref accountChanged);
-            //ip.CurrentBlockScore.Add(penalty, loginAttempt.TimeOfAttemptUtc);
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
                 loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)

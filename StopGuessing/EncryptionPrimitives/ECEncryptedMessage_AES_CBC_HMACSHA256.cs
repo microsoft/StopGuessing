@@ -40,20 +40,21 @@ namespace StopGuessing.EncryptionPrimitives
         /// </summary>
         /// <param name="recipientsEcPublicKey">The public portion of the message recpient's EC key.</param>
         /// <param name="plaintextMessageAsByteArray">The message to encrypt.</param>
-        public EcEncryptedMessageAesCbcHmacSha256(ECDiffieHellmanPublicKey recipientsEcPublicKey, byte[] plaintextMessageAsByteArray)
+        public EcEncryptedMessageAesCbcHmacSha256(ECDiffieHellmanPublicKey recipientsEcPublicKey,
+            byte[] plaintextMessageAsByteArray)
         {
-            ECDiffieHellmanCng oneTimeEcKey = new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null, new CngKeyCreationParameters()));
-            PublicOneTimeEcKey = oneTimeEcKey.PublicKey.ToByteArray();
-
-            byte[] sessionKey = oneTimeEcKey.DeriveKeyMaterial(recipientsEcPublicKey);
+            byte[] sessionKey;
+            using (CngKey oneTimeEcCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256))
+            {
+                using (ECDiffieHellmanCng oneTimeEcKey = new ECDiffieHellmanCng(oneTimeEcCngKey))
+                {
+                    PublicOneTimeEcKey = oneTimeEcKey.PublicKey.ToByteArray();
+                    sessionKey = oneTimeEcKey.DeriveKeyMaterial(recipientsEcPublicKey);
+                }
+            }
             EncryptedMessage = Encryption.EncryptAesCbc(plaintextMessageAsByteArray, sessionKey, addHmac: true);
         }
 
-        public EcEncryptedMessageAesCbcHmacSha256(byte[] publicOneTimeEcKey, byte[] plaintextMessageAsByteArray)
-            : this(
-                ECDiffieHellmanCngPublicKey.FromByteArray(publicOneTimeEcKey, CngKeyBlobFormat.EccPublicBlob), plaintextMessageAsByteArray)
-        {
-        }
 
         /// <summary>
         /// Decrypt the message by providing the recipient's private EC key.
@@ -66,20 +67,29 @@ namespace StopGuessing.EncryptionPrimitives
 
             try
             {
-                sessionKey = recipientsPrivateEcKey.DeriveKeyMaterial(CngKey.Import(PublicOneTimeEcKey, CngKeyBlobFormat.EccPublicBlob));
+                using (CngKey otherPartiesPublicKey = CngKey.Import(PublicOneTimeEcKey, CngKeyBlobFormat.EccPublicBlob))
+                {
+                    sessionKey = recipientsPrivateEcKey.DeriveKeyMaterial(otherPartiesPublicKey);
+                }
             }
             catch (CryptographicException e)
             {
                 throw new Exception("Failed to Decrypt log entry", e);
             }
 
-            return Encryption.DecryptAescbc(EncryptedMessage, sessionKey, checkAndRemoveHmac: true);
+            return Encryption.DecryptAesCbc(EncryptedMessage, sessionKey, checkAndRemoveHmac: true);
         }
 
-        
+
         public byte[] Decrypt(byte[] ecPrivateKey)
         {
-            return Decrypt(new ECDiffieHellmanCng(CngKey.Import(ecPrivateKey, CngKeyBlobFormat.EccPrivateBlob)));
+            using (CngKey privateCngKey = CngKey.Import(ecPrivateKey, CngKeyBlobFormat.EccPrivateBlob))
+            {
+                using (ECDiffieHellmanCng privateKey = new ECDiffieHellmanCng(privateCngKey))
+                {
+                    return Decrypt(privateKey);
+                }
+            }
         }
     }
 

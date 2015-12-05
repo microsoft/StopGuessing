@@ -10,19 +10,9 @@ namespace StopGuessing.EncryptionPrimitives
     public static class StrongRandomNumberGenerator
     {
         // Pre-allocate a thread-safe random number generator
-        private static RNGCryptoServiceProvider LocalRandomNumberGenerator = new RNGCryptoServiceProvider();
-        private static int FIXME_memoryLeakHack = 0;
+        private static readonly RNGCryptoServiceProvider LocalRandomNumberGenerator = new RNGCryptoServiceProvider();
         public static void GetBytes(byte[] bytes)
         {
-            if (FIXME_memoryLeakHack++ > 10000)
-            {
-                // To try to fix a memory leak, freeing and regerating the RNG service
-                // every 10,000 calls
-                FIXME_memoryLeakHack = 0;
-                RNGCryptoServiceProvider toDispose = LocalRandomNumberGenerator;
-                LocalRandomNumberGenerator = new RNGCryptoServiceProvider();
-                toDispose.Dispose();
-            }
             LocalRandomNumberGenerator.GetBytes(bytes);
         }
 
