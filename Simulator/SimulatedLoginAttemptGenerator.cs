@@ -7,47 +7,22 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace Simulator
 {
-    public class SimulatedLoginAttempt
+    
+    public class SimulatedLoginAttemptGenerator
     {
-        public LoginAttempt Attempt;
-        public string Password;
-        public bool IsPasswordValid;
-        public bool IsFromAttacker;
-        public bool IsGuess;
-        public string MistakeType;
+        private readonly SimulatedAccounts _simAccounts;
+        private readonly ExperimentalConfiguration _experimentalConfiguration;
+        private readonly IpPool _ipPool;
+        private readonly SimulatedPasswords _simPasswords;
 
-        public SimulatedLoginAttempt(SimulatedAccount account,
-            string password,
-            bool isFromAttacker,
-            bool isGuess,
-            IPAddress clientAddress,
-            string cookieProvidedByBrowser,
-            string mistakeType,
-            DateTime eventTimeUtc
-        )
+        public SimulatedLoginAttemptGenerator(ExperimentalConfiguration experimentalConfiguration, SimulatedAccounts simAccounts, IpPool ipPool, SimulatedPasswords simPasswords)
         {
-            string accountId = account != null ? account.UniqueId : StrongRandomNumberGenerator.Get64Bits().ToString();
-            bool isPasswordValid = account != null && account.Password == password;
-
-            Attempt = new LoginAttempt
-            {
-                UsernameOrAccountId = accountId,
-                AddressOfClientInitiatingRequest = clientAddress,
-                AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] {127, 1, 1, 1}),
-                TimeOfAttemptUtc = eventTimeUtc,
-                Api = "web",
-                CookieProvidedByBrowser = cookieProvidedByBrowser
-            };
-            Password = password;
-            IsPasswordValid = isPasswordValid;
-            IsFromAttacker = isFromAttacker;
-            IsGuess = isGuess;
-            MistakeType = mistakeType;
+            _simAccounts = simAccounts;
+            _experimentalConfiguration = experimentalConfiguration;
+            _ipPool = ipPool;
+            _simPasswords = simPasswords;
         }
-    }
 
-    public partial class Simulator
-    {
         /// <summary>
         /// Send one benign login attempts
         /// </summary>
@@ -62,7 +37,7 @@ namespace Simulator
             string cookie;
             // Add a new cookie if there are no cookies, or with if we haven't reached the max number of cookies and lose a roll of the dice
             if (account.Cookies.Count == 0 ||
-                (account.Cookies.Count < MyExperimentalConfiguration.MaxCookiesPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfCoookieReUse))
+                (account.Cookies.Count < _experimentalConfiguration.MaxCookiesPerUserAccount && StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.ChanceOfCoookieReUse))
             {
                 // We'll use the decimal represenation of a 64-bit unsigned integer as our cookie 
                 cookie = StrongRandomNumberGenerator.Get64Bits().ToString();
@@ -80,7 +55,7 @@ namespace Simulator
             // 1/3 of times login with the primary IP address, otherwise, choose an IP randomly from the benign IP pool
             IPAddress clientIp;
             if (account.ClientAddresses.Count == 0 ||
-                (account.ClientAddresses.Count < MyExperimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfIpReUse))
+                (account.ClientAddresses.Count < _experimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.ChanceOfIpReUse))
             {
                 // Use a new IP for the user
                 account.ClientAddresses.Add(clientIp = _ipPool.GetNewRandomBenignIp(account.UniqueId));
@@ -97,20 +72,20 @@ namespace Simulator
             // Add benign failures
 
             // The benign user may mistype her password causing a typo (Adding a z will meet the edit distance def. of typo)
-            if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignPasswordTypo)
+            if (StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.ChanceOfBenignPasswordTypo)
             {
                 password += "z";
                 mistake += "Typo";
             }
             // The benign user may mistakenly use a password for another of her accounts, which we draw from same distribution
             // we used to generate user account passwords
-            if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfAccidentallyUsingAnotherAccountPassword)
+            if (StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.ChanceOfAccidentallyUsingAnotherAccountPassword)
             {
                 password = _simPasswords.GetPasswordFromWeightedDistribution();
                 mistake = "WrongPassword";
             }
             // The benign user may mistype her account name, and land on someone else's account name
-            if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignAccountNameTypoResultingInAValidUserName)
+            if (StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.ChanceOfBenignAccountNameTypoResultingInAValidUserName)
             {
                 account = _simAccounts.GetBenignAccountAtRandomUniform();
                 mistake += "WrongAccountName";
@@ -126,7 +101,7 @@ namespace Simulator
         public SimulatedLoginAttempt MaliciousLoginAttemptWeighted()
         {
             SimulatedAccount targetBenignAccount =
-                (StrongRandomNumberGenerator.GetFraction() <  MyExperimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
+                (StrongRandomNumberGenerator.GetFraction() <  _experimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
                     ? null : _simAccounts.GetBenignAccountAtRandomUniform();
 
             return new SimulatedLoginAttempt(
@@ -148,14 +123,13 @@ namespace Simulator
         public SimulatedLoginAttempt MaliciousLoginAttemptBreadthFirst()
         {
             string mistake = "";
-            ulong breadthFirstAttemptCount;
             string password;
 
             SimulatedAccount targetBenignAccount;
 
             // Sometimes the attacker will miss and generate an invalid account name;
             if (StrongRandomNumberGenerator.GetFraction() <
-                MyExperimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
+                _experimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
             {
                 targetBenignAccount = null;
                 mistake = "BadAccount";
@@ -163,6 +137,7 @@ namespace Simulator
             }
             else
             {
+                ulong breadthFirstAttemptCount;
                 lock (_breadthFirstLock)
                 {
                     breadthFirstAttemptCount = _breadthFirstAttemptCounter++;
@@ -175,8 +150,6 @@ namespace Simulator
                 targetBenignAccount = _simAccounts.BenignAccounts[accountIndex];
                 password = _simPasswords.OrderedListOfMostCommonPasswords[passwordIndex];
             }
-
-
 
             //SimulationTest _simulationtest = new SimulationTest();
             return new SimulatedLoginAttempt(targetBenignAccount, password,
@@ -202,32 +175,6 @@ namespace Simulator
         }
 
 
-        ///// <summary>
-        ///// Send login requests to the stopguessing service
-        ///// </summary>
-        ///// <param name="username"></param>
-        ///// <param name="password"></param>
-        ///// <param name="clientAddress"></param>
-        ///// <param name="cookieProvidedByBrowser"></param>
-        ///// <param name="eventTimeUtc"></param>
-        ///// <param name="cancellationToken"></param>
-        ///// <returns></returns>
-        //public Tuple<LoginAttempt,string> CreateLoginAttempt(string username, string password,
-        //    IPAddress clientAddress,
-        //    string cookieProvidedByBrowser,
-        //    DateTimeOffset eventTimeUtc,
-        //    CancellationToken cancellationToken = default(CancellationToken)
-        //    )
-        //{
-        //    return new Tuple<LoginAttempt, string>(new LoginAttempt
-        //    {
-        //        UsernameOrAccountId = username,
-        //        AddressOfClientInitiatingRequest = clientAddress,
-        //        AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] { 127, 1, 1, 1 }),
-        //        TimeOfAttemptUtc = eventTimeUtc,
-        //        Api = "web",
-        //        CookieProvidedByBrowser = cookieProvidedByBrowser
-        //    }, password);
-        //}
+
     }
 }

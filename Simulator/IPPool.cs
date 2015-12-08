@@ -67,7 +67,7 @@ namespace Simulator
 
 
         private readonly List<IPAddress> _maliciousIpAddresses = new List<IPAddress>();
-        public void GenerateMaliciousIps()
+        public void GenerateAttackersIps()
         {
             List<IPAddress> listOfIpAddressesInUseByBenignUsers = _ipAddresssesInUseByBenignUsers.ToList();
             uint numberOfOverlappingIps = (uint)
@@ -86,7 +86,7 @@ namespace Simulator
                 _maliciousIpAddresses.Add(address);
                 listOfIpAddressesInUseByBenignUsers.RemoveAt(randIndex);
             }
-            for (i = 0; i < _experimentalConfiguration.NumberOfIpAddressesControlledByAttacker; i++)
+            for (; i < _experimentalConfiguration.NumberOfIpAddressesControlledByAttacker; i++)
             {
                 IPAddress address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
                 IPAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
@@ -106,14 +106,6 @@ namespace Simulator
         {
             int randIndex = (int)StrongRandomNumberGenerator.Get32Bits(_maliciousIpAddresses.Count);
             IPAddress address = _maliciousIpAddresses[randIndex];
-            var debugInfo = GetIpAddressDebugInfo(address);
-            lock (debugInfo)
-            {
-                if (debugInfo.IsInAttackersIpPool != true)
-                {
-                    debugInfo.IsInAttackersIpPool = true;
-                }
-            }
             return _maliciousIpAddresses[randIndex];
         }
 
