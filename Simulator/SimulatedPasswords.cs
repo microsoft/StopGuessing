@@ -9,11 +9,10 @@ namespace Simulator
 {
     public class SimulatedPasswords
     {
-        public WeightedSelector<string> passwordSelector;
-        public List<string> passwordsAlreadyKnownToBePopular;
-        public List<string> OrderedListOfMostCommonPasswords = new List<string>();
-        public WeightedSelector<string> PasswordSelector;
-        public WeightedSelector<string> CommonPasswordSelector;
+        private WeightedSelector<string> _passwordSelector;
+        private List<string> _passwordsAlreadyKnownToBePopular;
+        public List<string> OrderedListOfMostCommonPasswords;
+        private WeightedSelector<string> _commonPasswordSelector;
         private DebugLogger _logger;
 
         public SimulatedPasswords(DebugLogger logger, ExperimentalConfiguration experimentalConfiguration)
@@ -24,27 +23,25 @@ namespace Simulator
             _logger.WriteStatus("Loading passwords known to be common by the algorithm before the attack");
             LoadKnownPopularPasswords(experimentalConfiguration.PreviouslyKnownPopularPasswordFile);
             _logger.WriteStatus("Creating common password selector");
-            CommonPasswordSelector = PasswordSelector.TrimToInitialItems(
+            _commonPasswordSelector = _passwordSelector.TrimToInitialItems(
                     (int)experimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
             _logger.WriteStatus("Finished creating common password selector");
 
             _logger.WriteStatus("Creating list of most common passwords");
             OrderedListOfMostCommonPasswords =
-                PasswordSelector.GetItems((int)experimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
+                _passwordSelector.GetItems((int)experimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
             _logger.WriteStatus("Finished creating list of most common passwords");
-
-
         }
 
 
         public string GetPasswordFromWeightedDistribution()
         {
-            return passwordSelector.GetItemByWeightedRandom();
+            return _passwordSelector.GetItemByWeightedRandom();
         }
 
         public void LoadKnownPopularPasswords(string pathToPreviouslyKnownPopularPasswordFile)
         {
-            passwordsAlreadyKnownToBePopular = new List<string>();
+            _passwordsAlreadyKnownToBePopular = new List<string>();
             using (System.IO.StreamReader file =
                 new System.IO.StreamReader(pathToPreviouslyKnownPopularPasswordFile))
             {
@@ -54,21 +51,21 @@ namespace Simulator
                 {
                     line = line.Trim();
                     if (!string.IsNullOrEmpty(line))
-                        passwordsAlreadyKnownToBePopular.Add(line);
+                        _passwordsAlreadyKnownToBePopular.Add(line);
                 }
             }
         }
 
         public async Task PrimeWithKnownPasswordsAsync(LoginAttemptController loginAttemptController)
         {
-            await TaskParalllel.ForEachWithWorkers(passwordsAlreadyKnownToBePopular, async (password, itemNumer, cancelToken) =>
+            await TaskParalllel.ForEachWithWorkers(_passwordsAlreadyKnownToBePopular, async (password, itemNumer, cancelToken) =>
                 await loginAttemptController.PrimeCommonPasswordAsync(password, 100, cancelToken));
         }
 
 
         private void LoadPasswordSelector(string pathToWeightedFrequencyFile)
         {
-            passwordSelector = new WeightedSelector<string>();
+            _passwordSelector = new WeightedSelector<string>();
             // Created a weighted-random selector for paasswords based on the RockYou database.
             using (System.IO.StreamReader file =
                 new System.IO.StreamReader(pathToWeightedFrequencyFile))
@@ -87,7 +84,7 @@ namespace Simulator
                     if (!ulong.TryParse(countAsString, out count))
                         continue; // The count field is invalid as it doesn't parse to an unsigned number
                     string password = lineWithCountFollowedBySpaceFollowedByPassword.Substring(indexOfFirstSpace + 1);
-                    passwordSelector.AddItem(password, count);
+                    _passwordSelector.AddItem(password, count);
                 }
             }
         }
