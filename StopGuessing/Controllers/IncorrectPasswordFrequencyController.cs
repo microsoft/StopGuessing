@@ -29,7 +29,7 @@ namespace StopGuessing.Controllers
 
         // GET api/IncorrectPasswordFrequency/
         [HttpGet("{hash}")]
-        public Proportion[] Get(string hash)
+        public Proportion Get(string hash)
         {
             return MultiperiodFrequencyTracker.Get(hash);
         }

@@ -192,7 +192,7 @@ namespace StopGuessing.Controllers
 
             string easyHashOfPassword =
                 Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordProvidedByClient)));
-            IFrequencies frequencies = await _incorrectPasswordFrequenciesProvider.GetFrequenciesAsync(
+            IUpdatableFrequency frequencies = await _incorrectPasswordFrequenciesProvider.GetFrequencyAsync(
                 easyHashOfPassword,
                 cancellationToken: cancellationToken);
 
@@ -401,40 +401,32 @@ namespace StopGuessing.Controllers
             }
         }
 
-        /// <summary>
-        /// Multiply the penalty to be applied to a failed login loginAttempt based on the popularity of the password that was guessed.
-        /// </summary>
-        /// <param name="popularityLevel">The popularity of the password as a fraction (e.g. 0.0001 means 1 in 10,000 incorrect
-        /// passwords were this password.)</param>
-        /// <returns></returns>
-        private double PopularityPenaltyMultiplier(double popularityLevel)
-        {
-            double penalty = 1d;
-            foreach (
-                PenaltyForReachingAPopularityThreshold penaltyForReachingAPopularityThreshold in
-                    _options.PenaltyForReachingEachPopularityThreshold)
-            {
-                if (penalty < penaltyForReachingAPopularityThreshold.Penalty &&
-                    popularityLevel >= penaltyForReachingAPopularityThreshold.PopularityThreshold)
-                    penalty = penaltyForReachingAPopularityThreshold.Penalty;
-            }
-            return penalty;
-        }
+        ///// <summary>
+        ///// Multiply the penalty to be applied to a failed login loginAttempt based on the popularity of the password that was guessed.
+        ///// </summary>
+        ///// <param name="popularityLevel">The popularity of the password as a fraction (e.g. 0.0001 means 1 in 10,000 incorrect
+        ///// passwords were this password.)</param>
+        ///// <returns></returns>
+        //private double PopularityPenaltyMultiplier(double popularityLevel)
+        //{
+        //    return ThresholdAndValue.EvaluteAbove(_options.PenaltyForReachingEachPopularityThreshold, popularityLevel,
+        //        1d);
+        //}
 
         protected void UpdateBlockScore(DoubleThatDecaysWithTime currentBlockScore,
             CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
-            LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
+            LoginAttempt loginAttempt, UserAccount account, ILadder ladder, IUpdatableFrequency frequency, ref bool accountChanged)
         {
             switch (loginAttempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
                     double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
-                                     PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
+                                     _options.GetPopularityBasedPenaltyMultiplier(ladder, frequency);
                     currentBlockScore.Add(invalidAccontPenalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                     double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta *
-                                    PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
+                                    _options.GetPopularityBasedPenaltyMultiplier(ladder,frequency);
                     currentBlockScore.Add(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null)
                     {
@@ -468,15 +460,17 @@ namespace StopGuessing.Controllers
 
 
         protected void SimUpdateBlockScores(IEnumerable<SimulationConditionData> conditions, LoginAttempt loginAttempt, UserAccount account,
+            ILadder ladder, IUpdatableFrequency frequency,
             ref bool accountChanged)
         {
             foreach (SimulationConditionData condition in conditions)
             {
-                SimUpdateBlockScore(condition,loginAttempt,account,ref accountChanged);
+                SimUpdateBlockScore(condition,loginAttempt,account, ladder, frequency, ref accountChanged);
             }
         }
 
-        protected void SimUpdateBlockScore(SimulationConditionData cond, LoginAttempt loginAttempt, UserAccount account, ref bool accountChanged)
+        protected void SimUpdateBlockScore(SimulationConditionData cond, LoginAttempt loginAttempt, UserAccount account,
+            ILadder ladder, IUpdatableFrequency frequency, ref bool accountChanged)
         {
             switch (loginAttempt.Outcome)
             {
@@ -490,7 +484,7 @@ namespace StopGuessing.Controllers
                         ? _options.PenaltyForInvalidAccount_Alpha
                         : _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
+                        penalty *= _options.GetPopularityBasedPenaltyMultiplier(ladder, frequency);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 }
@@ -502,7 +496,7 @@ namespace StopGuessing.Controllers
                         return;
                     double penalty = _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= PopularityPenaltyMultiplier(loginAttempt.PasswordsPopularityAmongFailedGuesses);
+                        penalty *= _options.GetPopularityBasedPenaltyMultiplier(ladder, frequency);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null && cond.RecentPotentialTypos != null)
                     {
@@ -579,7 +573,7 @@ namespace StopGuessing.Controllers
             // Get a more-accurate count of the passwords' frequency if it is already known to be common
             string easyHashOfPassword =
                 Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordProvidedByClient)));
-            Task<IFrequencies> passwordFrequencyTask = _incorrectPasswordFrequenciesProvider.GetFrequenciesAsync(
+            Task<IUpdatableFrequency> passwordFrequencyTask = _incorrectPasswordFrequenciesProvider.GetFrequencyAsync(
                 easyHashOfPassword,
                 timeout: timeout,
                 cancellationToken: cancellationToken);
@@ -613,11 +607,10 @@ namespace StopGuessing.Controllers
             // as we are most concerned about frequently-guessed passwords.
             ILadder passwordLadder = await binomialLadderTask;
             int ladderRungsWithConfidence = passwordLadder.CountObservationsForGivenConfidence(_options.PopularityConfidenceLevel);
-            double ladderPopularity = (double)ladderRungsWithConfidence / (10d * 1000d);//FIXME
-
-            IFrequencies passwordFrequencies = await passwordFrequencyTask;
-            double trackedPopularity = Proportion.GetLargest(passwordFrequencies.Proportions).AsDouble;
-            double popularityOfPasswordAmongIncorrectPasswords = Math.Max(ladderPopularity, trackedPopularity);
+            //double ladderPopularity = 
+            IUpdatableFrequency passwordFrequency = await passwordFrequencyTask;
+            double trackedPopularity = passwordFrequency.Proportion.AsDouble;
+            double popularityOfPasswordAmongIncorrectPasswords = Math.Max((double)ladderRungsWithConfidence / (10d * 1000d), trackedPopularity);
 
 
             if (account == null)
@@ -720,16 +713,15 @@ namespace StopGuessing.Controllers
 
             double[] conditionScores = ip.SimulationConditions.Select( cond =>
                     cond.GetThresholdAdjustedScore(loginAttempt.PasswordsPopularityAmongFailedGuesses,
-                        loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount, loginAttempt.TimeOfAttemptUtc)).ToArray();
+                        loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount,
+                        passwordLadder, passwordFrequency, loginAttempt.TimeOfAttemptUtc)).ToArray();
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
             {
                 // We only need to decide whether to block if the credentials provided were valid.
                 // We'll get the blocking threshold, blocking condition, and block if the condition exceeds the threshold.
-                double blockingThreshold = _options.BlockThresholdPopularPassword;
-                if (loginAttempt.PasswordsPopularityAmongFailedGuesses <
-                    _options.ThresholdAtWhichAccountsPasswordIsDeemedPopular)
-                    blockingThreshold *= _options.BlockThresholdMultiplierForUnpopularPasswords;
+                double blockingThreshold = _options.BlockThresholdPopularPassword *
+                    _options.GetPopularityBasedThresholdMultiplier(passwordLadder, passwordFrequency);
                 double blockScore = ip.CurrentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc);
                 // If the client provided a cookie proving a past successful login, we'll ignore the block condition
                 if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
@@ -738,19 +730,19 @@ namespace StopGuessing.Controllers
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
             }
             
-            UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, ref accountChanged);
-            SimUpdateBlockScores(ip.SimulationConditions, loginAttempt, account, ref accountChanged);
+            UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, passwordLadder, passwordFrequency,  ref accountChanged);
+            SimUpdateBlockScores(ip.SimulationConditions, loginAttempt, account, passwordLadder, passwordFrequency, ref accountChanged);
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
                 loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
             {
-                if (passwordFrequencies.Proportions.Last().AsDouble > 0 ||
+                if (trackedPopularity > 0 ||
                     // FIXME with configuration values
                     passwordLadder.CountObservationsForGivenConfidence(1d/(1000d*1000d*1000d)) > 5)
                 {
                     // FIXME
                     //Task background1 = 
-                        await passwordFrequencies.RecordObservationAsync(cancellationToken: cancellationToken);
+                        await passwordFrequency.RecordObservationAsync(cancellationToken: cancellationToken);
                 }
 
                 // FIXME

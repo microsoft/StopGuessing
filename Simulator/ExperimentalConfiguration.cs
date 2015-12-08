@@ -25,6 +25,7 @@ namespace Simulator
 
         public TimeSpan TestTimeSpan = new TimeSpan(1, 0, 0, 0); // 1 day
 
+        public string OutputPath = @"d:\";
         public string PasswordFrequencyFile = @"..\..\rockyou-withcount.txt";
         public string PreviouslyKnownPopularPasswordFile = @"..\..\phpbb.txt";
 
