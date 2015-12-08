@@ -31,14 +31,17 @@ namespace Simulator
             public ulong TotalLoopIterations = 0;
             public ulong TotalExceptions = 0;
         }
-
-        //public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
+        
         public LoginAttemptController MyLoginAttemptController;
-        //public LoginAttemptClient MyLoginAttemptClient;
-        public IUserAccountContextFactory MyAccountContextFactory;
-        //public LimitPerTimePeriod[] CreditLimits;
-        //public MemoryOnlyStableStore StableStore = new MemoryOnlyStableStore();        
+        public IUserAccountContextFactory MyAccountContextFactory;     
         public ExperimentalConfiguration MyExperimentalConfiguration;
+
+        private TextWriter _outputWriter;
+        private DebugLogger _logger;
+        private SimulatedPasswords _simPasswords;
+        IpPool _ipPool;
+        SimulatedAccounts _simAccounts;
+
 
         public delegate void ExperimentalConfigurationFunction(ExperimentalConfiguration config);
         public delegate void StatisticsWritingFunction(ResultStatistics resultStatistics);
@@ -82,39 +85,14 @@ namespace Simulator
                 return (((double)numerator)/(double)denominmator).ToString(CultureInfo.InvariantCulture);
         }
 
-        private StreamWriter _errorWriter;
-        private DateTime whenStarted = DateTime.UtcNow;
-        private long lastMemory = 0;
-        private DateTime lastEventTime;
-        public void WriteStatus(string status, params Object[] args)
+
+        public async Task PrimeWithKnownPasswordsAsync(IEnumerable<string> knownPopularPasswords)
         {
-            DateTime now = DateTime.UtcNow;
-            TimeSpan eventTime = now - whenStarted;
-            TimeSpan sinceLastEvent = now - lastEventTime;
-            long eventMemory = GC.GetTotalMemory(false);
-            long memDiff = eventMemory - lastMemory;
-            long eventMemoryMB = eventMemory/(1024L*1024L);
-            long memDiffMB = memDiff/(1024L*1024L);
-            lastMemory = eventMemory;
-            lastEventTime = now;
-            Console.Out.WriteLine("Time: {0:00}:{1:00}:{2:00}.{3:000} seconds ({4:0.000}),  Memory: {5}MB (increased by {6}MB)",
-                eventTime.Hours,
-                eventTime.Minutes,
-                eventTime.Seconds,
-                eventTime.Milliseconds,
-                sinceLastEvent.TotalSeconds,
-                eventMemoryMB, memDiffMB);
-            Console.Out.WriteLine(status, args);
-            _errorWriter.WriteLine("Time: {0:00}:{1:00}:{2:00}.{3:000} seconds ({4:0.000}),  Memory: {5}MB (increased by {6}MB)",
-                eventTime.Hours,
-                eventTime.Minutes,
-                eventTime.Seconds,
-                eventTime.Milliseconds,
-                sinceLastEvent.TotalSeconds,
-                eventMemoryMB, memDiffMB);
-            _errorWriter.WriteLine(status, args);
-            _errorWriter.Flush();
+            //WriteStatus("I'm not going to prime with common passwords so that we can test more quickly.  FIXME for real testing");
+            await TaskParalllel.ForEachWithWorkers(knownPopularPasswords, async (password, itemNumer, cancelToken) =>
+                await MyLoginAttemptController.PrimeCommonPasswordAsync(password, 100, cancelToken));
         }
+
 
         public static async Task RunExperimentalSweep(
             ExperimentalConfigurationFunction configurationDelegate,
@@ -129,8 +107,7 @@ namespace Simulator
              
             ExperimentalConfiguration baseConfig = new ExperimentalConfiguration();
             configurationDelegate(baseConfig);
-            WeightedSelector <string> passwordSelector = Simulator.GetPasswordSelector(baseConfig.PasswordFrequencyFile);
-            List<string> passwordsAlreadyKnownToBePopular = Simulator.GetKnownPopularPasswords(baseConfig.PreviouslyKnownPopularPasswordFile);
+
 
             DateTime now = DateTime.Now;
             string dirName = @"..\..\Experiment_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
@@ -161,12 +138,14 @@ namespace Simulator
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
                 TextWriter dataWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "data.txt"));
-                StreamWriter errorWriter = new StreamWriter(path + "error.txt");
+                TextWriter errorWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "error.txt"));
+                DebugLogger logger = new DebugLogger(errorWriter);
                 try
                 {
-                    Simulator simulator = new Simulator(errorWriter,config, passwordSelector);
-                    await simulator.PrimeWithKnownPasswordsAsync(passwordsAlreadyKnownToBePopular);
-                    await simulator.Run(dataWriter);
+                    SimulatedPasswords simPasswords = new SimulatedPasswords(logger, config);
+                    Simulator simulator = new Simulator(logger, dataWriter, config, simPasswords);
+                    await simulator.PrimeWithKnownPasswordsAsync(simPasswords.passwordsAlreadyKnownToBePopular);
+                    await simulator.Run();
                 }
                 catch (Exception e)
                 {
@@ -182,13 +161,15 @@ namespace Simulator
             }
         }
 
-        public Simulator(StreamWriter errorWriter, ExperimentalConfiguration myExperimentalConfiguration, WeightedSelector<string> passwordSelector)
+        public Simulator(DebugLogger logger, TextWriter outputWriter, ExperimentalConfiguration myExperimentalConfiguration, SimulatedPasswords simPasswords)
         {
-            _errorWriter = errorWriter;
-            WriteStatus("Entered Simulator constructor");
+            _outputWriter = outputWriter;
+            _simPasswords = simPasswords;
+            _logger = logger;
+
+            _logger.WriteStatus("Entered Simulator constructor");
             MyExperimentalConfiguration = myExperimentalConfiguration;
             BlockingAlgorithmOptions options = MyExperimentalConfiguration.BlockingOptions;
-            PasswordSelector = passwordSelector;
             //CreditLimits = new[]
             //{
             //    // 3 per hour
@@ -201,13 +182,13 @@ namespace Simulator
             //    new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
             //};
             //We are testing with local server now
-            WriteStatus("Creating responsible hosts");
+            _logger.WriteStatus("Creating responsible hosts");
             //MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             //configuration.MyResponsibleHosts.Add("localhost", new RemoteHost { Uri = new Uri("http://localhost:80"), IsLocalHost = true });
             //RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
             //MyResponsibleHosts.Add("localhost", localHost);
 
-            WriteStatus("Creating binomial ladder");
+            _logger.WriteStatus("Creating binomial ladder");
             BinomialLadderSketch localPasswordBinomialLadderSketch =
                 new BinomialLadderSketch(1024 * 1024 * 1024, options.NumberOfRungsInBinomialLadder);
             MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
@@ -215,7 +196,7 @@ namespace Simulator
                     options.NumberOfPopularityMeasurementPeriods,
                     options.LengthOfShortestPopularityMeasurementPeriod,
                     options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
-            WriteStatus("Finished creating binomial ladder");
+            _logger.WriteStatus("Finished creating binomial ladder");
 
             //MyLoginAttemptClient = new LoginAttemptClient(MyResponsibleHosts, localHost);
 
@@ -226,10 +207,7 @@ namespace Simulator
                 MyAccountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
                 memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions);
 
-            WriteStatus("Creating login attempt controller");
-            //MyLoginAttemptClient.SetLocalLoginAttemptController(MyLoginAttemptController);
-            WriteStatus("Finished creating login attempt controller");
-            WriteStatus("Exiting Simulator constructor");
+            _logger.WriteStatus("Exiting Simulator constructor");
         }
 
 
@@ -237,16 +215,16 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task Run(TextWriter synchronizedOutcomeWriter,
-            CancellationToken cancellationToken = default(CancellationToken))
+        public async Task Run(CancellationToken cancellationToken = default(CancellationToken))
         {
-            WriteStatus("In Run");
+            _logger.WriteStatus("In Run");
+            _ipPool = new IpPool(MyExperimentalConfiguration);
+            _simAccounts = new SimulatedAccounts(_ipPool, _simPasswords, _logger);
+            _simAccounts.Generate(MyExperimentalConfiguration);
 
-            GenerateSimulatedAccounts();
-
-            WriteStatus("Creating user accounts for each simluated account record");
-            List<SimulatedAccount> allSimAccounts = new List<SimulatedAccount>(BenignAccounts);
-            allSimAccounts.AddRange(MaliciousAccounts);
+            _logger.WriteStatus("Creating user accounts for each simluated account record");
+            List<SimulatedAccount> allSimAccounts = new List<SimulatedAccount>(_simAccounts.BenignAccounts);
+            allSimAccounts.AddRange(_simAccounts.MaliciousAccounts);
             ConcurrentBag<UserAccount> userAccounts = new ConcurrentBag<UserAccount>();
             await TaskParalllel.ForEachWithWorkers(allSimAccounts,
 #pragma warning disable 1998
@@ -254,7 +232,7 @@ namespace Simulator
 #pragma warning restore 1998
                 {
                     if (index % 10000 == 0)
-                        WriteStatus("Created account {0:N0}", index);
+                        _logger.WriteStatus("Created account {0:N0}", index);
                     UserAccount account = UserAccount.Create(simAccount.UniqueId,
                         MyExperimentalConfiguration.BlockingOptions.Conditions.Length,
                         MyExperimentalConfiguration.BlockingOptions.AccountCreditLimit,
@@ -268,21 +246,21 @@ namespace Simulator
                     userAccounts.Add(account);
                 },
                 cancellationToken: cancellationToken);
-            WriteStatus("Finished creating user accounts for each simluated account record");
+            _logger.WriteStatus("Finished creating user accounts for each simluated account record");
 
 
-            WriteStatus("Performing a PUT on each account");
+            _logger.WriteStatus("Performing a PUT on each account");
             await TaskParalllel.ForEachWithWorkers(userAccounts,
                 async (account,index,cancelToken) =>
                 {
                     if (index % 10000 == 0)
-                        WriteStatus("PUT account {0:N0}", index);
+                        _logger.WriteStatus("PUT account {0:N0}", index);
                     await MyAccountContextFactory.Get().WriteNewAsync(account, cancellationToken: cancellationToken);
                 }, cancellationToken: cancellationToken);
-            WriteStatus("Done performing a PUT on each account");
+            _logger.WriteStatus("Done performing a PUT on each account");
 
 
-            synchronizedOutcomeWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+            _outputWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
@@ -303,7 +281,7 @@ namespace Simulator
             await TaskParalllel.RepeatWithWorkers(MyExperimentalConfiguration.TotalLoginAttemptsToIssue, async (count, cancelToken) =>
             {
                 if (count % 10000 == 0)
-                    WriteStatus("Login Attempt {0:N0}", count);
+                    _logger.WriteStatus("Login Attempt {0:N0}", count);
                 DateTime eventTimeUtc = startTimeUtc.AddTicks((long) (ticksBetweenLogins * count));
                 SimulatedLoginAttempt simAttempt;
                 if (StrongRandomNumberGenerator.GetFraction() <
@@ -321,12 +299,12 @@ namespace Simulator
                     MyLoginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
                         cancellationToken: cancellationToken);
 
-                var ipInfo = GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
+                var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
                 string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                     simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                     simAttempt.IsGuess ? "IsGuess" : "NotGuess",
-                    simAttempt.IsFromAttacker ? (ipInfo.UserIdsOfBenignUsers.Count > 0 ? "IsInBenignPool" : "NotUsedByBenign") : 
+                    simAttempt.IsFromAttacker ? (ipInfo.UserIdsOfBenignUsers != null && ipInfo.UserIdsOfBenignUsers.Count > 0 ? "IsInBenignPool" : "NotUsedByBenign") : 
                                                 (ipInfo.IsInAttackersIpPool ? "IsInAttackersIpPool" : "NotUsedByAttacker"),
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
@@ -334,8 +312,8 @@ namespace Simulator
                     simAttempt.Password,
                     string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray()));
 
-                await synchronizedOutcomeWriter.WriteLineAsync(outputString);
-                await synchronizedOutcomeWriter.FlushAsync();
+                await _outputWriter.WriteLineAsync(outputString);
+                await _outputWriter.FlushAsync();
             },
             //(e) => {
             //},
