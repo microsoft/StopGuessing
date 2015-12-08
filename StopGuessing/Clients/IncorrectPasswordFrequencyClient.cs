@@ -19,24 +19,24 @@ namespace StopGuessing.Clients
 
         private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
 
-        public async Task<IFrequencies> GetFrequenciesAsync(string passwordHash,
+        public async Task<IUpdatableFrequency> GetFrequencyAsync(string passwordHash,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             List<RemoteHost> hostsResponsibleForThisHash = _responsibleHosts.FindMembersResponsible(passwordHash,
                     HostsPerIncorrectPassword);
 
-            ConcurrentBag<Proportion[]> proportionsForEachHost = new ConcurrentBag<Proportion[]>();
+            ConcurrentBag<Proportion> proportionsForEachHost = new ConcurrentBag<Proportion>();
 
             await TaskParalllel.ForEachWithWorkers(hostsResponsibleForThisHash,
                 async (host, itemNumber, cancelToken) =>
                 {
-                    Proportion[] proportionsForThisHost = await RestClientHelper.GetAsync<Proportion[]>(
+                    Proportion proportionForThisHost = await RestClientHelper.GetAsync<Proportion>(
                         host.Uri,
                         "IncorrectPasswordFrequency/" +
                         Microsoft.Framework.WebEncoders.UrlEncoder.Default.UrlEncode(passwordHash),
                         timeout: timeout, cancellationToken: cancelToken);
-                    proportionsForEachHost.Add(proportionsForThisHost);
+                    proportionsForEachHost.Add(proportionForThisHost);
                 },
                 //e =>
                 //{
@@ -44,20 +44,7 @@ namespace StopGuessing.Clients
                 //},
                 cancellationToken: cancellationToken);
 
-            List<Proportion> proportions = new List<Proportion>();
-            foreach (Proportion[] proportionsForHost in proportionsForEachHost)
-            {
-                for (int i = 0; i < proportionsForHost.Length; i++)
-                {
-                    Proportion p = proportionsForHost[i];
-                    if (proportions.Count <= i)
-                        proportions.Add(p);
-                    else if (p.AsDouble > proportions[i].AsDouble)
-                        proportions[i] = p;
-                }
-            }
-
-            return new FrequencyTrackerFrequencies(hostsResponsibleForThisHash, passwordHash, proportions.ToArray());
+            return new ClientsUpdatableFrequency(hostsResponsibleForThisHash, passwordHash, Proportion.GetLargest(proportionsForEachHost.ToArray()));
         }
 
         protected async Task RecordObservation(string passwordHash,
@@ -95,14 +82,14 @@ namespace StopGuessing.Clients
             HostsPerIncorrectPassword = hostsPerIncorrectPassword;
         }
 
-        public class FrequencyTrackerFrequencies : IFrequencies
+        public class ClientsUpdatableFrequency : IUpdatableFrequency
         {
             protected IncorrectPasswordFrequencyClient Client;
             protected List<RemoteHost> HostsResponsibleForThisHash;
 
             protected string HashAsString;
 
-            public Proportion[] Proportions { get; protected set; }
+            public Proportion Proportion { get; protected set; }
 
             public async Task RecordObservationAsync(TimeSpan? timeout = null,
                 CancellationToken cancellationToken = default(CancellationToken))
@@ -110,12 +97,12 @@ namespace StopGuessing.Clients
                 await Client.RecordObservation(HashAsString, HostsResponsibleForThisHash, timeout, cancellationToken);
             }
 
-            public FrequencyTrackerFrequencies(List<RemoteHost> hostsResponsibleForThisHash,
-                string hashAsString, Proportion[] proportions)
+            public ClientsUpdatableFrequency(List<RemoteHost> hostsResponsibleForThisHash,
+                string hashAsString, Proportion proportion)
             {
                 HostsResponsibleForThisHash = hostsResponsibleForThisHash;
                 HashAsString = hashAsString;
-                Proportions = proportions;
+                this.Proportion = proportion;
             }
 
         }

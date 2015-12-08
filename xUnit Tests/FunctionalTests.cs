@@ -288,7 +288,7 @@ namespace xUnit_Tests
             {
                 PenaltyForInvalidPassword_Beta = 1,
                 BlockThresholdPopularPassword = 1,
-                BlockThresholdMultiplierForUnpopularPasswords = 1,
+                //BlockThresholdMultiplierForUnpopularPasswords = 1,
                 PenaltyMulitiplierForTypo = .25d
             };
 

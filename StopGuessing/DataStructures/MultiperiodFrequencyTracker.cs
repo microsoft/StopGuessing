@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace StopGuessing.DataStructures
 {
-    public interface IFrequencies
+    public interface IUpdatableFrequency
     {
-        Proportion[] Proportions { get; }
+        Proportion Proportion { get; }
 
         Task RecordObservationAsync(
             TimeSpan? timeout = null,
@@ -17,7 +17,7 @@ namespace StopGuessing.DataStructures
 
     public interface IFrequenciesProvider<in TKey>
     {
-        Task<IFrequencies> GetFrequenciesAsync(
+        Task<IUpdatableFrequency> GetFrequencyAsync(
             TKey key,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken));
@@ -56,10 +56,11 @@ namespace StopGuessing.DataStructures
 
         }
 
-        public Proportion[] Get(TKey key)
+        public Proportion Get(TKey key)
         {
-            return PasswordFrequencyEstimatesForDifferentPeriods.Select(
-                (ft) => ft.Get(key)).ToArray();
+            return Proportion.GetLargest(
+                PasswordFrequencyEstimatesForDifferentPeriods.Select(
+                    (ft) => ft.Get(key)));
         }
 
         public void RecordObservation(TKey key)
@@ -69,23 +70,23 @@ namespace StopGuessing.DataStructures
         }
 
 #pragma warning disable 1998
-        public async Task<IFrequencies> GetFrequenciesAsync(TKey key,
+        public async Task<IUpdatableFrequency> GetFrequencyAsync(TKey key,
 #pragma warning restore 1998
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return new FrequencyTrackerFrequencies(this, key, Get(key));
+            return new FrequencyTrackerResult(this, key, Get(key));
         }
     
 
 
-    public class FrequencyTrackerFrequencies : IFrequencies
+    public class FrequencyTrackerResult : IUpdatableFrequency
         {
             protected MultiperiodFrequencyTracker<TKey> Tracker;
             protected TKey Key;
 
-            public Proportion[] Proportions { get; protected set; }
+            public Proportion Proportion { get; protected set; }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
             public async Task RecordObservationAsync(
@@ -96,11 +97,22 @@ namespace StopGuessing.DataStructures
                 Tracker.RecordObservation(Key);
             }
 
-            public FrequencyTrackerFrequencies(MultiperiodFrequencyTracker<TKey> tracker, TKey key, Proportion[] proportions)
+            public FrequencyTrackerResult(MultiperiodFrequencyTracker<TKey> tracker, TKey key, IEnumerable<Proportion> proportions = null)
             {
                 Tracker = tracker;
                 Key = key;
-                Proportions = proportions;
+                this.Proportion = new Proportion(0, ulong.MaxValue);
+                if (proportions == null) return;
+                foreach(Proportion proportion in proportions)
+                    if (proportion.AsDouble > Proportion.AsDouble)
+                        this.Proportion = proportion;
+            }
+
+            public FrequencyTrackerResult(MultiperiodFrequencyTracker<TKey> tracker, TKey key, Proportion proportion)
+            {
+                Tracker = tracker;
+                Key = key;
+                this.Proportion = proportion;
             }
 
         }

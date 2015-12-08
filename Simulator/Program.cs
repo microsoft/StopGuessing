@@ -50,9 +50,12 @@ namespace Simulator
                 // Additional sources of false positives/negatives
                 config.FractionOfBenignIPsBehindProxies = 0.1d;
                 config.ProxySizeInUniqueClientIPs = 1000;
-                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.00d; // 0.1;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.01d; // 0.1;
 
-                config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 10d;
+                // Blocking parameters
+                // Make typos almost entirely ignored
+                config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
+                //config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 10d;
                 config.BlockingOptions.ExpensiveHashingFunctionIterations = 1;
                 config.BlockingOptions.Conditions = new[]
                 {
@@ -88,9 +91,6 @@ namespace Simulator
                         true, true, false)
                 };
                 
-        // Blocking parameters
-        // Make typos almost entirely ignored
-        config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
             });
 
 
