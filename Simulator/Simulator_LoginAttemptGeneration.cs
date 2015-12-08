@@ -56,7 +56,7 @@ namespace Simulator
         {
             string mistake = "";
             //1. Pick a user at random
-            SimulatedAccount account = BenignAccountSelector.GetItemByWeightedRandom();
+            SimulatedAccount account = _simAccounts.BenignAccountSelector.GetItemByWeightedRandom();
 
             //2. Deal with cookies
             string cookie;
@@ -83,7 +83,7 @@ namespace Simulator
                 (account.ClientAddresses.Count < MyExperimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfIpReUse))
             {
                 // Use a new IP for the user
-                account.ClientAddresses.Add(clientIp = GetNewRandomBenignIp(account.UniqueId));
+                account.ClientAddresses.Add(clientIp = _ipPool.GetNewRandomBenignIp(account.UniqueId));
             }
             else
             {
@@ -106,13 +106,13 @@ namespace Simulator
             // we used to generate user account passwords
             if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfAccidentallyUsingAnotherAccountPassword)
             {
-                password = GetPasswordFromWeightedDistribution();
+                password = _simPasswords.GetPasswordFromWeightedDistribution();
                 mistake = "WrongPassword";
             }
             // The benign user may mistype her account name, and land on someone else's account name
             if (StrongRandomNumberGenerator.GetFraction() < MyExperimentalConfiguration.ChanceOfBenignAccountNameTypoResultingInAValidUserName)
             {
-                account = GetBenignAccountAtRandomUniform();
+                account = _simAccounts.GetBenignAccountAtRandomUniform();
                 mistake += "WrongAccountName";
             }
 
@@ -127,13 +127,13 @@ namespace Simulator
         {
             SimulatedAccount targetBenignAccount =
                 (StrongRandomNumberGenerator.GetFraction() <  MyExperimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
-                    ? null : GetBenignAccountAtRandomUniform();
+                    ? null : _simAccounts.GetBenignAccountAtRandomUniform();
 
             return new SimulatedLoginAttempt(
                 targetBenignAccount,
-                GetPasswordFromWeightedDistribution(),
+                _simPasswords.GetPasswordFromWeightedDistribution(),
                 true, true,
-                GetRandomMaliciousIp(),
+                _ipPool.GetRandomMaliciousIp(),
                 StrongRandomNumberGenerator.Get64Bits().ToString(),
                 "",
                 DateTime.UtcNow);
@@ -149,17 +149,9 @@ namespace Simulator
         {
             string mistake = "";
             ulong breadthFirstAttemptCount;
-            lock (_breadthFirstLock)
-            {
-                breadthFirstAttemptCount = _breadthFirstAttemptCounter++;
-            }
+            string password;
 
-            // Start with the most common password and walk through all the accounts,
-            // then move on to the next most common password.
-            int passwordIndex = (int) (breadthFirstAttemptCount/(ulong) BenignAccounts.Count);
-            int accountIndex = (int) (breadthFirstAttemptCount%(ulong) BenignAccounts.Count);
-            string password = OrderedListOfMostCommonPasswords[passwordIndex];
-            SimulatedAccount targetBenignAccount = BenignAccounts[accountIndex];
+            SimulatedAccount targetBenignAccount;
 
             // Sometimes the attacker will miss and generate an invalid account name;
             if (StrongRandomNumberGenerator.GetFraction() <
@@ -167,13 +159,29 @@ namespace Simulator
             {
                 targetBenignAccount = null;
                 mistake = "BadAccount";
+                password = _simPasswords.OrderedListOfMostCommonPasswords[(int)(_breadthFirstAttemptCounter / (ulong)_simAccounts.BenignAccounts.Count)];
             }
+            else
+            {
+                lock (_breadthFirstLock)
+                {
+                    breadthFirstAttemptCount = _breadthFirstAttemptCounter++;
+                }
+
+                // Start with the most common password and walk through all the accounts,
+                // then move on to the next most common password.
+                int passwordIndex = (int) (breadthFirstAttemptCount/(ulong) _simAccounts.BenignAccounts.Count);
+                int accountIndex = (int) (breadthFirstAttemptCount%(ulong) _simAccounts.BenignAccounts.Count);
+                targetBenignAccount = _simAccounts.BenignAccounts[accountIndex];
+                password = _simPasswords.OrderedListOfMostCommonPasswords[passwordIndex];
+            }
+
 
 
             //SimulationTest _simulationtest = new SimulationTest();
             return new SimulatedLoginAttempt(targetBenignAccount, password,
                 true, true,
-                GetRandomMaliciousIp(),
+                _ipPool.GetRandomMaliciousIp(),
                 StrongRandomNumberGenerator.Get64Bits().ToString(),
                 mistake,
                 DateTime.UtcNow);
@@ -185,7 +193,7 @@ namespace Simulator
         /// <returns></returns>
         public SimulatedLoginAttempt MaliciousAttemptToSantiizeIpViaAValidLogin(IPAddress ipAddressToSanitizeThroughLogin)
         {
-            SimulatedAccount simAccount = GetMaliciousAccountAtRandomUniform();
+            SimulatedAccount simAccount = _simAccounts.GetMaliciousAccountAtRandomUniform();
 
             return new SimulatedLoginAttempt(simAccount, simAccount.Password,
                 true, false,
