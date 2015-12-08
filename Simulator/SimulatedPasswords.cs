@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using StopGuessing.Controllers;
+using StopGuessing.DataStructures;
 
 namespace Simulator
 {
@@ -57,13 +59,19 @@ namespace Simulator
             }
         }
 
+        public async Task PrimeWithKnownPasswordsAsync(LoginAttemptController loginAttemptController)
+        {
+            await TaskParalllel.ForEachWithWorkers(passwordsAlreadyKnownToBePopular, async (password, itemNumer, cancelToken) =>
+                await loginAttemptController.PrimeCommonPasswordAsync(password, 100, cancelToken));
+        }
 
-        private void LoadPasswordSelector(string PathToWeightedFrequencyFile)
+
+        private void LoadPasswordSelector(string pathToWeightedFrequencyFile)
         {
             passwordSelector = new WeightedSelector<string>();
             // Created a weighted-random selector for paasswords based on the RockYou database.
             using (System.IO.StreamReader file =
-                new System.IO.StreamReader(PathToWeightedFrequencyFile))
+                new System.IO.StreamReader(pathToWeightedFrequencyFile))
             {
                 string lineWithCountFollowedBySpaceFollowedByPassword;
                 while ((lineWithCountFollowedBySpaceFollowedByPassword = file.ReadLine()) != null)

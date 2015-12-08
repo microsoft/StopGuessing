@@ -5,8 +5,11 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
+using StopGuessing;
 using StopGuessing.DataStructures;
+using StopGuessing.Models;
 
 namespace Simulator
 {
@@ -16,9 +19,9 @@ namespace Simulator
         public List<SimulatedAccount> BenignAccounts = new List<SimulatedAccount>();
         public List<SimulatedAccount> MaliciousAccounts = new List<SimulatedAccount>();
         public WeightedSelector<SimulatedAccount> BenignAccountSelector = new WeightedSelector<SimulatedAccount>();
-        private IpPool _ipPool;
-        private DebugLogger _logger;
-        private SimulatedPasswords _simPasswords;
+        private readonly IpPool _ipPool;
+        private readonly DebugLogger _logger;
+        private readonly SimulatedPasswords _simPasswords;
 
         public SimulatedAccounts(IpPool ipPool, SimulatedPasswords simPasswords, DebugLogger logger)
         {
@@ -48,57 +51,90 @@ namespace Simulator
         /// <summary>
         /// Create accounts, generating passwords, primary IP
         /// </summary>
-        public void Generate(ExperimentalConfiguration experimentalConfiguration)
+        public async Task GenerateAsync(ExperimentalConfiguration experimentalConfiguration,
+            IUserAccountContextFactory accountContextFactory,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
-            _logger.WriteStatus("Creating {0:N0} benign accounts", experimentalConfiguration.NumberOfBenignAccounts);
-            int totalAccounts = 0;
-
-
-            // Generate benign accounts
-            for (uint i = 0; i < experimentalConfiguration.NumberOfBenignAccounts; i++)
+            _logger.WriteStatus("Creating {0:N0} benign accounts", experimentalConfiguration.NumberOfBenignAccounts);        
+            ConcurrentBag<SimulatedAccount> benignSimulatedAccountBag = new ConcurrentBag<SimulatedAccount>();
+            //
+            // Create benign accounts in parallel
+            Parallel.For(0, (int) experimentalConfiguration.NumberOfBenignAccounts, (index) =>
             {
-                if (i > 0 && i%10000 == 0)
-                    _logger.WriteStatus("Created {0:N0} benign accounts", i);
+                if (index > 0 && index % 10000 == 0)
+                    _logger.WriteStatus("Created {0:N0} benign accounts", index);
                 SimulatedAccount account = new SimulatedAccount()
                 {
-                    UniqueId = (totalAccounts++).ToString(),
+                    UniqueId = "user_" + index.ToString(),
                     Password = _simPasswords.GetPasswordFromWeightedDistribution()
                 };
                 account.ClientAddresses.Add(_ipPool.GetNewRandomBenignIp(account.UniqueId));
                 account.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
-                BenignAccounts.Add(account);
+
+                benignSimulatedAccountBag.Add(account);
+
                 double inverseFrequency = Distributions.GetLogNormal(0, 1);
                 if (inverseFrequency < 0.01d)
                     inverseFrequency = 0.01d;
                 if (inverseFrequency > 50d)
                     inverseFrequency = 50d;
-                double frequency = 1/inverseFrequency;
-                BenignAccountSelector.AddItem(account, frequency);
-            }
+                double frequency = 1 / inverseFrequency;
+                lock (BenignAccountSelector)
+                {
+                    BenignAccountSelector.AddItem(account, frequency);
+                }
+            });
+            BenignAccounts = benignSimulatedAccountBag.ToList();
             _logger.WriteStatus("Finished creating {0:N0} benign accounts",
                 experimentalConfiguration.NumberOfBenignAccounts);
 
-
-            // Right after creating benign accounts we can create malicious ones. 
-            // (we'll needed to wait for the the benign IPs to be generated create some overlap)
-            _ipPool.GenerateMaliciousIps();
+            //
+            // Right after creating benign accounts we create IPs and accounts controlled by the attacker. 
+            // (We create the attacker IPs here, and not earlier, because we need to have the benign IPs generated in order to create overlap)
+            _logger.WriteStatus("Creating attacker IPs");            
+            _ipPool.GenerateAttackersIps();
 
             _logger.WriteStatus("Creating {0:N0} attacker accounts",
                 experimentalConfiguration.NumberOfAttackerControlledAccounts);
-
-            // Generate attacker accounts
-            for (ulong i = 0; i < experimentalConfiguration.NumberOfAttackerControlledAccounts; i++)
+            ConcurrentBag<SimulatedAccount> maliciousSimulatedAccountBag = new ConcurrentBag<SimulatedAccount>();
+            
+            //
+            // Create accounts in parallel
+            Parallel.For(0, (int) experimentalConfiguration.NumberOfAttackerControlledAccounts, (index) =>
             {
                 SimulatedAccount account = new SimulatedAccount()
                 {
-                    UniqueId = (totalAccounts++).ToString(),
+                    UniqueId = "attacker_" + index.ToString(),
                     Password = _simPasswords.GetPasswordFromWeightedDistribution(),
                 };
                 account.ClientAddresses.Add(_ipPool.GetRandomMaliciousIp());
-                MaliciousAccounts.Add(account);
-            }
+                maliciousSimulatedAccountBag.Add(account);
+            });
+            MaliciousAccounts = maliciousSimulatedAccountBag.ToList();
             _logger.WriteStatus("Finished creating {0:N0} attacker accounts",
                 experimentalConfiguration.NumberOfAttackerControlledAccounts);
+            
+            //
+            // Now create full UserAccount records for each simulated account and store them into the account context
+            await TaskParalllel.ForEachWithWorkers(BenignAccounts.Union(MaliciousAccounts),
+                async (simAccount, index, cancelToken) =>
+                {
+                    if (index % 10000 == 0)
+                        _logger.WriteStatus("Created account {0:N0}", index);
+                    UserAccount account = UserAccount.Create(simAccount.UniqueId,
+                        experimentalConfiguration.BlockingOptions.Conditions.Length,
+                        experimentalConfiguration.BlockingOptions.AccountCreditLimit,
+                        experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
+                        simAccount.Password,
+                        "PBKDF2_SHA256",
+                        experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations);
+                    foreach (string cookie in simAccount.Cookies)
+                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
+                            LoginAttempt.HashCookie(cookie));
+                    await accountContextFactory.Get().WriteNewAsync(account, cancelToken);
+                },
+                cancellationToken: cancellationToken);
+            _logger.WriteStatus("Finished creating user accounts for each simluated account record");
         }
     }
 }
