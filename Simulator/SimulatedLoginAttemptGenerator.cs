@@ -7,7 +7,10 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace Simulator
 {
-    
+    /// <summary>
+    /// This class generates simulated login attempts to be sent to the StopGuessing algorithms
+    /// by the simulator 
+    /// </summary>
     public class SimulatedLoginAttemptGenerator
     {
         private readonly SimulatedAccounts _simAccounts;
@@ -15,6 +18,14 @@ namespace Simulator
         private readonly IpPool _ipPool;
         private readonly SimulatedPasswords _simPasswords;
 
+        /// <summary>
+        /// The attempt generator needs to know about the experimental configuration and have access to the sets of simulated accounts,
+        /// IP addresses, and simulated passwords.
+        /// </summary>
+        /// <param name="experimentalConfiguration"></param>
+        /// <param name="simAccounts"></param>
+        /// <param name="ipPool"></param>
+        /// <param name="simPasswords"></param>
         public SimulatedLoginAttemptGenerator(ExperimentalConfiguration experimentalConfiguration, SimulatedAccounts simAccounts, IpPool ipPool, SimulatedPasswords simPasswords)
         {
             _simAccounts = simAccounts;
@@ -22,6 +33,7 @@ namespace Simulator
             _ipPool = ipPool;
             _simPasswords = simPasswords;
         }
+
 
         /// <summary>
         /// Send one benign login attempts
@@ -58,7 +70,7 @@ namespace Simulator
                 (account.ClientAddresses.Count < _experimentalConfiguration.MaxIpPerUserAccount && StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.ChanceOfIpReUse))
             {
                 // Use a new IP for the user
-                account.ClientAddresses.Add(clientIp = _ipPool.GetNewRandomBenignIp(account.UniqueId));
+                account.ClientAddresses.Add(clientIp = _ipPool.GetNewRandomBenignIp());
             }
             else
             {

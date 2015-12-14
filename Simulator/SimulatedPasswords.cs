@@ -7,6 +7,10 @@ using StopGuessing.DataStructures;
 
 namespace Simulator
 {
+    /// <summary>
+    /// This class tracks information about passwords to be used by the simulator.
+    /// Specifically, it reads in a password distribution for simulating user's password choices.
+    /// </summary>
     public class SimulatedPasswords
     {
         private WeightedSelector<string> _passwordSelector;
@@ -34,11 +38,20 @@ namespace Simulator
         }
 
 
+        /// <summary>
+        /// Gets a password from a realistic password distribution.
+        /// </summary>
+        /// <returns>A password string</returns>
         public string GetPasswordFromWeightedDistribution()
         {
             return _passwordSelector.GetItemByWeightedRandom();
         }
 
+        /// <summary>
+        /// This method loads in the file containing passwords that StopGuessing knew were popular
+        /// before the simulation begins
+        /// </summary>
+        /// <param name="pathToPreviouslyKnownPopularPasswordFile"></param>
         public void LoadKnownPopularPasswords(string pathToPreviouslyKnownPopularPasswordFile)
         {
             _passwordsAlreadyKnownToBePopular = new List<string>();
@@ -56,13 +69,24 @@ namespace Simulator
             }
         }
 
+        /// <summary>
+        /// This method will prime the simulator with known-popular passwords so that they are treated
+        /// as if the simulator had already observed them (or been configured with them)
+        /// </summary>
+        /// <param name="loginAttemptController"></param>
+        /// <returns></returns>
         public async Task PrimeWithKnownPasswordsAsync(LoginAttemptController loginAttemptController)
         {
             await TaskParalllel.ForEachWithWorkers(_passwordsAlreadyKnownToBePopular, async (password, itemNumer, cancelToken) =>
                 await loginAttemptController.PrimeCommonPasswordAsync(password, 100, cancelToken));
         }
 
-
+        /// <summary>
+        /// Given the path of a file containing a count, followed by a space, followed by a password,
+        /// this method reads in the distribution and creates a password selector that can provide
+        /// passwords sampled from that distribution.
+        /// </summary>
+        /// <param name="pathToWeightedFrequencyFile"></param>
         private void LoadPasswordSelector(string pathToWeightedFrequencyFile)
         {
             _passwordSelector = new WeightedSelector<string>();

@@ -13,11 +13,13 @@ using StopGuessing.Models;
 
 namespace Simulator
 {
-
+    /// <summary>
+    /// A class that tracks all of the user accounts being simulated, both benign and belonging to attackers.
+    /// </summary>
     public class SimulatedAccounts
     {
         public List<SimulatedAccount> BenignAccounts = new List<SimulatedAccount>();
-        public List<SimulatedAccount> MaliciousAccounts = new List<SimulatedAccount>();
+        public List<SimulatedAccount> AttackerAccounts = new List<SimulatedAccount>();
         public WeightedSelector<SimulatedAccount> BenignAccountSelector = new WeightedSelector<SimulatedAccount>();
         private readonly IpPool _ipPool;
         private readonly DebugLogger _logger;
@@ -43,7 +45,7 @@ namespace Simulator
 
         public SimulatedAccount GetMaliciousAccountAtRandomUniform()
         {
-            return MaliciousAccounts[(int) StrongRandomNumberGenerator.Get32Bits(MaliciousAccounts.Count)];
+            return AttackerAccounts[(int) StrongRandomNumberGenerator.Get32Bits(AttackerAccounts.Count)];
         }
 
 
@@ -68,7 +70,7 @@ namespace Simulator
                     UniqueId = "user_" + index.ToString(),
                     Password = _simPasswords.GetPasswordFromWeightedDistribution()
                 };
-                account.ClientAddresses.Add(_ipPool.GetNewRandomBenignIp(account.UniqueId));
+                account.ClientAddresses.Add(_ipPool.GetNewRandomBenignIp());
                 account.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
 
                 benignSimulatedAccountBag.Add(account);
@@ -110,13 +112,13 @@ namespace Simulator
                 account.ClientAddresses.Add(_ipPool.GetRandomMaliciousIp());
                 maliciousSimulatedAccountBag.Add(account);
             });
-            MaliciousAccounts = maliciousSimulatedAccountBag.ToList();
+            AttackerAccounts = maliciousSimulatedAccountBag.ToList();
             _logger.WriteStatus("Finished creating {0:N0} attacker accounts",
                 experimentalConfiguration.NumberOfAttackerControlledAccounts);
             
             //
             // Now create full UserAccount records for each simulated account and store them into the account context
-            await TaskParalllel.ForEachWithWorkers(BenignAccounts.Union(MaliciousAccounts),
+            await TaskParalllel.ForEachWithWorkers(BenignAccounts.Union(AttackerAccounts),
                 async (simAccount, index, cancelToken) =>
                 {
                     if (index % 10000 == 0)
