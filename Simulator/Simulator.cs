@@ -204,8 +204,8 @@ namespace Simulator
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                     simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                     simAttempt.IsGuess ? "IsGuess" : "NotGuess",
-                    simAttempt.IsFromAttacker ? (ipInfo.UserIdsOfBenignUsers != null && ipInfo.UserIdsOfBenignUsers.Count > 0 ? "IsInBenignPool" : "NotUsedByBenign") : 
-                                                (ipInfo.IsInAttackersIpPool ? "IsInAttackersIpPool" : "NotUsedByAttacker"),
+                    simAttempt.IsFromAttacker ? (ipInfo.UsedByBenignUsers ? "IsInBenignPool" : "NotUsedByBenign") : 
+                                                (ipInfo.UsedByAttackers ? "IsInAttackersIpPool" : "NotUsedByAttacker"),
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
                     simAttempt.Attempt.UsernameOrAccountId ?? "<null>",

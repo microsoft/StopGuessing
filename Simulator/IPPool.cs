@@ -8,13 +8,15 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace Simulator
 {
+    /// <summary>
+    /// Tracks the pool of IP addresses used by the simulator.
+    /// </summary>
     public class IpPool
     {
-        private readonly Object _proxyAddressLock = new object();
-        private IPAddress _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+        private IPAddress _currentProxyAddress = null;
         private int _numberOfClientsBehindTheCurrentProxy = 0;
         private readonly ConcurrentBag<IPAddress> _ipAddresssesInUseByBenignUsers = new ConcurrentBag<IPAddress>();
-        private readonly ConcurrentDictionary<IPAddress, IPAddressDebugInfo> _debugInformationAboutIpAddresses = new ConcurrentDictionary<IPAddress, IPAddressDebugInfo>();
+        private readonly ConcurrentDictionary<IPAddress, IpAddressDebugInfo> _debugInformationAboutIpAddresses = new ConcurrentDictionary<IPAddress, IpAddressDebugInfo>();
         private readonly ExperimentalConfiguration _experimentalConfiguration;
 
 
@@ -24,49 +26,60 @@ namespace Simulator
         }
 
 
-        public IPAddressDebugInfo GetIpAddressDebugInfo(IPAddress address)
+        public IpAddressDebugInfo GetIpAddressDebugInfo(IPAddress address)
         {
-            return _debugInformationAboutIpAddresses.GetOrAdd(address, a => new IPAddressDebugInfo());
+            return _debugInformationAboutIpAddresses.GetOrAdd(address, a => new IpAddressDebugInfo());
         }
 
-        public IPAddress GetNewRandomBenignIp(string forUserId)
+        private readonly Object _proxyAddressLock = new object();
+        /// <summary>
+        /// Get a new IP address for use in a benign request
+        /// </summary>
+        /// <returns>An IP address</returns>
+        public IPAddress GetNewRandomBenignIp()
         {
-            IPAddress address;
-            IPAddressDebugInfo debugInfo;
+            IpAddressDebugInfo debugInfo;
             if (StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.FractionOfBenignIPsBehindProxies)
             {
-                // Use the most recent proxy IP
+                // Use a proxy IP address
                 lock (_proxyAddressLock)
                 {
-                    address = _currentProxyAddress;
-                    if (++_numberOfClientsBehindTheCurrentProxy >=
+                    if (_currentProxyAddress == null || ++_numberOfClientsBehindTheCurrentProxy >=
                         _experimentalConfiguration.ProxySizeInUniqueClientIPs)
-                        _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
-                    debugInfo = GetIpAddressDebugInfo(_currentProxyAddress);
-                    lock (debugInfo)
                     {
+                        // Create a new proxy IP address
+                        _currentProxyAddress = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+                        debugInfo = GetIpAddressDebugInfo(_currentProxyAddress);
                         debugInfo.IsPartOfProxy = true;
+                        debugInfo.UsedByBenignUsers = true;
+                        _numberOfClientsBehindTheCurrentProxy = 0;
+                        return _currentProxyAddress;
+                    }
+                    else
+                    {
+                        // Use the most recent proxy IP
+                        return _currentProxyAddress;
                     }
                 }
             }
             else
             {
                 // Just pick a random address
-                address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
+                IPAddress address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
                 _ipAddresssesInUseByBenignUsers.Add(address);
                 debugInfo = GetIpAddressDebugInfo(address);
+                debugInfo.UsedByBenignUsers = true;
+                return address;
             }
-            lock (debugInfo)
-            {
-                if (debugInfo.UserIdsOfBenignUsers == null)
-                    debugInfo.UserIdsOfBenignUsers = new List<string>();
-                debugInfo.UserIdsOfBenignUsers.Add(forUserId);
-            }
-            return address;
         }
 
 
         private readonly List<IPAddress> _maliciousIpAddresses = new List<IPAddress>();
+        /// <summary>
+        /// Generate a set of IP addresses to be owned by attackers.
+        /// Must be called after all benign users accounts have been created so as to create
+        /// the desired level of overlap between those benign addresses and the malicious ones.
+        /// </summary>
         public void GenerateAttackersIps()
         {
             List<IPAddress> listOfIpAddressesInUseByBenignUsers = _ipAddresssesInUseByBenignUsers.ToList();
@@ -78,10 +91,10 @@ namespace Simulator
             {
                 int randIndex = (int)StrongRandomNumberGenerator.Get32Bits(listOfIpAddressesInUseByBenignUsers.Count);
                 IPAddress address = listOfIpAddressesInUseByBenignUsers[randIndex];
-                IPAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
+                IpAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
                 lock (debugInfo)
                 {
-                    debugInfo.IsInAttackersIpPool = true;
+                    debugInfo.UsedByAttackers = true;
                 }
                 _maliciousIpAddresses.Add(address);
                 listOfIpAddressesInUseByBenignUsers.RemoveAt(randIndex);
@@ -89,10 +102,10 @@ namespace Simulator
             for (; i < _experimentalConfiguration.NumberOfIpAddressesControlledByAttacker; i++)
             {
                 IPAddress address = new IPAddress(StrongRandomNumberGenerator.Get32Bits());
-                IPAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
+                IpAddressDebugInfo debugInfo = GetIpAddressDebugInfo(address);
                 lock (debugInfo)
                 {
-                    debugInfo.IsInAttackersIpPool = true;
+                    debugInfo.UsedByAttackers = true;
                 }
                 _maliciousIpAddresses.Add(address);
             }

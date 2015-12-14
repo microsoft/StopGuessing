@@ -5,23 +5,45 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace Simulator
 {
+    /// <summary>
+    /// This class takes a set of value/weight pairs (v_i/w_i) and produces a selector
+    /// that can be sampled to return a value from the set such that v_i is returned with
+    /// probability w_i / SUM(w_i, over all i).
+    /// </summary>
+    /// <typeparam name="T">The value type</typeparam>
     public class WeightedSelector<T>
     {
+        /// <summary>
+        /// the values
+        /// </summary>
         private readonly List<T> _items = new List<T>();
+
+        // The cumulative value of all the weights for all values including the one at index i
         private readonly List<double> _cumulativeWeight = new List<double>();
 
+        // Add an item to the selector
         public void AddItem(T item, double weight)
         {
             _items.Add(item);
             _cumulativeWeight.Add(weight + (_cumulativeWeight.Count > 0 ? _cumulativeWeight[_cumulativeWeight.Count-1] : 0));
         }
 
+        /// <summary>
+        /// Get the list of items in the selector
+        /// </summary>
+        /// <param name="count">A limit on the number of items to get</param>
+        /// <returns>The first count items in the selector</returns>
         public List<T> GetItems(int count)
         {
             count = Math.Min(count, _items.Count);
             return _items.Take(count).ToList();
         }
 
+        /// <summary>
+        /// Create a new selector that only contains the first <paramref name="count"/> items of this selector.
+        /// </summary>
+        /// <param name="count">The number of values to keep</param>
+        /// <returns>The new selector that has only the first <paramref name="count"/> items.</returns>
         public WeightedSelector<T> TrimToInitialItems(int count)
         {
             WeightedSelector<T> trimmed = new WeightedSelector<T>();
@@ -31,6 +53,10 @@ namespace Simulator
             return trimmed;
         }
 
+        /// <summary>
+        /// Get an item from the selector at random using the weights to match the desired distribution.
+        /// </summary>
+        /// <returns>A value in the selector identified at weighted random.</returns>
         public T GetItemByWeightedRandom()
         {
             if (_cumulativeWeight.Count == 0)
