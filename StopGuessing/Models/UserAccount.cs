@@ -110,81 +110,6 @@ namespace StopGuessing.Models
             return Convert.ToBase64String(ManagedSHA256.Hash(phase1Hash));
         }
 
-        ///// <summary>
-        ///// This analysis will examine LoginAttempts that failed due to an incorrect password
-        ///// and, where it can be determined if the failure was due to a typo or not,
-        ///// update the outcomes to reflect whether it was or was not a typo.
-        ///// </summary>
-        ///// <param name="correctPassword">The correct password for this account.  (We can only know it because
-        ///// the client must have provided the correct one this attempt.)</param>
-        ///// <param name="phase1HashOfCorrectPassword">The phase1 hash of that correct password---which we could
-        ///// recalculate from the information in the previous parameters, but doing so would be expensive.</param>
-        ///// <param name="maxEditDistanceConsideredATypo">The maximum edit distance between the correct and incorrect password
-        ///// that is considered a typo (inclusive).</param>
-        ///// <param name="attemptsToAnalyze">The set of LoginAttempts to analyze.</param>
-        ///// <returns>Returns the set of LoginAttempt records that were modified so that the updates
-        ///// to their outcomes can be written to stable store or other actions taken.</returns>
-        //public List<LoginAttempt> UpdateLoginAttemptOutcomeUsingTypoAnalysis(
-        //    string correctPassword,
-        //    byte[] phase1HashOfCorrectPassword,
-        //    float maxEditDistanceConsideredATypo,
-        //    IEnumerable<LoginAttempt> attemptsToAnalyze)
-        //{
-        //    List<LoginAttempt> changedAttempts = new List<LoginAttempt>();
-
-        //    ECDiffieHellmanCng ecPrivateAccountLogKey = null;
-
-        //    foreach (LoginAttempt attempt in attemptsToAnalyze)
-        //    {
-
-        //        // If we haven't yet decrypted the EC key, which we will in turn use to decrypt the password
-        //        // provided in this login attempt, do it now.  (We don't do it in advance as we don't want to
-        //        // do the work unless we find at least one record to analyze.)
-        //        if (ecPrivateAccountLogKey == null)
-        //        {
-        //            // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
-        //            try
-        //            {
-        //                ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
-        //                    EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
-        //            }
-        //            catch (Exception)
-        //            {
-        //                // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
-        //                return changedAttempts;
-        //            }
-        //        }
-
-        //        // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
-        //        try
-        //        {
-        //            // Attempt to decrypt the password.
-        //            string incorrectPasswordFromPreviousAttempt =
-        //                attempt.DecryptAndGetIncorrectPassword(ecPrivateAccountLogKey);
-
-        //            // Use an edit distance calculation to determine if it was a likely typo
-        //            bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
-        //                              maxEditDistanceConsideredATypo;
-
-        //            // Update the outcome based on this information.
-        //            attempt.Outcome = likelyTypo
-        //                ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
-        //                : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
-
-        //            // Add this to the list of changed attempts
-        //            changedAttempts.Add(attempt);
-        //        }
-        //        catch (Exception)
-        //        {
-        //            // An exception is likely due to an incorrect key (perhaps outdated).
-        //            // Since we simply can't do anything with a record we can't Decrypt, we carry on
-        //            // as if nothing ever happened.  No.  Really.  Nothing to see here.
-        //        }
-        //    }
-        //    return changedAttempts;
-        //}
-
-
         /// <summary>
         /// Sets the password of a user.
         /// <b>Important</b>: this does not authenticate the user but assumes the user has already been authenticated.
@@ -362,14 +287,11 @@ namespace StopGuessing.Models
                 SaltUniqueToThisAccount = saltUniqueToThisAccount,
                 HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount =
                     new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
-                //PasswordVerificationFailures =
-                //    new Sequence<LoginAttempt>(maxAccountPasswordVerificationFailuresToTrack),
                 RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack),
                 ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife),
                 CreditLimit = creditLimit,
                 PasswordHashPhase1FunctionName = phase1HashFunctionName,
                 NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash
-                //Password = password
 #if Simulation
         , ConsumedCreditsForSimulation = new DoubleThatDecaysWithTime[numberOfConditions]
 #endif

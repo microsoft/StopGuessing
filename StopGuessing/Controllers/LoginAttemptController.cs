@@ -41,30 +41,22 @@ namespace StopGuessing.Controllers
 #endif
         ILoginAttemptController
     {
-        //private readonly IStableStore _stableStore;
         private readonly BlockingAlgorithmOptions _options;
         private readonly IBinomialLadderSketch _binomialLadderSketch;
         private readonly IFrequenciesProvider<string> _incorrectPasswordFrequenciesProvider;
         private readonly IStableStoreFactory<string, UserAccount> _userAccountContextFactory;
-        //private readonly FixedSizeLruCache<string, LoginAttempt> _loginAttemptCache;
         private readonly AgingMembershipSketch _recentIncorrectPasswords;
 
-        //private readonly Dictionary<string, Task<Tuple<LoginAttempt, BlockingScoresForEachAlgorithm>>>
-        //    _loginAttemptsInProgress;
-
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
-        //private readonly LoginAttemptClient _loginAttemptClient;
 
         private TimeSpan DefaultTimeout { get; } = new TimeSpan(0, 0, 0, 0, 500); // FUTURE use configuration value
 
         public LoginAttemptController(
-            //LoginAttemptClient loginAttemptClient,
             IStableStoreFactory<string, UserAccount> userAccountContextFactory,
             IBinomialLadderSketch binomialLadderSketch,
             IFrequenciesProvider<string> incorrectPasswordFrequenciesProvider,
             MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions blockingOptions
-            //IStableStore stableStore
             )
         {
             _options = blockingOptions; //optionsAccessor.Options;
@@ -80,75 +72,7 @@ namespace StopGuessing.Controllers
         }
 
 
-        //// GET: api/LoginAttempt
-        //[HttpGet]
-        //public IEnumerable<LoginAttempt> Get()
-        //{
-        //    throw new NotImplementedException("Cannot enumerate all login attempts");
-        //}
-
-//// GET api/LoginAttempt/5
-//[HttpGet("{id}")]
-//public async Task<IActionResult> GetAsync(string id,
-//    [FromQuery] List<RemoteHost> serversResponsibleForCachingALoginAttempt = null,
-//    CancellationToken cancellationToken = default(CancellationToken))
-//{
-//    LoginAttempt result = await LocalGetAsync(id, serversResponsibleForCachingALoginAttempt, cancellationToken);
-//    return (result == null) ? (IActionResult) (new HttpNotFoundResult()) : (new ObjectResult(result));
-//}
-
-//public async Task<LoginAttempt> LocalGetAsync(
-//    string key,
-//    List<RemoteHost> serversResponsibleFOrCachingALoginAttempt = null,
-//    CancellationToken cancellationToken = default(CancellationToken))
-//{
-//    LoginAttempt loginAttempt;
-
-//    // If the requested LoginAttempt is in cache, return it immediately
-//    if (_loginAttemptCache.TryGetValue(key, out loginAttempt))
-//        return loginAttempt;
-
-//    // We'll have to load the login attempt from stable store
-//    loginAttempt = await _stableStore.ReadLoginAttemptAsync(key, cancellationToken);
-
-//    if (loginAttempt != null)
-//    {
-//        // We successfully read the login attempt from stable store.  We now need to ensure
-//        // that it enters the local cache and the other caches
-//        WriteLoginAttemptInBackground(loginAttempt, serversResponsibleFOrCachingALoginAttempt,
-//            updateTheLocalCache: true, updateRemoteCaches: true, updateStableStore: false,
-//            cancellationToken: cancellationToken);
-//    }
-
-//    return loginAttempt;
-//}
-
-//// WriteAccountAsync login attempts
-//// POST api/LoginAttempt/
-//[HttpPost]
-//public async Task<IActionResult> UpdateLoginAttemptOutcomesAsync(
-//    [FromBody] List<LoginAttempt> loginAttemptsWithUpdatedOutcomes,
-//    CancellationToken cancellationToken = default(CancellationToken))
-//{
-//    await new Task(() =>
-//    {
-//        Parallel.ForEach(
-//            loginAttemptsWithUpdatedOutcomes.ToLookup(attempt => attempt.AddressOfClientInitiatingRequest),
-//            loginAttemptsWithUpdatedOutcomesByIp =>
-//            {
-//                // If there is a record of the IP address that the login attempt belongs to,
-//                // update that IP history with the new loginAttempt outcome.
-//                IpHistory ip;
-//                if (_ipHistoryCache.TryGetValue(loginAttemptsWithUpdatedOutcomesByIp.Key, out ip))
-//                {
-//                    ip.UpdateLoginAttemptsWithNewOutcomes(loginAttemptsWithUpdatedOutcomesByIp.ToList());
-//                }
-//            });
-//    });
-//    return new HttpOkResult();
-//}
-
-// PUT api/LoginAttempt/clientsIpHistory-address-datetime
+        // PUT api/LoginAttempt/clientsIpHistory-address-datetime
         [HttpPut("{id}")]
         public async Task<IActionResult> PutAsync(string id,
             [FromBody] LoginAttempt loginAttempt,
@@ -202,17 +126,7 @@ namespace StopGuessing.Controllers
                 await frequencies.RecordObservationAsync(cancellationToken: cancellationToken);
             }
         }
-
-
-        //public async Task<LoginAttempt> LocalPutAsync(LoginAttempt loginAttempt,
-        //    string passwordProvidedByClient = null,
-        //    CancellationToken cancellationToken = default(CancellationToken))
-        //{
-        //    return await DetermineLoginAttemptOutcomeAsync(
-        //        loginAttempt,
-        //        passwordProvidedByClient,
-        //        cancellationToken: cancellationToken);
-        //}
+        
 
         // DELETE api/LoginAttempt/<key>
         [HttpDelete("{id}")]
@@ -221,83 +135,6 @@ namespace StopGuessing.Controllers
             // no-op
             return new HttpNotFoundResult();
         }
-
-
-        ///// <summary>
-        ///// Store an updated LoginAttempt to the local cache, remote caches, and in stable store.
-        ///// </summary>
-        ///// <param name="loginAttempt">The loginAttempt to write to cache/stable store.</param>
-        ///// <param name="serversResponsibleForCachingThisLoginAttempt"></param>
-        ///// <param name="updateTheLocalCache"></param>
-        ///// <param name="updateRemoteCaches"></param>
-        ///// <param name="updateStableStore"></param>
-        ///// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        //protected async Task WriteLoginAttemptAsync(
-        //    LoginAttempt loginAttempt,
-        //    List<RemoteHost> serversResponsibleForCachingThisLoginAttempt = null,
-        //    bool updateTheLocalCache = true,
-        //    bool updateRemoteCaches = true,
-        //    bool updateStableStore = true,
-        //    CancellationToken cancellationToken = default(CancellationToken))
-        //{
-        //    Task stableStoreTask = null;
-
-        //    //if (updateTheLocalCache)
-        //    //{
-        //    //    // Write to the local cache on this server
-        //    //    _loginAttemptCache.Add(loginAttempt.UniqueKey, loginAttempt);
-        //    //}
-
-        //    if (updateStableStore)
-        //    {
-        //        // Write to stable consistent storage (e.g. database) that the system is configured to use
-        //        stableStoreTask = _stableStore.WriteLoginAttemptAsync(loginAttempt, cancellationToken);
-        //    }
-
-        //    if (updateRemoteCaches)
-        //    {
-        //        // Identify the servers that cache this LoginAttempt and will need their cache entries updated
-        //        if (serversResponsibleForCachingThisLoginAttempt == null)
-        //        {
-        //            serversResponsibleForCachingThisLoginAttempt =
-        //                _loginAttemptClient.GetServersResponsibleForCachingALoginAttempt(loginAttempt);
-        //        }
-
-        //        // Update the cache entries for this LoginAttempt on the remote servers.
-        //        _loginAttemptClient.PutCacheOnlyBackground(loginAttempt,
-        //            serversResponsibleForCachingThisLoginAttempt,
-        //            cancellationToken: cancellationToken);
-        //    }
-
-        //    // If writing to stable store, wait until the write has completed before returning.
-        //    if (stableStoreTask != null)
-        //        await stableStoreTask;
-        //}
-
-        ///// <summary>
-        ///// Store an updated LoginAttempt to the local cache, remote caches, and in stable store.
-        ///// </summary>
-        ///// <param name="attempt">The loginAttempt to write to cache/stable store.</param>
-        ///// <param name="serversResponsibleForCachingThisLoginAttempt"></param>
-        ///// <param name="updateTheLocalCache"></param>
-        ///// <param name="updateRemoteCaches"></param>
-        ///// <param name="updateStableStore"></param>
-        ///// <param name="cancellationToken">To allow the async call to be cancelled, such as in the event of a timeout.</param>
-        //protected void WriteLoginAttemptInBackground(LoginAttempt attempt,
-        //    List<RemoteHost> serversResponsibleForCachingThisLoginAttempt = null,
-        //    bool updateTheLocalCache = true,
-        //    bool updateRemoteCaches = true,
-        //    bool updateStableStore = true,
-        //    CancellationToken cancellationToken = default(CancellationToken))
-        //{
-        //    Task.Run(() => WriteLoginAttemptAsync(attempt,
-        //        serversResponsibleForCachingThisLoginAttempt,
-        //        updateTheLocalCache,
-        //        updateRemoteCaches,
-        //        updateStableStore,
-        //        cancellationToken),
-        //        cancellationToken);
-        //}
 
 
         /// <summary>
@@ -324,12 +161,12 @@ namespace StopGuessing.Controllers
             if (clientsIpHistory == null)
                 return;
 
-            LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = clientsIpHistory.RecentPotentialTypos.ToArray();
+            LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = clientsIpHistory.RecentPotentialTypos.MostRecentFirst.ToArray();
             ECDiffieHellmanCng ecPrivateAccountLogKey = null;
             try
             {
 #if Simulation
-                foreach (SimulationConditionData cond in clientsIpHistory.SimulationConditions)
+                foreach (SimulationConditionIpHistoryState cond in clientsIpHistory.SimulationConditions)
                     cond.AdjustScoreForPastTyposTreatedAsFullFailures(ref ecPrivateAccountLogKey, account,
                         whenUtc, correctPassword, phase1HashOfCorrectPassword);
 #endif
@@ -401,32 +238,21 @@ namespace StopGuessing.Controllers
             }
         }
 
-        ///// <summary>
-        ///// Multiply the penalty to be applied to a failed login loginAttempt based on the popularity of the password that was guessed.
-        ///// </summary>
-        ///// <param name="popularityLevel">The popularity of the password as a fraction (e.g. 0.0001 means 1 in 10,000 incorrect
-        ///// passwords were this password.)</param>
-        ///// <returns></returns>
-        //private double PopularityPenaltyMultiplier(double popularityLevel)
-        //{
-        //    return ThresholdAndValue.EvaluteAbove(_options.PenaltyForReachingEachPopularityThreshold, popularityLevel,
-        //        1d);
-        //}
 
         protected void UpdateBlockScore(DoubleThatDecaysWithTime currentBlockScore,
-            CapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
+            SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
             LoginAttempt loginAttempt, UserAccount account, ILadder ladder, IUpdatableFrequency frequency, ref bool accountChanged)
         {
             switch (loginAttempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
                     double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
-                                     _options.GetPopularityBasedPenaltyMultiplier(ladder, frequency);
+                                     _options.PopularityBasedPenaltyMultiplier_h(ladder, frequency);
                     currentBlockScore.Add(invalidAccontPenalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                     double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta *
-                                    _options.GetPopularityBasedPenaltyMultiplier(ladder,frequency);
+                                    _options.PopularityBasedPenaltyMultiplier_h(ladder,frequency);
                     currentBlockScore.Add(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null)
                     {
@@ -445,7 +271,7 @@ namespace StopGuessing.Controllers
                 case AuthenticationOutcome.CredentialsValid:
                     if (currentBlockScore > 0)
                     {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, currentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc));
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma, currentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc));
                         double credit = account.TryGetCredit(desiredCredit, loginAttempt.TimeOfAttemptUtc);
                         if (credit > 0)
                             accountChanged = true;
@@ -459,17 +285,17 @@ namespace StopGuessing.Controllers
         }
 
 
-        protected void SimUpdateBlockScores(IEnumerable<SimulationConditionData> conditions, LoginAttempt loginAttempt, UserAccount account,
+        protected void SimUpdateBlockScores(IEnumerable<SimulationConditionIpHistoryState> conditions, LoginAttempt loginAttempt, UserAccount account,
             ILadder ladder, IUpdatableFrequency frequency,
             ref bool accountChanged)
         {
-            foreach (SimulationConditionData condition in conditions)
+            foreach (SimulationConditionIpHistoryState condition in conditions)
             {
                 SimUpdateBlockScore(condition,loginAttempt,account, ladder, frequency, ref accountChanged);
             }
         }
 
-        protected void SimUpdateBlockScore(SimulationConditionData cond, LoginAttempt loginAttempt, UserAccount account,
+        protected void SimUpdateBlockScore(SimulationConditionIpHistoryState cond, LoginAttempt loginAttempt, UserAccount account,
             ILadder ladder, IUpdatableFrequency frequency, ref bool accountChanged)
         {
             switch (loginAttempt.Outcome)
@@ -484,7 +310,7 @@ namespace StopGuessing.Controllers
                         ? _options.PenaltyForInvalidAccount_Alpha
                         : _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= _options.GetPopularityBasedPenaltyMultiplier(ladder, frequency);
+                        penalty *= _options.PopularityBasedPenaltyMultiplier_h(ladder, frequency);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 }
@@ -496,7 +322,7 @@ namespace StopGuessing.Controllers
                         return;
                     double penalty = _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= _options.GetPopularityBasedPenaltyMultiplier(ladder, frequency);
+                        penalty *= _options.PopularityBasedPenaltyMultiplier_h(ladder, frequency);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null && cond.RecentPotentialTypos != null)
                     {
@@ -515,7 +341,7 @@ namespace StopGuessing.Controllers
                 case AuthenticationOutcome.CredentialsValid:                    
                     if (cond.Score > 0)
                     {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Gamma, cond.Score.GetValue(loginAttempt.TimeOfAttemptUtc));
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma, cond.Score.GetValue(loginAttempt.TimeOfAttemptUtc));
                         double credit = account.TryGetCreditForSimulation(cond.Condition.Index, desiredCredit, loginAttempt.TimeOfAttemptUtc);
                         if (credit > 0)
                             accountChanged = true;
@@ -720,8 +546,8 @@ namespace StopGuessing.Controllers
             {
                 // We only need to decide whether to block if the credentials provided were valid.
                 // We'll get the blocking threshold, blocking condition, and block if the condition exceeds the threshold.
-                double blockingThreshold = _options.BlockThresholdPopularPassword *
-                    _options.GetPopularityBasedThresholdMultiplier(passwordLadder, passwordFrequency);
+                double blockingThreshold = _options.BlockThresholdPopularPassword_T_base *
+                    _options.PopularityBasedThresholdMultiplier_T_multiplier(passwordLadder, passwordFrequency);
                 double blockScore = ip.CurrentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc);
                 // If the client provided a cookie proving a past successful login, we'll ignore the block condition
                 if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)

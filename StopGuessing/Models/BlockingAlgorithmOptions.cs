@@ -43,9 +43,9 @@ namespace StopGuessing.Models
         public double PenaltyForInvalidPassword_Beta { get; set; } = 1d;
         public double PenaltyForInvalidAccount_Alpha { get; set; } = 2d; // 2 * PenaltyForInvalidPassword_Beta;
 
-        public double RewardForCorrectPasswordPerAccount_Gamma { get; set; } = 30d;
+        public double RewardForCorrectPasswordPerAccount_Sigma { get; set; } = 30d;
 
-        public double BlockThresholdPopularPassword { get; set; } = 50d;
+        public double BlockThresholdPopularPassword_T_base { get; set; } = 50d;
 
         public TimeSpan BlockScoreHalfLife = new TimeSpan(12,0,0); // 12 hours
 
@@ -70,7 +70,7 @@ namespace StopGuessing.Models
         public double PopularityConfidenceLevel { get; set; } = 0.001d; // 1 in 100,000
 
 
-        public PasswordPopularityFunction GetPopularityBasedPenaltyMultiplier = (binomialLadder, frequency) =>
+        public PasswordPopularityFunction PopularityBasedPenaltyMultiplier_h = (binomialLadder, frequency) =>
         {
             int ladderObservations = binomialLadder.CountObservationsForGivenConfidence(0.001d);
             double popularity = Math.Max((double) ladderObservations/(10d*1000d), frequency.Proportion.AsDouble);
@@ -88,7 +88,7 @@ namespace StopGuessing.Models
         };
 
 
-        public PasswordPopularityFunction GetPopularityBasedThresholdMultiplier = (binomialLadder, frequency) =>
+        public PasswordPopularityFunction PopularityBasedThresholdMultiplier_T_multiplier = (binomialLadder, frequency) =>
         {
             if ((frequency.Proportion.AsDouble) > 0)
             {

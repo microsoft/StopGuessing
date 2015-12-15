@@ -21,7 +21,7 @@ namespace StopGuessing.DataStructures
     /// <typeparam name="T"></typeparam>    
     [DataContract]
     [JsonConverter(typeof(SmallCapacityConstrainedSetConverter))]
-    public class SmallCapacityConstrainedSet<T> : IEquatable<CapacityConstrainedSet<T>>
+    public class SmallCapacityConstrainedSet<T> : IEquatable<SmallCapacityConstrainedSet<T>>
     {
         /// <summary>
         /// The maximum number of elements the set can hold.
@@ -133,10 +133,10 @@ namespace StopGuessing.DataStructures
                 Add(newMember);
         }
         
-        public bool Equals(CapacityConstrainedSet<T> other)
+        public bool Equals(SmallCapacityConstrainedSet<T> other)
         {
             return other.Capacity == Capacity &&
-                   other.InOrderAdded.SequenceEqual(LeastRecentFirst);
+                   other.LeastRecentFirst.SequenceEqual(LeastRecentFirst);
         }
     }
 
