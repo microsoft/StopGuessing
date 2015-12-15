@@ -97,9 +97,9 @@ namespace StopGuessing.DataStructures
         }
 
         /// <summary>
-        /// Test if a string (<paramref name="s"/>) is a member of the set and Observe it if it is not.
+        /// Test if a string (<paramref name="s"/>) is a member of the set and Step it if it is not.
         /// </summary>
-        /// <param name="s">The string to Observe.</param>
+        /// <param name="s">The string to Step.</param>
         /// <returns>True if <paramref name="s"/> was already a member of the set.</returns>
         public bool AddMember(string s)
         {

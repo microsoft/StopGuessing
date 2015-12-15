@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
+using System.Threading;
 using Microsoft.AspNet.Razor.Chunks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -18,29 +20,41 @@ namespace StopGuessing.DataStructures
     /// </summary>
     /// <typeparam name="T"></typeparam>    
     [DataContract]
-    [JsonConverter(typeof(CapacityConstrainedSetConverter))]
-    public class CapacityConstrainedSet<T> : HashSet<T>, IEquatable<CapacityConstrainedSet<T>>
+    [JsonConverter(typeof(SmallCapacityConstrainedSetConverter))]
+    public class SmallCapacityConstrainedSet<T> : IEquatable<CapacityConstrainedSet<T>>
     {
         /// <summary>
         /// The maximum number of elements the set can hold.
         /// </summary>
         public int Capacity { get; protected set; }
 
-        /// <summary>
-        /// This internal representation of the set maintains ordering from most- to least-recently added.
-        /// </summary>
-        private readonly LinkedList<T> _recency;
+        protected LinkedList<T> AsList;
+        protected ReaderWriterLockSlim RwLock;
 
         /// <summary>
         /// Get the members of the set ordered from the most-recently added to the least-recently added.
         /// </summary>
-        public List<T> InOrderAdded
+        public IEnumerable<T> LeastRecentFirst => MostRecentFirst.Reverse();
+
+        public bool Contains(T item) => AsList.Contains(item);
+
+        /// <summary>
+        /// Get the members of the set ordered from the most-recently added to the least-recently added.
+        /// </summary>
+        public IEnumerable<T> MostRecentFirst
         {
             get
             {
-                lock (_recency)
                 {
-                    return _recency.Reverse().ToList();
+                    RwLock.EnterReadLock();
+                    try
+                    {
+                        return AsList.ToArray();
+                    }
+                    finally
+                    {
+                        RwLock.ExitReadLock();
+                    }
                 }
             }
         }
@@ -50,11 +64,11 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="capacity">The maximum number of items that the set can hold.
         /// When capacity is exceeded, the oldest member of the set is removed.</param>
-        public CapacityConstrainedSet(int capacity)
+        public SmallCapacityConstrainedSet(int capacity)
         {
+            AsList = new LinkedList<T>();
             Capacity = capacity;
-            //_membership = new HashSet<T>();
-            _recency = new LinkedList<T>();
+            RwLock = new ReaderWriterLockSlim();
         }
        
 
@@ -65,48 +79,55 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="item">The item to Add.</param>
         /// <returns>Returns true if the item was already a member of the set; false otherwise.</returns>
-        public new bool Add(T item)
+        public bool Add(T item)
         {
-            lock (_recency)
+            RwLock.EnterWriteLock();
+            try
             {
-                bool itemIsAlreadyPresent = Contains(item);
+                bool itemIsAlreadyPresent = AsList.Contains(item);
                 if (itemIsAlreadyPresent)
                 {
-                    if (!item.Equals(_recency.First()))
+                    if (!item.Equals(AsList.First))
                     {
                         // Make the item, which is already a member,
                         // the most recent
-                        _recency.Remove(item);
-                        _recency.AddFirst(item);
+                        AsList.Remove(item);
+                        AsList.AddFirst(item);
                     }
                 }
                 else
                 {
-                    if (Count >= Capacity)
+                    if (AsList.Count >= Capacity)
                     {
                         // We need to remove the oldest item to make space for the new item
-                        base.Remove(_recency.Last());
-                        _recency.RemoveLast();
+                        AsList.RemoveLast();
                     }
                     // Add the new item
-                    base.Add(item);
-                    _recency.AddFirst(item);
+                    AsList.AddFirst(item);
 
                 }
                 return itemIsAlreadyPresent;
             }
-        }
-
-        public new bool Remove(T item)
-        {
-            lock (_recency)
+            finally
             {
-                _recency.Remove(item);
-                return base.Remove(item);
+                RwLock.ExitWriteLock();
             }
         }
 
-        public new void UnionWith(IEnumerable<T> newMembers)
+        public bool Remove(T item)
+        {
+            RwLock.EnterWriteLock();
+            try
+            {
+                return AsList.Remove(item);
+            }
+            finally
+            {
+                RwLock.ExitWriteLock();
+            }
+        }
+
+        public void UnionWith(IEnumerable<T> newMembers)
         {
             foreach (T newMember in newMembers)
                 Add(newMember);
@@ -115,14 +136,14 @@ namespace StopGuessing.DataStructures
         public bool Equals(CapacityConstrainedSet<T> other)
         {
             return other.Capacity == Capacity &&
-                   other.InOrderAdded.SequenceEqual(InOrderAdded);
+                   other.InOrderAdded.SequenceEqual(LeastRecentFirst);
         }
     }
 
 
 
 
-    public class CapacityConstrainedSetConverter : JsonConverter
+    public class SmallCapacityConstrainedSetConverter : JsonConverter
     {
         private const string CapacityName = "Capacity";
         private const string MembersName = "Members";
@@ -158,14 +179,14 @@ namespace StopGuessing.DataStructures
             serializer.Serialize(writer, set.Capacity);
             // WriteAccountToStableStoreAsync the members
             writer.WritePropertyName(MembersName);
-            serializer.Serialize(writer, set.InOrderAdded);
+            serializer.Serialize(writer, set.LeastRecentFirst);
             // Close the object 
             writer.WriteEndObject();
         }
 
         public override bool CanConvert(Type objectType)
         {
-            bool canConvert = StaticUtilities.IsAssignableToGenericType(objectType, typeof (CapacityConstrainedSet<>));
+            bool canConvert = StaticUtilities.IsAssignableToGenericType(objectType, typeof (SmallCapacityConstrainedSet<>));
             return canConvert;
         }
     }

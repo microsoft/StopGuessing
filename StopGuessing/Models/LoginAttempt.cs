@@ -59,7 +59,7 @@ namespace StopGuessing.Models
         /// The time of the attempt.
         /// </summary>
         [DataMember]
-        public DateTimeOffset TimeOfAttempt { get; set; }
+        public DateTime TimeOfAttemptUtc { get; set; }
 
         /// <summary>
         /// The API/protocol over which the attempt was sent.  Can be used to differentiate attempts via web browsers
@@ -146,7 +146,7 @@ namespace StopGuessing.Models
 
         private string ToUniqueKey()
         {
-            return UrlEncoder.Default.UrlEncode(UsernameOrAccountId) + "&" + AddressOfServerThatInitiallyReceivedLoginAttempt + "&" + TimeOfAttempt.UtcTicks.ToString();
+            return UrlEncoder.Default.UrlEncode(UsernameOrAccountId) + "&" + AddressOfServerThatInitiallyReceivedLoginAttempt + "&" + TimeOfAttemptUtc.Ticks.ToString();
         }
 
         /// <summary>
@@ -161,10 +161,13 @@ namespace StopGuessing.Models
         /// <param name="incorrectPassword">The incorrect password to be stored into the EncryptedIncorrectPassword
         /// field.</param>
         /// <param name="ecPublicLogKey">The public key used to encrypt the incorrect password.</param>
-        public void EncryptAndWriteIncorrectPassword(string incorrectPassword, ECDiffieHellmanPublicKey ecPublicLogKey)
+        public void EncryptAndWriteIncorrectPassword(string incorrectPassword, byte[] ecPublicLogKey)
         {
-            EncryptedIncorrectPassword = JsonConvert.SerializeObject(
-                new EcEncryptedMessageAesCbcHmacSha256(ecPublicLogKey, Encoding.UTF8.GetBytes(incorrectPassword)));
+            using (ECDiffieHellmanPublicKey ecPublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(ecPublicLogKey, CngKeyBlobFormat.EccPublicBlob))
+            {
+                EncryptedIncorrectPassword = JsonConvert.SerializeObject(
+                    new EcEncryptedMessageAesCbcHmacSha256(ecPublicKey, Encoding.UTF8.GetBytes(incorrectPassword)));
+            }
         }
 
         /// <summary>

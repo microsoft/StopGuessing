@@ -15,62 +15,64 @@ namespace xUnit_Tests
     public class TestConfiguration
     {
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
-        public UserAccountController MyUserAccountController;
-        public UserAccountClient MyUserAccountClient;
-        public LoginAttemptClient MyLoginAttemptClient;
+        //public LoginAttemptClient MyLoginAttemptClient;
+        public BlockingAlgorithmOptions MyBlockingAlgorithmOptions;
         public LimitPerTimePeriod[] CreditLimits;
-        public MemoryOnlyStableStore StableStore;
+        //public MemoryOnlyStableStore StableStore;
+        public IUserAccountContextFactory MyAccountContextFactory;
+        public ILoginAttemptController MyLoginAttemptClient;
     }
 
     public class FunctionalTests
     {
         public static TestConfiguration InitTest(BlockingAlgorithmOptions options = default(BlockingAlgorithmOptions))
         {
-            TestConfiguration configuration = new TestConfiguration();
             if (options == null)
                 options = new BlockingAlgorithmOptions();
-            configuration.CreditLimits = new[]
-            {
-                // 3 per hour
-                new LimitPerTimePeriod(new TimeSpan(1, 0, 0), 3f),
-                // 6 per day (24 hours, not calendar day)
-                new LimitPerTimePeriod(new TimeSpan(1, 0, 0, 0), 6f),
-                // 10 per week
-                new LimitPerTimePeriod(new TimeSpan(6, 0, 0, 0), 10f),
-                // 15 per month
-                new LimitPerTimePeriod(new TimeSpan(30, 0, 0, 0), 15f)
-            };
 
-            configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
-            RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
-            configuration.MyResponsibleHosts.Add("localhost", localHost);
-            IStableStore stableStore = configuration.StableStore = new MemoryOnlyStableStore();
+            TestConfiguration configuration = new TestConfiguration();
+            configuration.MyBlockingAlgorithmOptions = options ?? new BlockingAlgorithmOptions();
+
+            //configuration.MyResponsibleHosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
+            //RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:80") };
+            //configuration.MyResponsibleHosts.Add("localhost", localHost);
+            //IStableStore stableStore = configuration.StableStore = new MemoryOnlyStableStore();
             
-            configuration.MyUserAccountClient = new UserAccountClient(configuration.MyResponsibleHosts, localHost);
-            configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
+            //configuration.MyLoginAttemptClient = new LoginAttemptClient(configuration.MyResponsibleHosts, localHost);
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
-            configuration.MyUserAccountController = new UserAccountController(configuration.MyUserAccountClient,
-                configuration.MyLoginAttemptClient, memoryUsageLimiter, options, stableStore, 
-                configuration.CreditLimits);
-            LoginAttemptController myLoginAttemptController = new LoginAttemptController(configuration.MyLoginAttemptClient, configuration.MyUserAccountClient,
-                memoryUsageLimiter, options, stableStore);
+            BinomialLadderSketch localPasswordBinomialLadderSketch =
+            new BinomialLadderSketch(1024 * 1024 * 1024, options.NumberOfRungsInBinomialLadder);
+                MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
+                    new MultiperiodFrequencyTracker<string>(
+                        options.NumberOfPopularityMeasurementPeriods,
+                        options.LengthOfShortestPopularityMeasurementPeriod,
+                        options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
 
-            configuration.MyUserAccountController.SetLoginAttemptClient(configuration.MyLoginAttemptClient);
-            configuration.MyUserAccountClient.SetLocalUserAccountController(configuration.MyUserAccountController);
+            configuration.MyAccountContextFactory = new MemoryOnlyAccountContextFactory();
 
-            myLoginAttemptController.SetUserAccountClient(configuration.MyUserAccountClient);
-            configuration.MyLoginAttemptClient.SetLocalLoginAttemptController(myLoginAttemptController);
+            LoginAttemptController myLoginAttemptController = new LoginAttemptController(
+                configuration.MyAccountContextFactory,
+                localPasswordBinomialLadderSketch,
+                localPasswordFrequencyTracker,
+                memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions);
+
+            configuration.MyLoginAttemptClient = myLoginAttemptController;
+
+            //configuration.MyLoginAttemptClient.SetLocalLoginAttemptController(myLoginAttemptController);
             return configuration;
         }
 
         public async static Task<UserAccount> CreateTestAccountAsync(TestConfiguration configuration, string usernameOrAccountId, string password)
         {
             UserAccount account = UserAccount.Create(usernameOrAccountId,
-              (int) configuration.CreditLimits.Last().Limit,  password,
+              configuration.MyBlockingAlgorithmOptions.Conditions.Length,
+              configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
+              configuration.MyBlockingAlgorithmOptions.BlockScoreHalfLife,
+              password,
               numberOfIterationsToUseForPhase1Hash: 1);
-            await configuration.MyUserAccountController.PutAsync(account.UsernameOrAccountId, account);
+            await configuration.MyAccountContextFactory.Get().WriteNewAsync(account);
             return account;
         }
 
@@ -92,7 +94,7 @@ namespace xUnit_Tests
             IPAddress serverAddress = null,
             string api = "web",
             string cookieProvidedByBrowser = null,
-            DateTimeOffset? eventTime = null,
+            DateTime? eventTimeUtc = null,
             CancellationToken cancellationToken = default(CancellationToken)
             )
         {
@@ -105,7 +107,7 @@ namespace xUnit_Tests
                 UsernameOrAccountId = username,
                 AddressOfClientInitiatingRequest = clientAddress,
                 AddressOfServerThatInitiallyReceivedLoginAttempt = serverAddress,
-                TimeOfAttempt = eventTime ?? DateTimeOffset.Now,
+                TimeOfAttemptUtc = eventTimeUtc ?? DateTime.UtcNow,
                 Api = api,
                 CookieProvidedByBrowser = cookieProvidedByBrowser
             };
@@ -170,6 +172,9 @@ namespace xUnit_Tests
         [Fact]
         public async Task LoginWithIpWithBadReputationAsync()
         {
+            //BlockingAlgorithmOptions Options = new BlockingAlgorithmOptions();
+            //Options.BlockThresholdMultiplierForUnpopularPasswords = 1d;
+            //TestConfiguration configuration = InitTest(Options);
             TestConfiguration configuration = InitTest();
             string[] usernames = CreateUserAccounts(configuration, 200);
             await CreateTestAccountAsync(configuration, Username1, Password1);
@@ -202,8 +207,8 @@ namespace xUnit_Tests
             await CreateTestAccountAsync(configuration, Username1, Password1);
 
             // Have one attacker make the password popular by attempting to login to every account with it.
-            Parallel.ForEach(usernames.Skip(20), async (username) =>
-                await AuthenticateAsync(configuration, username, Password1, clientAddress: AttackersIp));
+            await TaskParalllel.ForEachWithWorkers(usernames.Skip(20), async (username, itemNumber, cancelToken) =>
+                await AuthenticateAsync(configuration, username, Password1, clientAddress: AttackersIp, cancellationToken: cancelToken));
 
             Thread.Sleep(2000);
             
@@ -281,9 +286,9 @@ namespace xUnit_Tests
         {
             BlockingAlgorithmOptions options = new BlockingAlgorithmOptions
             {
-                BasePenaltyForInvalidPassword = 1,
+                PenaltyForInvalidPassword_Beta = 1,
                 BlockThresholdPopularPassword = 1,
-                BlockThresholdMultiplierForUnpopularPasswords = 1,
+                //BlockThresholdMultiplierForUnpopularPasswords = 1,
                 PenaltyMulitiplierForTypo = .25d
             };
 

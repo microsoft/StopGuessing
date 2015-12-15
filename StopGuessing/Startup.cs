@@ -45,27 +45,51 @@ namespace StopGuessing
             // You will also need to add the Microsoft.AspNet.Mvc.WebApiCompatShim package to the 'dependencies' section of project.json.
             // services.AddWebApiConventions();
 
-            var hosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
-            RemoteHost localHost = new RemoteHost {Uri = new Uri("http://localhost:35358")};
+            BlockingAlgorithmOptions options = new BlockingAlgorithmOptions();
 
+            services.AddSingleton<BlockingAlgorithmOptions>(x => options);
+
+            RemoteHost localHost = new RemoteHost {Uri = new Uri("http://localhost:35358")};
             services.AddSingleton<RemoteHost>(x => localHost);
+
+            MaxWeightHashing<RemoteHost> hosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
             hosts.Add("localhost", localHost);
+            services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>(x => hosts);
+
+            BinomialLadderSketch localPasswordBinomialLadderSketch =
+                new BinomialLadderSketch(1024*1024*1024, options.NumberOfRungsInBinomialLadder);
+            MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
+                new MultiperiodFrequencyTracker<string>(
+                    options.NumberOfPopularityMeasurementPeriods,
+                    options.LengthOfShortestPopularityMeasurementPeriod,
+                    options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
+
+
+            services.AddSingleton<IStableStoreFactory<string, UserAccount>, MemoryOnlyAccountContextFactory>();
 
             // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
-            services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
+            //services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
 
-            var options = new BlockingAlgorithmOptions();
-
-
-            services.AddSingleton<BlockingAlgorithmOptions>(x => options);
-            services.AddSingleton<BlockingAlgorithmOptions>(x => options);
 
             services.AddSingleton<MemoryUsageLimiter, MemoryUsageLimiter>();
 
-            services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>(x => hosts);
-            services.AddSingleton<UserAccountClient>();
+            if (hosts.Count > 0)
+            {
+                // If running as a distributed system
+                services.AddSingleton<IBinomialLadderSketch, DistributedBinomialLadderClient>(x => 
+                new DistributedBinomialLadderClient(
+                    hosts,
+                    options.NumberOfRedundantHostsToCachePasswordPopularity,
+                    options.NumberOfRungsInBinomialLadder));
+                services.AddSingleton<IFrequenciesProvider<string>>(x =>
+                    new IncorrectPasswordFrequencyClient(hosts, options.NumberOfRedundantHostsToCachePasswordPopularity));
+            }  else
+            {
+                services.AddSingleton<IBinomialLadderSketch>(x => localPasswordBinomialLadderSketch);
+                services.AddSingleton<IFrequenciesProvider<string>>(x => localPasswordFrequencyTracker);
+            }
+
             services.AddSingleton<LoginAttemptClient>();
-            services.AddSingleton<UserAccountController>();
             services.AddSingleton<LoginAttemptController>();
         }
 

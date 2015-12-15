@@ -35,11 +35,12 @@ namespace StopGuessing.DataStructures
             return builder.Uri.PathAndQuery;
         }
 
+
         public static async Task<TReturnType> PutAsync<TReturnType>(
             Uri baseAddress,
             string pathAndQuery,
-            Object parameters,
-            TimeSpan? timeout,
+            Object parameters = null,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             using (HttpClient client = new HttpClient())
@@ -54,7 +55,7 @@ namespace StopGuessing.DataStructures
         public static async Task PutAsync(Uri baseAddress, 
             string pathAndQuery,
             Object parameters,
-            TimeSpan? timeout,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             using (HttpClient client = new HttpClient())
@@ -67,8 +68,8 @@ namespace StopGuessing.DataStructures
         public static async Task<TReturnType> PostAsync<TReturnType>(
             Uri baseAddress,
             string pathAndQuery,
-            Object parameters,
-            TimeSpan? timeout,
+            Object parameters = null,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             using (HttpClient client = new HttpClient())
@@ -83,8 +84,8 @@ namespace StopGuessing.DataStructures
         public static async Task PostAsync(
             Uri baseAddress,
             string pathAndQuery,
-            Object parameters,
-            TimeSpan? timeout,
+            Object parameters = null,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             using (HttpClient client = new HttpClient())
@@ -96,8 +97,8 @@ namespace StopGuessing.DataStructures
 
         public static void PostBackground(Uri baseAddress, 
             string pathAndQuery,
-            Object parameters,
-            TimeSpan? timeout,
+            Object parameters = null,
+            TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Task.Run(() => PostAsync(baseAddress, pathAndQuery, parameters, timeout, cancellationToken),
@@ -167,19 +168,13 @@ namespace StopGuessing.DataStructures
         /// <param name="actionToTry"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async static Task<TResult> TryServersUntilOneResponds<TResult, TIterationParameter>(
+        public async static Task<TResult> TryServersUntilOneRespondsWithResult<TResult, TIterationParameter>(
             IEnumerable<TIterationParameter> iterationParameters,
             TimeSpan timeBetweenRetries,
             Func<TIterationParameter, TimeSpan, Task<TResult>> actionToTry,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
-
-            // FIXME Hack to test perf
-            if (iterationParameterQueue.Count == 1)
-            {
-                return await actionToTry(iterationParameterQueue.Dequeue(), timeBetweenRetries);
-            }
 
             List<Task<TResult>> attemptsInProgress = new List<Task<TResult>>();
             
@@ -236,14 +231,7 @@ namespace StopGuessing.DataStructures
             CancellationToken cancellationToken = default(CancellationToken))
         {
             Queue<TIterationParameter> iterationParameterQueue = new Queue<TIterationParameter>(iterationParameters);
-
-            // FIXME Hack to test perf
-            if (iterationParameterQueue.Count == 1)
-            {
-                await actionToTry(iterationParameterQueue.Dequeue(), timeBetweenRetries);
-                return;
-            }
-
+            
             List<Task> attemptsInProgress = new List<Task>();
 
             int indexOfTaskFound = -1;
@@ -253,10 +241,8 @@ namespace StopGuessing.DataStructures
             while (indexOfTaskFound == -1 && iterationParameterQueue.Count > 0)
             {
                 TimeSpan localtimeUntilFinalTimeout = timeUntilFinalTimeout;
-                attemptsInProgress.Add(Task.Run(async () =>
-                {
-                    await actionToTry(iterationParameterQueue.Dequeue(), localtimeUntilFinalTimeout);
-                }, cancellationToken));
+                attemptsInProgress.Add(Task.Run(async () => await actionToTry(iterationParameterQueue.Dequeue(), localtimeUntilFinalTimeout),
+                        cancellationToken));
 
                 indexOfTaskFound = Task.WaitAny(
                         (attemptsInProgress.Select(t => (Task)t).ToArray()),

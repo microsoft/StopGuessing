@@ -1,4 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StopGuessing.DataStructures
@@ -7,9 +11,10 @@ namespace StopGuessing.DataStructures
     /// <summary>
     /// A class to track the frequency of a sequence of observed values (keys).
     /// </summary>
-    /// <typeparam name="T">The type of values (keys) to observe.</typeparam>
-    public class FrequencyTracker<T>
+    /// <typeparam name="TKey">The type of values (keys) to observe.</typeparam>
+    public class FrequencyTracker<TKey>
     {
+   
         /// <summary>
         /// The maximum number of elements this data structure should store before
         /// recovering space.
@@ -34,29 +39,37 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// The sum of the counts of all observations currently stored in the tracker.
         /// </summary>
-        public ulong SumOfAmountsOverAllKeys { get; private set; }
+        private long _sumOfAmountsOverAllKeys;
+        public long SumOfAmountsOverAllKeys {
+            get { return _sumOfAmountsOverAllKeys;}
+            private set {_sumOfAmountsOverAllKeys = value; } }
 
         // The count of the number of items is the number of elements we're tracking the count of
-        public int Count => _keyCounts.Count;
+        private int _numberOfElements = 0;
+        public int Count
+        {
+            get { return _numberOfElements; }
+            private set { _numberOfElements = value; }
+        }
 
 
         /// <summary>
         /// Where the elements are stored
         /// </summary>
-        private readonly SortedDictionary<T, uint> _keyCounts;
+        private readonly ConcurrentDictionary<TKey, uint> _keyCounts;
 
         /// <summary>
         /// Trigger reduction when this threshold is reached to clear old out observations
         /// </summary>
-        protected ulong TotalCountMaxThreshold { get; }
+        protected long TotalCountMaxThreshold { get; }
 
         /// <summary>
         /// The threshold to reduce to when clearing out old observations.
         /// </summary>
-        protected ulong ReducedAmountToTargetWhenTotalAmountReached { get; }
+        protected long ReducedAmountToTargetWhenTotalAmountReached { get; }
 
         // For scaling up before reaching steady-state capacity
-        private int _periodBetweenIncrementGrowth;
+        private readonly int _periodBetweenIncrementGrowth;
         private int _capacityAtWhichToIncreaseTheIncrement;
 
         // The amount to increment on each observation.  This starts at one, and grows linearly
@@ -73,7 +86,7 @@ namespace StopGuessing.DataStructures
         // For recovering capacity or reducing observations
         private readonly object _recoveryTaskLock;
         private Task _recoveryTask;
-        private Queue<T> _cleanupQueue;
+        private Queue<TKey> _cleanupQueue;
 
 
         /// <summary>
@@ -104,7 +117,7 @@ namespace StopGuessing.DataStructures
             // to the TotalCount, the TotalCount will be:
             //    approximateObservationLifetime * Generations
             // At that threshold we should start clearing out old observations
-            TotalCountMaxThreshold = ((ulong)approximateObservationLifetime) * Generations;
+            TotalCountMaxThreshold = ((long)approximateObservationLifetime) * Generations;
             // If the max capacity is not specified, have space for enough observations to keep
             // one for each lifetime.
             MaxCapacity = maxCapacity ?? approximateObservationLifetime;
@@ -118,10 +131,10 @@ namespace StopGuessing.DataStructures
             _capacityAtWhichToIncreaseTheIncrement = _periodBetweenIncrementGrowth;
 
             // Initialize our main storage data structure
-            _keyCounts = new SortedDictionary<T, uint>();
+            _keyCounts = new ConcurrentDictionary<TKey, uint>();
 
             // Use these two objects during clean-up
-            _cleanupQueue = new Queue<T>();
+            _cleanupQueue = new Queue<TKey>();
             _recoveryTaskLock = new object();
         }
 
@@ -131,59 +144,60 @@ namespace StopGuessing.DataStructures
         /// <param name="key">The key to query.</param>
         /// <returns>The proportion (frequency) with which that observation occurred before this observation,
         /// aged over time.</returns>
-        public Proportion Get(T key)
+        public Proportion Get(TKey key)
         {
             uint count;
-            lock (_keyCounts)
-            {
-                _keyCounts.TryGetValue(key, out count);
-            }
-            return new Proportion(count, SumOfAmountsOverAllKeys);
+            _keyCounts.TryGetValue(key, out count);
+            return new Proportion(count, (ulong) SumOfAmountsOverAllKeys);
         }
 
+
+        private readonly object _capacityLockObj = new object();
         /// <summary>
         /// Add an observation of a given key, returning the estimated frequency of that key before the observation.
         /// </summary>
         /// <param name="key">The key to observe</param>
         /// <returns>The proportion (frequency) with which that observation occurred, aged over time.</returns>
-        public Proportion Observe(T key)
+        public Proportion Observe(TKey key)
         {
-            uint count;
-            bool recoveryNeeded;
-            lock (_keyCounts)
-            {
-                // Get the value of the key if it is already present (or 0 otherwise)
-                _keyCounts.TryGetValue(key, out count);
-                // Increment the value for the key and the sum of the amountts over all keys 
-                count += _increment;
-                _keyCounts[key] = count;
-                SumOfAmountsOverAllKeys += _increment;
+            // Perform locked conccurrent add to _keyCounts[key]
+            uint increment = _increment;
+            uint countForThisKeyAfter = _keyCounts.AddOrUpdate(key, (k) => increment, (k, priorValue) => priorValue + increment);
+            uint countForThisKeyBefore = countForThisKeyAfter - increment;
+            if (countForThisKeyBefore > 0)
+                Interlocked.Add(ref _numberOfElements, 1);
+            // Perform a locked add to the total for all the key counts
+            Interlocked.Add(ref _sumOfAmountsOverAllKeys, _increment);
 
-                // Special logic used during the initial phase of the tracker, during which we increase
-                // the increment amount over time.
-                if (Count == _capacityAtWhichToIncreaseTheIncrement)
+            // Special logic used during the initial phase of the tracker, during which we increase
+            // the increment amount over time.
+            if (_capacityAtWhichToIncreaseTheIncrement >= 0 && Count >= _capacityAtWhichToIncreaseTheIncrement)
+            {
+                lock (_capacityLockObj)
                 {
-                    // We can grow the increment amount so that newer observations have higher
-                    // values than older observations, facilitating future clean-up.
-                    if (++_increment >= Generations)
+                    if (_capacityAtWhichToIncreaseTheIncrement >= 0 &&
+                        _numberOfElements >= _capacityAtWhichToIncreaseTheIncrement)
                     {
-                        _capacityAtWhichToIncreaseTheIncrement = -1;
-                    }
-                    else
-                    {
-                        _periodBetweenIncrementGrowth += _periodBetweenIncrementGrowth;
+                        // We can grow the increment amount so that newer observations have higher
+                        // values than older observations, facilitating future clean-up.
+                        if (++_increment >= Generations)
+                        {
+                            _capacityAtWhichToIncreaseTheIncrement = -1;
+                        }
+                        else
+                        {
+                            _capacityAtWhichToIncreaseTheIncrement += _periodBetweenIncrementGrowth;
+                        }
                     }
                 }
-                // We need a recovery if the number of keys exceeds our capacity constraint
-                // (Though we use this below, we calculate it here because it requires the lock
-                //  we're about to let go of.) 
-                recoveryNeeded = _keyCounts.Count > MaxCapacity;
-            } // We let go of that lock here
-
+            }
+            // We need a recovery if the number of keys exceeds our capacity constraint
+            // (Though we use this below, we calculate it here because it requires the lock
+            //  we're about to let go of.) 
             if (_recoveryTask == null)
             {
                 // No recovery tasks are running.  Check to see if one is needed.
-                if (recoveryNeeded)
+                if (_numberOfElements > MaxCapacity)
                 {
                     // We're above our space budget.  Start a reduction operation with the goal
                     // of recovering space
@@ -197,7 +211,8 @@ namespace StopGuessing.DataStructures
                     StartReducingTotal();
                 }
             }
-            return new Proportion(count, SumOfAmountsOverAllKeys);
+
+            return new Proportion(countForThisKeyBefore, (ulong) SumOfAmountsOverAllKeys);
         }
 
         /// <summary>
@@ -241,35 +256,30 @@ namespace StopGuessing.DataStructures
                 // If there queue of keys to cleanup is empty, refill it with all of the key's keys
                 if (_cleanupQueue.Count == 0)
                 {
-                    lock (_keyCounts)
-                    {
-                        _cleanupQueue = new Queue<T>(_keyCounts.Keys);
-                    }
+                    _cleanupQueue = new Queue<TKey>(_keyCounts.ToArray().Select(k => k.Key));
                 }
                 // Dequeue one key from the clean-up queue (we only run one recovery-task at a time,
                 // so we don't need task/thread safety here.
-                T key = _cleanupQueue.Dequeue();
+                TKey key = _cleanupQueue.Dequeue();
                 // Reduce the count for the current key on the queue and, if the count reaches 0,
                 // remove that key
-                lock (_keyCounts)
+                uint count;
+                if (_keyCounts.TryGetValue(key, out count))
                 {
-                    uint count;
-                    if (_keyCounts.TryGetValue(key, out count))
+                    if (count <= 1)
                     {
-                        if (count <= 1)
-                        {
-                            _keyCounts.Remove(key);
-                            SumOfAmountsOverAllKeys -= count;
-                        }
-                        else
-                        {
-                            _keyCounts[key] = count - 1;
-                            SumOfAmountsOverAllKeys -= 1;
-                        }
+                        _keyCounts.TryRemove(key, out count);
+                        Interlocked.Add(ref _sumOfAmountsOverAllKeys, -count);
+                        Interlocked.Add(ref _numberOfElements, -1);
                     }
-                    // We're finished when the capacity has reached the target capacity
-                    finished = finishCondition();
+                    else
+                    {
+                        _keyCounts.AddOrUpdate(key, k => 0, (k, priorValue) => priorValue - 1);
+                        Interlocked.Add(ref _sumOfAmountsOverAllKeys, -1);
+                    }
                 }
+                // We're finished when the capacity has reached the target capacity
+                finished = finishCondition();
             }
             // Now that the task is done, clear the task object so that a new task can be started
             // if necessary.

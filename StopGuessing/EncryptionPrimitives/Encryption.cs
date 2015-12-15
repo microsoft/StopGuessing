@@ -67,7 +67,7 @@ namespace StopGuessing.EncryptionPrimitives
         /// The HMAC will be removed before the plaintext is returned.  If the HMAC does not match, the method will throw a
         /// System.Security.Cryptography.CryptographicException.</param>
         /// <returns>The plaintext resulting from decrypting the ciphertext with the given key.</returns>
-        public static byte[] DecryptAescbc(byte[] ciphertext, byte[] key, byte[] iv = null, bool checkAndRemoveHmac = false)
+        public static byte[] DecryptAesCbc(byte[] ciphertext, byte[] key, byte[] iv = null, bool checkAndRemoveHmac = false)
         {
             using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
             {
@@ -101,7 +101,7 @@ namespace StopGuessing.EncryptionPrimitives
 
         public static string DecryptAescbcutf8(byte[] ciphertext, byte[] key, byte[] iv = null, bool checkAndRemoveHmac = false)
         {
-            return System.Text.Encoding.UTF8.GetString(DecryptAescbc(ciphertext, key, iv, checkAndRemoveHmac));
+            return System.Text.Encoding.UTF8.GetString(DecryptAesCbc(ciphertext, key, iv, checkAndRemoveHmac));
         }
 
 
@@ -130,7 +130,7 @@ namespace StopGuessing.EncryptionPrimitives
             byte[] ecPrivateKeyEncryptedWithAesCbc,
             byte[] symmetricKey)
         {
-            byte[] ecPrivateAccountLogKeyAsBytes = DecryptAescbc(
+            byte[] ecPrivateAccountLogKeyAsBytes = DecryptAesCbc(
                                 ecPrivateKeyEncryptedWithAesCbc,
                                 symmetricKey.Take(16).ToArray(),
                                 checkAndRemoveHmac: true);

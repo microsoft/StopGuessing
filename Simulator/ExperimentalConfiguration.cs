@@ -23,8 +23,11 @@ namespace Simulator
 
         public BlockingAlgorithmOptions BlockingOptions = new BlockingAlgorithmOptions();
 
-        public string PasswordFrequencyFile = @"rockyou-withcount.txt";
-        public string PreviouslyKnownPopularPasswordFile = @"phpbb.txt";
+        public TimeSpan TestTimeSpan = new TimeSpan(1, 0, 0, 0); // 1 day
+
+        public string OutputPath = @"d:\";
+        public string PasswordFrequencyFile = @"..\..\rockyou-withcount.txt";
+        public string PreviouslyKnownPopularPasswordFile = @"..\..\phpbb.txt";
 
         public ulong TotalLoginAttemptsToIssue = 10*Thousand;
 

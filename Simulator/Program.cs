@@ -20,7 +20,7 @@ namespace Simulator
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test
-                ulong totalLoginAttempts = 100 * Million;
+                ulong totalLoginAttempts = 500 * Thousand; // * Million;
 
                 // Figure out parameters from scale
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
@@ -50,41 +50,47 @@ namespace Simulator
                 // Additional sources of false positives/negatives
                 config.FractionOfBenignIPsBehindProxies = 0.1d;
                 config.ProxySizeInUniqueClientIPs = 1000;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.01d; // 0.1;
 
                 // Blocking parameters
                 // Make typos almost entirely ignored
                 config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
-            }, new Simulator.IParameterSweeper[]
-            {
-                new Simulator.ParameterSweeper<Simulator.SystemMode>
+                //config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 10d;
+                config.BlockingOptions.ExpensiveHashingFunctionIterations = 1;
+                config.BlockingOptions.Conditions = new[]
                 {
-                    Name = "Algorithm",
-                    Parameters = new Simulator.SystemMode[]
-                    {
-                        Simulator.SystemMode.StopGuessing,
-                        //Simulator.SystemMode.Basic,
-                        //Simulator.SystemMode.SSH
-                    },
-                    ParameterSetter =
-                        (config, modeForThisExp) => Simulator.SetSystemMode(config, modeForThisExp)
-                },
-                new Simulator.ParameterSweeper<double>
-                {
-                    Name = "BlockThresholdPopularPassword",
-                    Parameters = new double[] {
-                        //3,
-                        //5,
-                        //8,
-                        //12,
-                        //18,
-                        //28,
-                        //40,
-                        //60,
-                        //80,
-                        500 },
-                    ParameterSetter =
-                        (config, thresholdForThisExp) => config.BlockingOptions.BlockThresholdPopularPassword = thresholdForThisExp
-                }
+                    new SimulationCondition(config.BlockingOptions, 0, "Baseline", false, false, false, false, false,
+                        false, false),
+                    new SimulationCondition(config.BlockingOptions, 1, "NoRepeats", true, false, false, false, false,
+                        false, false),
+                    new SimulationCondition(config.BlockingOptions, 2, "Cookies", true, true, false, false, false, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 3, "Credits", true, true, true, false, false, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 4, "Alpha", true, true, true, true, false, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 5, "Typos", true, true, true, true, true, false,
+                        false),
+                    new SimulationCondition(config.BlockingOptions, 6, "PopularThreshold", true, true, true, true, true,
+                        true, false),
+                    new SimulationCondition(config.BlockingOptions, 7, "PunishPopularGuesses", true, true, true, true,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 8, "AllButRepeats", false, true, true, true,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 9, "AllButCookies", true, false, true, true,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 10, "AllButCredits", true, true, false, true,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 11, "AllButAlpha", true, true, true, false,
+                        true, true, true),
+                    new SimulationCondition(config.BlockingOptions, 12, "AllButTypos", true, true, true, true,
+                        false, true, true),
+                    new SimulationCondition(config.BlockingOptions, 13, "AllButThreshold", true, true, true, true,
+                        true, false, true),
+                    new SimulationCondition(config.BlockingOptions, 14, "AllButPunishPopular", true, true, true, true,
+                        true, true, false)
+                };
+                
             });
 
 
