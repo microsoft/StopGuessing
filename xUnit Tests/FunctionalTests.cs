@@ -43,7 +43,7 @@ namespace xUnit_Tests
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
             BinomialLadderSketch localPasswordBinomialLadderSketch =
-            new BinomialLadderSketch(1024 * 1024 * 1024, options.NumberOfRungsInBinomialLadder);
+            new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.NumberOfRungsInBinomialLadder_K);
                 MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
                     new MultiperiodFrequencyTracker<string>(
                         options.NumberOfPopularityMeasurementPeriods,

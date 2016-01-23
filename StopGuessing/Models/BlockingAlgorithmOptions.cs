@@ -34,8 +34,9 @@ namespace StopGuessing.Models
     {
         public int NumberOfRedundantHostsToCacheIPs = 1;
         public int NumberOfRedundantHostsToCachePasswordPopularity = 1;
-        public int NumberOfRungsInBinomialLadder = 96;
-        
+        public int NumberOfRungsInBinomialLadder_K = 48;
+        public int NumberOfElementsInBinomialLadderSketch_N = 53665619;
+
         public int NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos = 8;
 
         public float MaxEditDistanceConsideredATypo { get; set; } = 2f;
@@ -65,7 +66,7 @@ namespace StopGuessing.Models
         /// Until we've observed enough failure attempts, we use the following denominator for popularity calculations.
         /// This ensures that a small burst of something rare doesn't look popular when we've only had a few observations.
         /// </summary>
-        public ulong MinDenominatorForPasswordPopularity { get; set; } = 100*1000; // 1 million
+        //public ulong MinDenominatorForPasswordPopularity { get; set; } = 100*1000; // 1 million
 
         public double PopularityConfidenceLevel { get; set; } = 0.001d; // 1 in 100,000
 

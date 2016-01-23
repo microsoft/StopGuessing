@@ -25,7 +25,7 @@ namespace Simulator
 
         public TimeSpan TestTimeSpan = new TimeSpan(1, 0, 0, 0); // 1 day
 
-        public string OutputPath = @"d:\";
+        public string OutputPath = @"e:\";
         public string PasswordFrequencyFile = @"..\..\rockyou-withcount.txt";
         public string PreviouslyKnownPopularPasswordFile = @"..\..\phpbb.txt";
 
@@ -38,7 +38,14 @@ namespace Simulator
         public int MaxIpPerUserAccount = 5;
 
 
+        public double ChanceOfLongRepeatOfStalePassword = 0.0004; // 1 in 2,500
+        public double MinutesBetweenLongRepeatOfOldPassword = 5; // an attempt every 5 minutes
+        public uint LengthOfLongRepeatOfOldPassword = (uint) ( (60 * 24) / 5 ); // 24 hours / an attempt every 5 minutes
         public double ChanceOfBenignPasswordTypo = 0.02d;
+        public double ChanceOfRepeatTypo = 2d/3d; // two thirds
+        public double ChanceOfRepeatUseOfPasswordFromAnotherAccount = 1d / 3d; // one thirds
+        public double ChanceOfRepeatWrongAccountName = .2d; // 20%
+        public double DelayBetweenRepeatBenignErrorsInSeconds = 7d;
         public double ChanceOfBenignAccountNameTypoResultingInAValidUserName = 0.02d;
         public double ChanceOfAccidentallyUsingAnotherAccountPassword = 0.02d;
 

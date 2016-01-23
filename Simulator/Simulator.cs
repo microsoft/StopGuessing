@@ -21,7 +21,7 @@ namespace Simulator
     public partial class Simulator
     {      
         private readonly LoginAttemptController _loginAttemptController;
-        private readonly IUserAccountContextFactory accountContextFactory;     
+        private readonly IUserAccountContextFactory _accountContextFactory;     
         private readonly ExperimentalConfiguration _experimentalConfiguration;
 
         private readonly TextWriter _outputWriter;
@@ -31,6 +31,7 @@ namespace Simulator
         private SimulatedAccounts _simAccounts;
         private SimulatedLoginAttemptGenerator _attemptGenerator;
 
+        protected readonly DateTime StartTimeUtc = new DateTime(2016, 01, 01, 0, 0, 0, DateTimeKind.Utc);
 
         public delegate void ExperimentalConfigurationFunction(ExperimentalConfiguration config);
 
@@ -121,7 +122,7 @@ namespace Simulator
             
             _logger.WriteStatus("Creating binomial ladder");
             BinomialLadderSketch localPasswordBinomialLadderSketch =
-                new BinomialLadderSketch(1024 * 1024 * 1024, options.NumberOfRungsInBinomialLadder);
+                new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.NumberOfRungsInBinomialLadder_K);
             MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
                 new MultiperiodFrequencyTracker<string>(
                     options.NumberOfPopularityMeasurementPeriods,
@@ -130,12 +131,12 @@ namespace Simulator
             _logger.WriteStatus("Finished creating binomial ladder");
 
 
-            accountContextFactory = new MemoryOnlyAccountContextFactory();
+            _accountContextFactory = new MemoryOnlyAccountContextFactory();
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
             _loginAttemptController = new LoginAttemptController(
-                accountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
-                memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions);
+                _accountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
+                memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StartTimeUtc);
 
             _logger.WriteStatus("Exiting Simulator constructor");
         }
@@ -157,7 +158,7 @@ namespace Simulator
             _ipPool = new IpPool(_experimentalConfiguration);
             _logger.WriteStatus("Generating simualted account records");
             _simAccounts = new SimulatedAccounts(_ipPool, _simPasswords, _logger);
-            await _simAccounts.GenerateAsync(_experimentalConfiguration, accountContextFactory, cancellationToken);
+            await _simAccounts.GenerateAsync(_experimentalConfiguration, _accountContextFactory, cancellationToken);
 
             _logger.WriteStatus("Creating login-attempt generator");
             _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool, _simPasswords);
@@ -174,7 +175,6 @@ namespace Simulator
                 "Password",
                 string.Join(",", _experimentalConfiguration.BlockingOptions.Conditions.Select( cond => cond.Name )));
 
-            DateTime startTimeUtc = new DateTime(2016,01,01,0,0,0, DateTimeKind.Utc);
             TimeSpan testTimeSpan = _experimentalConfiguration.TestTimeSpan;
             double ticksBetweenLogins = ((double)testTimeSpan.Ticks)/(double)_experimentalConfiguration.TotalLoginAttemptsToIssue;
             
@@ -182,18 +182,17 @@ namespace Simulator
             {
                 if (count % 10000 == 0)
                     _logger.WriteStatus("Login Attempt {0:N0}", count);
-                DateTime eventTimeUtc = startTimeUtc.AddTicks((long) (ticksBetweenLogins * count));
+                DateTime eventTimeUtc = StartTimeUtc.AddTicks((long) (ticksBetweenLogins * count));
                 SimulatedLoginAttempt simAttempt;
                 if (StrongRandomNumberGenerator.GetFraction() <
                     _experimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
                 {
-                    simAttempt = _attemptGenerator.MaliciousLoginAttemptBreadthFirst();
+                    simAttempt = _attemptGenerator.MaliciousLoginAttemptBreadthFirst(eventTimeUtc);
                 }
                 else
                 {
-                    simAttempt = _attemptGenerator.BenignLoginAttempt();
+                    simAttempt = _attemptGenerator.BenignLoginAttempt(eventTimeUtc, _accountContextFactory);                    
                 }
-                simAttempt.Attempt.TimeOfAttemptUtc = eventTimeUtc;
 
                 double[] scores = await
                     _loginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,

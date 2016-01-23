@@ -19,13 +19,18 @@ namespace StopGuessing.Models
                 score = 0;
             else if (Condition.ProtectsAccountsWithPopularPasswords)
                 score /= Condition.Options.PopularityBasedThresholdMultiplier_T_multiplier(ladder, frequency);
+            if (double.IsNaN(score))
+            {
+                //FIXME
+                Console.Error.WriteLine("here");
+            }
             return score;
         }
 
-        public SimulationConditionIpHistoryState(SimulationCondition condition)
+        public SimulationConditionIpHistoryState(SimulationCondition condition, DateTime? currentDateTimeUtc)
         {
             Condition = condition;
-            Score = new DoubleThatDecaysWithTime(Condition.Options.BlockScoreHalfLife);
+            Score = new DoubleThatDecaysWithTime(Condition.Options.BlockScoreHalfLife, 0, currentDateTimeUtc);
             RecentPotentialTypos = !Condition.FixesTypos ? null :
                 new SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(
                     Condition.Options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);

@@ -36,7 +36,18 @@ namespace StopGuessing.DataStructures
         /// </summary>
         public IEnumerable<T> LeastRecentFirst => MostRecentFirst.Reverse();
 
-        public bool Contains(T item) => AsList.Contains(item);
+        public bool Contains(T item)
+        {
+            RwLock.EnterReadLock();
+            try
+            {
+                return AsList.Contains(item);
+            }
+            finally
+            {
+                RwLock.ExitReadLock();
+            }            
+        } 
 
         /// <summary>
         /// Get the members of the set ordered from the most-recently added to the least-recently added.

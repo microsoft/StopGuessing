@@ -56,7 +56,8 @@ namespace StopGuessing.Controllers
             IBinomialLadderSketch binomialLadderSketch,
             IFrequenciesProvider<string> incorrectPasswordFrequenciesProvider,
             MemoryUsageLimiter memoryUsageLimiter,
-            BlockingAlgorithmOptions blockingOptions
+            BlockingAlgorithmOptions blockingOptions,
+            DateTime? currentDateTimeUtc = null
             )
         {
             _options = blockingOptions; //optionsAccessor.Options;
@@ -66,7 +67,7 @@ namespace StopGuessing.Controllers
 
             _recentIncorrectPasswords = new AgingMembershipSketch(16, 128*1024); // FIXME -- more configurable?
             _userAccountContextFactory = userAccountContextFactory;
-            _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(address => new IpHistory(address, _options));
+            _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(address => new IpHistory(address, currentDateTimeUtc, _options));
 
             memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }
@@ -564,7 +565,7 @@ namespace StopGuessing.Controllers
             {
                 if (trackedPopularity > 0 ||
                     // FIXME with configuration values
-                    passwordLadder.CountObservationsForGivenConfidence(1d/(1000d*1000d*1000d)) > 5)
+                    passwordLadder.HeightOfKeyInRungs == passwordLadder.HeightOfLadderInRungs)
                 {
                     // FIXME
                     //Task background1 = 

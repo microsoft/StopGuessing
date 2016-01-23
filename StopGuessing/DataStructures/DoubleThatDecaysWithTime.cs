@@ -61,6 +61,8 @@ namespace StopGuessing.DataStructures
         public double GetValue(DateTime? whenUtc = null)
         {
             DateTime whenUtcTime = whenUtc ?? DateTime.UtcNow;
+            if (whenUtcTime <= this.LastUpdatedUtc)
+                return ValueAtTimeOfLastUpdate;
             TimeSpan timeSinceLastUpdate = whenUtcTime - LastUpdatedUtc;
             double halfLivesSinceLastUpdate = timeSinceLastUpdate.TotalMilliseconds/HalfLife.TotalMilliseconds;
             return ValueAtTimeOfLastUpdate/Math.Pow(2, halfLivesSinceLastUpdate);
@@ -87,7 +89,7 @@ namespace StopGuessing.DataStructures
         /// will be reduced by a factor of two during the half life.</param>
         /// <param name="initialValue">The initial value of the double, which defaults to zero.</param>
         /// <param name="initialLastUpdateUtc">The time when the value was set, which defaults to now.</param>
-        public DoubleThatDecaysWithTime(TimeSpan halfLife, double initialValue = 0d, DateTime? initialLastUpdateUtc = null)
+        public DoubleThatDecaysWithTime(TimeSpan halfLife, double initialValue, DateTime? initialLastUpdateUtc)
         {
             HalfLife = halfLife;
             ValueAtTimeOfLastUpdate = initialValue;
@@ -135,7 +137,7 @@ namespace StopGuessing.DataStructures
         /// <param name="c2">The double on the right side of the operator</param>
         /// <returns>A new half life score</returns>
         public static DoubleThatDecaysWithTime operator +(DoubleThatDecaysWithTime c1, double c2) =>
-            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value + c2);
+            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value + c2, DateTime.UtcNow);
 
         /// <summary>
         /// Implement the - operator for adding a double to a half life score.
@@ -144,13 +146,13 @@ namespace StopGuessing.DataStructures
         /// <param name="c2">The double on the right side of the operator</param>
         /// <returns>A new half life score</returns>
         public static DoubleThatDecaysWithTime operator -(DoubleThatDecaysWithTime c1, double c2) =>
-            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value - c2);
+            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value - c2, DateTime.UtcNow);
         
         public static DoubleThatDecaysWithTime operator *(DoubleThatDecaysWithTime c1, double c2) =>
-            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value * c2);
+            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value * c2, DateTime.UtcNow);
         
         public static DoubleThatDecaysWithTime operator /(DoubleThatDecaysWithTime c1, double c2) =>
-            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value / c2);
+            new DoubleThatDecaysWithTime(c1.HalfLife, c1.Value / c2, DateTime.UtcNow);
         
         public static bool operator <(DoubleThatDecaysWithTime c1, double c2) => c1.Value < c2;
         public static bool operator >(DoubleThatDecaysWithTime c1, double c2) => c1.Value > c2;

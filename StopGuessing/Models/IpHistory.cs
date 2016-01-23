@@ -1,4 +1,5 @@
 ﻿#define Simulation
+using System;
 using System.Net;
 using StopGuessing.DataStructures;
 
@@ -23,14 +24,15 @@ namespace StopGuessing.Models
 
         public IpHistory(//bool isIpAKnownAggregatorThatWeCannotBlock = false,
             IPAddress address,
+            DateTime? currentDateTimeUtc,
             BlockingAlgorithmOptions options)
         {
             Address = address;
-            CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife);
+            CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife, 0, currentDateTimeUtc);
 #if Simulation
             SimulationConditions = new SimulationConditionIpHistoryState[options.Conditions.Length];
             for (int i=0; i < SimulationConditions.Length; i++)
-                SimulationConditions[i] = new SimulationConditionIpHistoryState(options.Conditions[i]);
+                SimulationConditions[i] = new SimulationConditionIpHistoryState(options.Conditions[i], currentDateTimeUtc);
 #endif
             RecentPotentialTypos =
                 new SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);

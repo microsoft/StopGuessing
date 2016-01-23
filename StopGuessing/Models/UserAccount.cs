@@ -218,7 +218,7 @@ namespace StopGuessing.Models
         {
             double amountAvailable = CreditLimit - ConsumedCredits.GetValue(timeOfRequestUtc);
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            ConsumedCredits.Add(amountConsumed);
+            ConsumedCredits.Add(amountConsumed, timeOfRequestUtc);
 
             return amountConsumed;
         }
@@ -230,7 +230,7 @@ namespace StopGuessing.Models
             {
                 double amountAvailable = CreditLimit - ConsumedCreditsForSimulation[simulationIndex].GetValue(timeOfRequestUtc);
                 double amountConsumed = Math.Min(amountRequested, amountAvailable);
-                ConsumedCreditsForSimulation[simulationIndex].Add(amountConsumed);
+                ConsumedCreditsForSimulation[simulationIndex].Add(amountConsumed, timeOfRequestUtc);
                 return amountConsumed;
             }
         }
@@ -270,6 +270,7 @@ namespace StopGuessing.Models
             string phase1HashFunctionName = ExpensiveHashFunctionFactory.DefaultFunctionName,
             int numberOfIterationsToUseForPhase1Hash = ExpensiveHashFunctionFactory.DefaultNumberOfIterations,
             byte[] saltUniqueToThisAccount = null,
+            DateTime? currentDateTimeUtc = null,
             int maxNumberOfCookiesToTrack = DefaultMaxNumberOfCookiesToTrack,
             int maxFailedPhase2HashesToTrack = DefaultMaxFailedPhase2HashesToTrack,
             int saltLength = DefaultSaltLength)
@@ -288,7 +289,7 @@ namespace StopGuessing.Models
                 HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount =
                     new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
                 RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack),
-                ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife),
+                ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife, 0, currentDateTimeUtc),
                 CreditLimit = creditLimit,
                 PasswordHashPhase1FunctionName = phase1HashFunctionName,
                 NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash

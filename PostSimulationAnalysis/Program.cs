@@ -134,7 +134,7 @@ namespace PostSimulationAnalysis
 
         public void Main(string[] args)
         {
-            string path = @"C:\Users\stus\Documents\GitHubVisualStudio\Experiment_12_8_14_58\";
+            string path = @"E:\Experiment_1_22_16_25\";
             List<Trial> trials = LoadData(path + "data.txt");
 
             List<Trial> trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToList();

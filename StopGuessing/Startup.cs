@@ -57,7 +57,7 @@ namespace StopGuessing
             services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>(x => hosts);
 
             BinomialLadderSketch localPasswordBinomialLadderSketch =
-                new BinomialLadderSketch(1024*1024*1024, options.NumberOfRungsInBinomialLadder);
+                new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.NumberOfRungsInBinomialLadder_K);
             MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
                 new MultiperiodFrequencyTracker<string>(
                     options.NumberOfPopularityMeasurementPeriods,
@@ -80,7 +80,7 @@ namespace StopGuessing
                 new DistributedBinomialLadderClient(
                     hosts,
                     options.NumberOfRedundantHostsToCachePasswordPopularity,
-                    options.NumberOfRungsInBinomialLadder));
+                    options.NumberOfRungsInBinomialLadder_K));
                 services.AddSingleton<IFrequenciesProvider<string>>(x =>
                     new IncorrectPasswordFrequencyClient(hosts, options.NumberOfRedundantHostsToCachePasswordPopularity));
             }  else
