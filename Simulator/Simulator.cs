@@ -187,7 +187,19 @@ namespace Simulator
                 if (StrongRandomNumberGenerator.GetFraction() <
                     _experimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
                 {
-                    simAttempt = _attemptGenerator.MaliciousLoginAttemptBreadthFirst(eventTimeUtc);
+                    switch (_experimentalConfiguration.AttackersStrategy)
+                    {
+                        case ExperimentalConfiguration.AttackStrategy.UseUntilLikelyPopular:                        
+                            simAttempt = _attemptGenerator.MaliciousLoginAttemptBreadthFirstAvoidMakingPopular(eventTimeUtc);
+                        break;
+                        case ExperimentalConfiguration.AttackStrategy.Weighted:                         
+                            simAttempt = _attemptGenerator.MaliciousLoginAttemptWeighted(eventTimeUtc);
+                        break;
+                        case ExperimentalConfiguration.AttackStrategy.BreadthFirst:
+                        default:
+                            simAttempt = _attemptGenerator.MaliciousLoginAttemptBreadthFirst(eventTimeUtc);
+                            break;
+                    }
                 }
                 else
                 {

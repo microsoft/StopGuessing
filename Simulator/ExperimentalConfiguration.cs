@@ -25,6 +25,14 @@ namespace Simulator
 
         public TimeSpan TestTimeSpan = new TimeSpan(1, 0, 0, 0); // 1 day
 
+        public enum AttackStrategy
+        {
+            BreadthFirst,
+            Weighted,
+            UseUntilLikelyPopular
+        };
+        public AttackStrategy AttackersStrategy = AttackStrategy.BreadthFirst;
+
         public string OutputPath = @"e:\";
         public string PasswordFrequencyFile = @"..\..\rockyou-withcount.txt";
         public string PreviouslyKnownPopularPasswordFile = @"..\..\phpbb.txt";
