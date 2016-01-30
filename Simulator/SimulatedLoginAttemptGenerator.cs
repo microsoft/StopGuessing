@@ -298,7 +298,8 @@ namespace Simulator
 
             // Start with the most common password and walk through all the accounts,
             // then move on to the next most common password.
-            int passwordIndex = (int)(breadthFirstAttemptCount / (ulong)_experimentalConfiguration.MaxAttackerGuessesPerPassword);
+            int passwordIndex = (int)((breadthFirstAttemptCount / (ulong)_experimentalConfiguration.MaxAttackerGuessesPerPassword)) % 
+                _simPasswords.OrderedListOfMostCommonPasswords.Count;
             int accountIndex = (int)(breadthFirstAttemptCount % (ulong)_simAccounts.BenignAccounts.Count);
 
             string mistake = invalidAccount ? "BadAccount" : "";
