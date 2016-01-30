@@ -33,7 +33,7 @@ namespace Simulator
         /// </summary>
         /// <param name="count">A limit on the number of items to get</param>
         /// <returns>The first count items in the selector</returns>
-        public List<T> GetItems(int count)
+        public List<T> GetItems(int count = Int32.MaxValue)
         {
             count = Math.Min(count, _items.Count);
             return _items.Take(count).ToList();

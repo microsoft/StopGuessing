@@ -35,7 +35,7 @@ namespace StopGuessing.Models
         public int NumberOfRedundantHostsToCacheIPs = 1;
         public int NumberOfRedundantHostsToCachePasswordPopularity = 1;
         public int NumberOfRungsInBinomialLadder_K = 48;
-        public int NumberOfElementsInBinomialLadderSketch_N = 53665619;
+        public int NumberOfElementsInBinomialLadderSketch_N = 1 << 29;
 
         public int NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos = 8;
 

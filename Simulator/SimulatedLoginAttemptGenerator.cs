@@ -248,34 +248,62 @@ namespace Simulator
         /// </summary>
         public SimulatedLoginAttempt MaliciousLoginAttemptBreadthFirst(DateTime eventTimeUtc)
         {
-            string mistake = "";
-            string password;
-
-            SimulatedAccount targetBenignAccount;
-
             // Sometimes the attacker will miss and generate an invalid account name;
-            if (StrongRandomNumberGenerator.GetFraction() <
-                _experimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
-            {
-                targetBenignAccount = null;
-                mistake = "BadAccount";
-                password = _simPasswords.OrderedListOfMostCommonPasswords[(int)(_breadthFirstAttemptCounter / (ulong)_simAccounts.BenignAccounts.Count)];
-            }
-            else
-            {
-                ulong breadthFirstAttemptCount;
-                lock (_breadthFirstLock)
-                {
-                    breadthFirstAttemptCount = _breadthFirstAttemptCounter++;
-                }
+            bool invalidAccount = (StrongRandomNumberGenerator.GetFraction() <
+                                   _experimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount);
 
-                // Start with the most common password and walk through all the accounts,
-                // then move on to the next most common password.
-                int passwordIndex = (int) (breadthFirstAttemptCount/(ulong) _simAccounts.BenignAccounts.Count);
-                int accountIndex = (int) (breadthFirstAttemptCount%(ulong) _simAccounts.BenignAccounts.Count);
-                targetBenignAccount = _simAccounts.BenignAccounts[accountIndex];
-                password = _simPasswords.OrderedListOfMostCommonPasswords[passwordIndex];
+            ulong breadthFirstAttemptCount;
+            lock (_breadthFirstLock)
+            {
+                breadthFirstAttemptCount = _breadthFirstAttemptCounter;
+                if (!invalidAccount)
+                    _breadthFirstAttemptCounter++;
             }
+
+            // Start with the most common password and walk through all the accounts,
+            // then move on to the next most common password.
+            int passwordIndex = (int)(breadthFirstAttemptCount / (ulong)_simAccounts.BenignAccounts.Count);
+            int accountIndex = (int)(breadthFirstAttemptCount % (ulong)_simAccounts.BenignAccounts.Count);
+
+            string mistake = invalidAccount ? "BadAccount" : "";
+            SimulatedAccount targetBenignAccount = invalidAccount ? null : _simAccounts.BenignAccounts[accountIndex];
+            string password = _simPasswords.OrderedListOfMostCommonPasswords[passwordIndex];
+
+            //SimulationTest _simulationtest = new SimulationTest();
+            return new SimulatedLoginAttempt(targetBenignAccount, password,
+                true, true,
+                _ipPool.GetRandomMaliciousIp(),
+                StrongRandomNumberGenerator.Get64Bits().ToString(),
+                mistake,
+                eventTimeUtc);
+        }
+
+
+        /// <summary>
+        /// Attacker issues one guess by picking an benign account at random and picking a password by weighted distribution
+        /// </summary>
+        public SimulatedLoginAttempt MaliciousLoginAttemptBreadthFirstAvoidMakingPopular(DateTime eventTimeUtc)
+        {
+            // Sometimes the attacker will miss and generate an invalid account name;
+            bool invalidAccount = (StrongRandomNumberGenerator.GetFraction() <
+                                   _experimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount);
+
+            ulong breadthFirstAttemptCount;
+            lock (_breadthFirstLock)
+            {
+                breadthFirstAttemptCount = _breadthFirstAttemptCounter;
+                if (!invalidAccount)
+                    _breadthFirstAttemptCounter++;
+            }
+
+            // Start with the most common password and walk through all the accounts,
+            // then move on to the next most common password.
+            int passwordIndex = (int)(breadthFirstAttemptCount / (ulong)_experimentalConfiguration.MaxAttackerGuessesPerPassword);
+            int accountIndex = (int)(breadthFirstAttemptCount % (ulong)_simAccounts.BenignAccounts.Count);
+
+            string mistake = invalidAccount ? "BadAccount" : "";
+            SimulatedAccount targetBenignAccount = invalidAccount ? null : _simAccounts.BenignAccounts[accountIndex];
+            string password = _simPasswords.OrderedListOfMostCommonPasswords[passwordIndex];
 
             //SimulationTest _simulationtest = new SimulationTest();
             return new SimulatedLoginAttempt(targetBenignAccount, password,

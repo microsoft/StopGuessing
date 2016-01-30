@@ -33,7 +33,7 @@ namespace Simulator
 
             _logger.WriteStatus("Creating list of most common passwords");
             OrderedListOfMostCommonPasswords =
-                _passwordSelector.GetItems((int)experimentalConfiguration.NumberOfPopularPasswordsForAttackerToExploit);
+                _passwordSelector.GetItems();
             _logger.WriteStatus("Finished creating list of most common passwords");
         }
 

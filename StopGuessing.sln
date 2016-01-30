@@ -22,6 +22,8 @@ Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "PostSimulationAnalysis", "P
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PostSimulationAnalysisOldRuntime", "PostSimulationAnalysisOldRuntime\PostSimulationAnalysisOldRuntime.csproj", "{0E1898E6-417D-463D-A0C7-7D4A53452538}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Binomial Ladder Sketch Parameter Calculator", "Binomial Ladder Sketch Parameter Calculator\Binomial Ladder Sketch Parameter Calculator.csproj", "{A5CE9C56-5AD2-486C-87DD-782D6178A799}"
+EndProject
 Global
 	GlobalSection(Performance) = preSolution
 		HasPerformanceSessions = true
@@ -51,6 +53,10 @@ Global
 		{0E1898E6-417D-463D-A0C7-7D4A53452538}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0E1898E6-417D-463D-A0C7-7D4A53452538}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0E1898E6-417D-463D-A0C7-7D4A53452538}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A5CE9C56-5AD2-486C-87DD-782D6178A799}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A5CE9C56-5AD2-486C-87DD-782D6178A799}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A5CE9C56-5AD2-486C-87DD-782D6178A799}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A5CE9C56-5AD2-486C-87DD-782D6178A799}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -56,6 +56,8 @@ namespace Simulator
         public uint NumberOfIpAddressesControlledByAttacker = 100;// * (uint)Thousand;
         public double FractionOfMaliciousIPsToOverlapWithBenign = 0.1;
 
+        public ulong MaxAttackerGuessesPerPassword = 25;
+
         public uint ProxySizeInUniqueClientIPs = 1000;
         public double FractionOfBenignIPsBehindProxies = 0.20d; 
 
