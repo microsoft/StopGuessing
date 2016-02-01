@@ -16,11 +16,11 @@ namespace PostSimulationAnalysisOldRuntime
         public bool IsIpInBenignPool = false;
         public bool IsClientAProxyIP;
         //public string TypeOfMistake;
-        public double IndustryBlockScore;
-        public double SSHBlockScore;
+        //public float IndustryBlockScore;
+        //public float SSHBlockScore;
         //public string UserID;
         //public string Password;
-        public double[] scoreForEachCondition;
+        public float[] scoreForEachCondition;
 
         public Trial(string[] fields)
         {
@@ -36,21 +36,21 @@ namespace PostSimulationAnalysisOldRuntime
             field++; // TypeOfMistake = fields[field++];
             field++; // UserID = fields[field++];
             field++; // Password = fields[field++];
-            scoreForEachCondition = new double[fields.Length - field];
+            scoreForEachCondition = new float[fields.Length - field];
             int condition = 0;
             for (; field < fields.Length; field++)
-                double.TryParse(fields[field], out scoreForEachCondition[condition++]);
+                float.TryParse(fields[field], out scoreForEachCondition[condition++]);
         }
 
-        public double GetScoreForCondition(int condition)
+        public float GetScoreForCondition(int condition)
         {
             return scoreForEachCondition[condition];
         }
 
         public int CompareTo(Trial other, int condition)
         {
-            double myScore = GetScoreForCondition(condition);
-            double othersScore = other.GetScoreForCondition(condition);
+            float myScore = GetScoreForCondition(condition);
+            float othersScore = other.GetScoreForCondition(condition);
             if (myScore < othersScore)
                 return -1;
             if (myScore > othersScore)

@@ -20,14 +20,21 @@ namespace Simulator
             await Simulator.RunExperimentalSweep((config) =>
             {
                 // Scale of test
-                ulong totalLoginAttempts = 100*Million; // 2.5m // 500 * Thousand; // * Million;
                 config.AttackersStrategy = ExperimentalConfiguration.AttackStrategy.BreadthFirst;
-                config.OutputPath = @"d:\";
 
-                // Figure out parameters from scale
+                //ulong totalLoginAttempts = Billion;
+                //config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
+                //double meanNumberOfLoginsPerBenignAccountDuringExperiment = 100d;
+                //double meanNumberOfLoginsPerAttackerControlledIP = 1000d;
+
+                ulong totalLoginAttempts = 100 * Million; // 2.5m // 500 * Thousand; // * Million;
+                config.TestTimeSpan = new TimeSpan(1, 0, 0, 0); // 7 days
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
+                config.OutputPath = @"d:\";
+
+                // Figure out parameters from scale
                 double fractionOfLoginAttemptsFromAttacker = 0.5d;
                 double fractionOfLoginAttemptsFromBenign = 1d - fractionOfLoginAttemptsFromAttacker;
 
@@ -61,7 +68,14 @@ namespace Simulator
                 config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
                 //config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 10d;
                 config.BlockingOptions.ExpensiveHashingFunctionIterations = 1;
-                config.BlockingOptions.Conditions = new[]
+
+                config.BlockingOptions.PopularityBasedPenaltyMultiplier_h = (binomialLadder, frequency) => 
+                    frequency.Proportion.Numerator > 0 ? 10 : 1;
+
+                config.BlockingOptions.PopularityBasedThresholdMultiplier_T_multiplier = (binomialLadder, frequency) =>
+                    frequency.Proportion.Numerator > 0 ? 1 : 10;
+
+       config.BlockingOptions.Conditions = new[]
                 {
                     new SimulationCondition(config.BlockingOptions, 0, "Baseline", false, false, false, false, false,
                         false, false),
