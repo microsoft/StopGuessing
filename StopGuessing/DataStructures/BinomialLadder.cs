@@ -30,7 +30,7 @@ namespace StopGuessing.DataStructures
             {
                 if (RungsAbove.Count == 0)
                 {
-                    // The key is already at the top of the ladder.  No further steps can be taken.
+                    // The key is already at the top of the ladder.  No rungs are available
                     return default(TRung);
                 }
 
@@ -42,16 +42,20 @@ namespace StopGuessing.DataStructures
         }
 
         protected abstract Task StepAsync(TRung rungToClimb, CancellationToken cancellationToken = default(CancellationToken));
+        protected abstract Task StepOverTopAsync(CancellationToken cancellationToken = default(CancellationToken));
 
         public async Task StepAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            TRung rungToClimb = GetAndRemoveRandomRungAbove();
+            if (RungsAbove.Count == 0)
+            {
+                await StepOverTopAsync(cancellationToken);
+            }
+            else
+            {
+                TRung rungToClimb = GetAndRemoveRandomRungAbove();
 
-            if (rungToClimb.Equals(default(TRung)))
-                // There are no rungs left to climb.  Cannot take another step.
-                return;
-
-            await StepAsync(rungToClimb, cancellationToken);
+                await StepAsync(rungToClimb, cancellationToken);
+            }
         }
         
         /// <summary>

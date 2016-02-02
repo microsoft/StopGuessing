@@ -134,26 +134,29 @@ namespace StopGuessing.DataStructures
             return GetRungs(key, heightOfLadderInRungs).Where(index => !RungElements[index]);
         }
 
-        
-        protected void Step(int rungElementToClimb, int indexOfNonRungElementToClear)
-        {
-            // ReSharper disable once RedundantBoolCompare
-            if (RungElements[rungElementToClimb] == true || RungElements[indexOfNonRungElementToClear] == false)
-                return;
-            RungElements[rungElementToClimb] = true;
-            RungElements[indexOfNonRungElementToClear] = false;
-        }
 
-        public void Step(int rungElementToClimb)
-        {            
-            int randomClimbedRungElementToMarkAsUnclimbed;
+        public void Step(int? indexOfElementToSetOrNull = null)
+        {
+            int indexOfElementToSet;
+            if (indexOfElementToSetOrNull.HasValue)
+                indexOfElementToSet = indexOfElementToSetOrNull.Value;
+            else
+            {
+                do
+                {
+                    // Iterate through random elements until we find one that is set to one (true) and can be cleared
+                    indexOfElementToSet = (int)(StrongRandomNumberGenerator.Get64Bits((ulong)RungElements.Length));
+                } while (RungElements[indexOfElementToSet] == true);
+            }
+            int indexOfElementToClear;
             do
             {
                 // Iterate through random elements until we find one that is set to one (true) and can be cleared
-                randomClimbedRungElementToMarkAsUnclimbed = (int) (StrongRandomNumberGenerator.Get64Bits((ulong) RungElements.Length));
-            } while (RungElements[randomClimbedRungElementToMarkAsUnclimbed] == false);
+                indexOfElementToClear = (int) (StrongRandomNumberGenerator.Get64Bits((ulong) RungElements.Length));
+            } while (RungElements[indexOfElementToClear] == false);
 
-            Step(rungElementToClimb, randomClimbedRungElementToMarkAsUnclimbed);
+            RungElements[indexOfElementToSet] = true;
+            RungElements[indexOfElementToClear] = false;
         }
 
 
@@ -175,7 +178,11 @@ namespace StopGuessing.DataStructures
             List<int> rungsAbove = GetRungsAbove(key, heightOfLadderInRungs).ToList();
 
             // We can only update state to record the observation if there is an unset (0) index that we can set (to 1).
-            if (rungsAbove.Count > 0)
+            if (rungsAbove.Count == 0)
+            {
+                Step();
+            }
+            else
             {
                 // First, pick an index to a zero element at random.
                 int indexToSet = rungsAbove[ (int) (StrongRandomNumberGenerator.Get32Bits((uint) rungsAbove.Count)) ];
@@ -221,6 +228,13 @@ namespace StopGuessing.DataStructures
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 Sketch.Step(rungToClimb);
+            }
+#pragma warning disable 1998
+            protected override async Task StepOverTopAsync(CancellationToken cancellationToken = new CancellationToken())
+#pragma warning restore 1998
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Sketch.Step();
             }
         }
 

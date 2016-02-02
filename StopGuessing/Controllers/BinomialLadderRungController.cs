@@ -15,7 +15,7 @@ namespace StopGuessing.Controllers
         }
 
         [HttpPut("{rungId}")]
-        public void Step(int rungId)
+        public void Step(int? rungId)
         {
             LadderSketch.Step(rungId);
         }

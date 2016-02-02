@@ -105,6 +105,15 @@ namespace StopGuessing.Clients
                 await DistributedBinomialLadderClient.StepAsync(rungToClimb, cancellationToken);
             }
 
+
+            // ReSharper disable once MemberHidesStaticFromOuterClass
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+            protected override async Task StepOverTopAsync(CancellationToken cancellationToken = default(CancellationToken))
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+            {
+                // FIXME
+            }
+
         }
     }
 }
