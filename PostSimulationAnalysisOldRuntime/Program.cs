@@ -103,7 +103,6 @@ namespace PostSimulationAnalysisOldRuntime
                         while (malicious.Count > 0 && malicious.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
                         {
                             Trial t = malicious.Dequeue();
-                            falsePositiveUsers.Add(t.UserID);
                             if (t.IsClientAProxyIP)
                                 falseNegativeWithProxy--;
                             if (t.IsIpInBenignPool)
@@ -116,6 +115,7 @@ namespace PostSimulationAnalysisOldRuntime
                         while (benign.Count > 0 && benign.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
                         {
                             Trial t = benign.Dequeue();
+                            falsePositiveUsers.Add(t.UserID);
                             if (t.IsIpInAttackersPool)
                                 falsePositivesWithAttackerIp++;
                             if (t.IsClientAProxyIP)
