@@ -164,7 +164,7 @@ namespace Simulator
             _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool, _simPasswords);
             _logger.WriteStatus("Finiished creating login-attempt generator");
 
-            _outputWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+            _outputWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
@@ -172,8 +172,10 @@ namespace Simulator
                 "IsClientAProxyIP",
                 "TypeOfMistake",
                 "UserID",
+                "IP",
                 "Password",
-                string.Join(",", _experimentalConfiguration.BlockingOptions.Conditions.Select( cond => cond.Name )));
+                string.Join(",", _experimentalConfiguration.BlockingOptions.Conditions.Select( cond => cond.Name ))
+                );
 
             TimeSpan testTimeSpan = _experimentalConfiguration.TestTimeSpan;
             double ticksBetweenLogins = ((double)testTimeSpan.Ticks)/(double)_experimentalConfiguration.TotalLoginAttemptsToIssue;
@@ -211,7 +213,7 @@ namespace Simulator
                         cancellationToken: cancellationToken);
 
                 var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+                string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                     simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                     simAttempt.IsGuess ? "IsGuess" : "NotGuess",
@@ -220,8 +222,10 @@ namespace Simulator
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
                     simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
+                    simAttempt.Attempt.AddressOfClientInitiatingRequest,
                     simAttempt.Password,
-                    string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray()));
+                    string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
+                    );
 
                 await _outputWriter.WriteLineAsync(outputString);
                 await _outputWriter.FlushAsync();

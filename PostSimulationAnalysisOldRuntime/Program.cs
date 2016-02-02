@@ -79,6 +79,8 @@ namespace PostSimulationAnalysisOldRuntime
                     Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
                     Queue<Trial> benign = new Queue<Trial>(originalBenign);
 
+                    int falseNegatives = originalMalicious.Count;
+                    int falsePositives = 0;
                     int falsePositivesWithProxy = 0;
                     int falsePositivesWithAttackerIp = 0;
                     int falsePositivesWithProxyAndAttackerIp = 0;
@@ -86,13 +88,14 @@ namespace PostSimulationAnalysisOldRuntime
                     long falseNegativeBenignIp = numCorrectGuessesFromBenignIpPool;
                     long falseNegativeBenignProxyIp = numCorrectGuessesFromBoth;
                     HashSet<string> falsePositiveUsers = new HashSet<string>();
+                    HashSet<string> falsePositiveIPs = new HashSet<string>();
                     //int falseNegativeFromDefendersIpPool;
 
 
                     double blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
                     List<ROCPoint> rocPoints = new List<ROCPoint>
                     {
-                        new ROCPoint(0, 0, 0, originalMalicious.Count, originalBenign.Count,
+                        new ROCPoint(0, 0, 0, 0, originalMalicious.Count, originalBenign.Count,
                         falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,
                         falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
                         blockThreshold)
@@ -103,6 +106,7 @@ namespace PostSimulationAnalysisOldRuntime
                         while (malicious.Count > 0 && malicious.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
                         {
                             Trial t = malicious.Dequeue();
+                            falseNegatives--;
                             if (t.IsClientAProxyIP)
                                 falseNegativeWithProxy--;
                             if (t.IsIpInBenignPool)
@@ -115,7 +119,9 @@ namespace PostSimulationAnalysisOldRuntime
                         while (benign.Count > 0 && benign.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
                         {
                             Trial t = benign.Dequeue();
+                            falsePositives++;
                             falsePositiveUsers.Add(t.UserID);
+                            falsePositiveIPs.Add(t.ClientIP);
                             if (t.IsIpInAttackersPool)
                                 falsePositivesWithAttackerIp++;
                             if (t.IsClientAProxyIP)
@@ -124,9 +130,13 @@ namespace PostSimulationAnalysisOldRuntime
                                 falsePositivesWithProxyAndAttackerIp++;
                         }
 
-                        rocPoints.Add(new ROCPoint(originalBenign.Count - benign.Count, originalMalicious.Count - malicious.Count,
+                        rocPoints.Add(new ROCPoint(
+                            falsePositives,  //originalBenign.Count - benign.Count,
                             falsePositiveUsers.Count(),
-                            malicious.Count, benign.Count,
+                            falsePositiveIPs.Count(),
+                            falseNegatives, // originalMalicious.Count - malicious.Count,
+                            malicious.Count,
+                            benign.Count,
                             falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,
                             falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
                             blockThreshold));
@@ -147,9 +157,10 @@ namespace PostSimulationAnalysisOldRuntime
 
                     foreach (ROCPoint point in finalROCPoints)
                     {
-                        writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15}",
+                        writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}",
                             point.FalsePositives,
                             point.FalsePositiveUniqueUsers,
+                            point.FalsePositiveUniqueIPs,
                             point.FalseNegatives, point.TruePositives, point.TrueNegatives,
                             point.FalsePositiveRate, point.TruePositiveRate, point.Precision, point.Recall,
                             point.FalsePositivesWithAttackerIp, point.FalsePositivesWithProxy, point.FalsePositivesWithProxyAndAttackerIp,

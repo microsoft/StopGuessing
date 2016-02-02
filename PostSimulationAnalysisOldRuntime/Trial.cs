@@ -19,6 +19,7 @@ namespace PostSimulationAnalysisOldRuntime
         //public float IndustryBlockScore;
         //public float SSHBlockScore;
         public string UserID;
+        public string ClientIP;
         //public string Password;
         public float[] scoreForEachCondition;
 
@@ -35,6 +36,7 @@ namespace PostSimulationAnalysisOldRuntime
             IsClientAProxyIP = fields[field++] == "ProxyIP";
             field++; // TypeOfMistake = fields[field++];
             UserID = fields[field++];
+            ClientIP = fields[field++];
             field++; // Password = fields[field++];
             scoreForEachCondition = new float[fields.Length - field];
             int condition = 0;

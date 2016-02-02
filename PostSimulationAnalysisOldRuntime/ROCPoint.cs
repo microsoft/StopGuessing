@@ -10,6 +10,7 @@ namespace PostSimulationAnalysisOldRuntime
     {
         public int FalsePositives;
         public int FalsePositiveUniqueUsers;
+        public int FalsePositiveUniqueIPs;
         public int TruePositives;
         public int FalseNegatives;
         public int TrueNegatives;
@@ -21,7 +22,8 @@ namespace PostSimulationAnalysisOldRuntime
         public long FalseNegativesWithBenignIp;
         public long FalseNegativesWithBenignProxyIp;
 
-        public ROCPoint(int falsePositives, int falsePositiveUniqueUsers, int truePositives, int falseNegatives, int trueNegatives,
+        public ROCPoint(int falsePositives, int falsePositiveUniqueUsers, int falsePositiveUniqueIPs,
+            int truePositives, int falseNegatives, int trueNegatives,
             int falsePositivesWithAttackerIp,
             int falsePositivesWithProxy,
             int falsePositivesWithProxyAndAttackerIp,
@@ -32,6 +34,7 @@ namespace PostSimulationAnalysisOldRuntime
         {
             FalsePositives = falsePositives;
             FalsePositiveUniqueUsers = falsePositiveUniqueUsers;
+            FalsePositiveUniqueIPs = falsePositiveUniqueIPs;
             TruePositives = truePositives;
             FalseNegatives = falseNegatives;
             TrueNegatives = trueNegatives;
