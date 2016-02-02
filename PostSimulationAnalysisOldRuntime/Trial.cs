@@ -18,7 +18,7 @@ namespace PostSimulationAnalysisOldRuntime
         //public string TypeOfMistake;
         //public float IndustryBlockScore;
         //public float SSHBlockScore;
-        //public string UserID;
+        public string UserID;
         //public string Password;
         public float[] scoreForEachCondition;
 
@@ -34,7 +34,7 @@ namespace PostSimulationAnalysisOldRuntime
                 IsIpInAttackersPool = fields[field++].Contains("InAttackersIpPool");
             IsClientAProxyIP = fields[field++] == "ProxyIP";
             field++; // TypeOfMistake = fields[field++];
-            field++; // UserID = fields[field++];
+            UserID = fields[field++];
             field++; // Password = fields[field++];
             scoreForEachCondition = new float[fields.Length - field];
             int condition = 0;

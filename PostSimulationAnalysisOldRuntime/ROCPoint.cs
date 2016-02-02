@@ -9,6 +9,7 @@ namespace PostSimulationAnalysisOldRuntime
     public class ROCPoint
     {
         public int FalsePositives;
+        public int FalsePositiveUniqueUsers;
         public int TruePositives;
         public int FalseNegatives;
         public int TrueNegatives;
@@ -20,7 +21,7 @@ namespace PostSimulationAnalysisOldRuntime
         public long FalseNegativesWithBenignIp;
         public long FalseNegativesWithBenignProxyIp;
 
-        public ROCPoint(int falsePositives, int truePositives, int falseNegatives, int trueNegatives,
+        public ROCPoint(int falsePositives, int falsePositiveUniqueUsers, int truePositives, int falseNegatives, int trueNegatives,
             int falsePositivesWithAttackerIp,
             int falsePositivesWithProxy,
             int falsePositivesWithProxyAndAttackerIp,
@@ -30,6 +31,7 @@ namespace PostSimulationAnalysisOldRuntime
             double blockingThreshold)
         {
             FalsePositives = falsePositives;
+            FalsePositiveUniqueUsers = falsePositiveUniqueUsers;
             TruePositives = truePositives;
             FalseNegatives = falseNegatives;
             TrueNegatives = trueNegatives;
