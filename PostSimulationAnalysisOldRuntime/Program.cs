@@ -14,6 +14,7 @@ namespace PostSimulationAnalysisOldRuntime
         private static List<Trial> LoadData(string path)
         {
             List<Trial> trials = new List<Trial>();
+            int counter = 0;
             using (StreamReader file = new StreamReader(path))
             {
                 // Skip header
@@ -25,6 +26,11 @@ namespace PostSimulationAnalysisOldRuntime
                     string[] fields = line.Trim().Split(new char[] { ',' });
                     if (fields.Length >= 11)
                         trials.Add(new Trial(fields));
+                    if (++counter >= 10000)
+                    {
+                        counter = 0;
+                        Console.Out.WriteLine("Loaded: {0}", trials.Count);
+                    }
                 }
             }
             return trials;

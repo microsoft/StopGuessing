@@ -82,7 +82,7 @@ namespace Simulator
             string cookie;
             // Add a new cookie if there are no cookies, or with if we haven't reached the max number of cookies and lose a roll of the dice
             if (account.Cookies.Count == 0 ||
-                (account.Cookies.Count < _experimentalConfiguration.MaxCookiesPerUserAccount && StrongRandomNumberGenerator.GetFraction() < _experimentalConfiguration.ChanceOfCoookieReUse))
+                (account.Cookies.Count < _experimentalConfiguration.MaxCookiesPerUserAccount && StrongRandomNumberGenerator.GetFraction() > _experimentalConfiguration.ChanceOfCoookieReUse))
             {
                 // We'll use the decimal represenation of a 64-bit unsigned integer as our cookie 
                 cookie = StrongRandomNumberGenerator.Get64Bits().ToString();
@@ -129,13 +129,20 @@ namespace Simulator
                 lock (ScheduledBenignAttempts)
                 {
                     double additionalMistakes = 0;
-                    for (additionalMistakes = 1; additionalMistakes < _experimentalConfiguration.LengthOfLongRepeatOfOldPassword; additionalMistakes++)                        
+                    DateTime currentTimeUtc = eventTimeUtc;
+                    for (additionalMistakes = 1; additionalMistakes < _experimentalConfiguration.LengthOfLongRepeatOfOldPassword; additionalMistakes++)
                     {
+                        currentTimeUtc = currentTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword*additionalMistakes);
                         DateTime futureMistakeEventTimeUtc = eventTimeUtc.AddSeconds(
                             _experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword * additionalMistakes);
                         ScheduledBenignAttempts.Add(new SimulatedLoginAttempt(
-                            account, AddTypoToPassword(password), false, false, clientIp, cookie, mistake,
-                                eventTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword * additionalMistakes)));
+                            account, password, false, false, clientIp, cookie, mistake, currentTimeUtc));
+                    }
+                    for (uint correctLogins = 1; correctLogins < _experimentalConfiguration.LengthOfLongRepeatOfOldPassword; correctLogins++)
+                    {
+                        currentTimeUtc = currentTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword * additionalMistakes);
+                        ScheduledBenignAttempts.Add(new SimulatedLoginAttempt(
+                            account, newPassword, false, false, clientIp, cookie, mistake,currentTimeUtc));
                     }
                 }
             }

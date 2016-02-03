@@ -25,14 +25,7 @@ namespace StopGuessing.Controllers
             CancellationToken cancellationToken = default(CancellationToken));
 
     }
-
-
-    public class BlockingScoresForEachAlgorithm
-    {
-        public double Ours = 0;
-        public double Industry = 0;
-        public double SSH = 0;
-    }
+    
 
     [Route("api/[controller]")]
     public class LoginAttemptController :
