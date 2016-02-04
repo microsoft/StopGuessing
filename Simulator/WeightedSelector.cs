@@ -53,6 +53,16 @@ namespace Simulator
             return trimmed;
         }
 
+        public WeightedSelector<T> TrimToRemoveInitialItems(int count)
+        {
+            WeightedSelector<T> trimmed = new WeightedSelector<T>();
+            count = Math.Min(count, _items.Count);
+            double weightRemoved = _cumulativeWeight[count];
+            trimmed._items.AddRange(_items.Skip(count));
+            trimmed._cumulativeWeight.AddRange(_cumulativeWeight.Skip(count).Select( x=> x-weightRemoved ));
+            return trimmed;
+        }
+
         /// <summary>
         /// Get an item from the selector at random using the weights to match the desired distribution.
         /// </summary>

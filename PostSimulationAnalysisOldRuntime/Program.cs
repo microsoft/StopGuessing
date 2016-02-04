@@ -40,7 +40,7 @@ namespace PostSimulationAnalysisOldRuntime
 
         public static void Main()   // string[] args
         {
-            string path = @"E:\Experiment_1_22_16_25\";
+            string path = @"E:\Experiment_2_3_17_50_5m_avoid\";
             List<Trial> trials = LoadData(path + "data.txt");
 
             List<Trial> trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToList();
@@ -59,9 +59,10 @@ namespace PostSimulationAnalysisOldRuntime
             {
                 using (StreamWriter writer = new StreamWriter(path + "PointsFor_" + conditionNumber.ToString() + ".csv"))
                 {
-                    writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}",
+                    writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}",
                         "False +",
                         "False + users",
+                        "False + IPs",
                         "False -",
                         "True +",
                         "True -",
@@ -140,7 +141,8 @@ namespace PostSimulationAnalysisOldRuntime
                             falsePositives,  //originalBenign.Count - benign.Count,
                             falsePositiveUsers.Count(),
                             falsePositiveIPs.Count(),
-                            falseNegatives, // originalMalicious.Count - malicious.Count,
+                            //falseNegatives, //
+                            originalMalicious.Count - malicious.Count,
                             malicious.Count,
                             benign.Count,
                             falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,

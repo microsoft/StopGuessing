@@ -45,6 +45,7 @@ namespace Simulator
         public double ChanceOfIpReUse = 0.85d;
         public int MaxIpPerUserAccount = 5;
 
+        public int PopularPasswordsToRemoveFromDistribution = 0;
 
         public double ChanceOfLongRepeatOfStalePassword = 0.0004; // 1 in 2,500
         public double MinutesBetweenLongRepeatOfOldPassword = 5; // an attempt every 5 minutes

@@ -21,18 +21,24 @@ namespace Simulator
             {
                 // Scale of test
                 config.AttackersStrategy = ExperimentalConfiguration.AttackStrategy.BreadthFirst;
+                config.PopularPasswordsToRemoveFromDistribution = 100;
 
                 //ulong totalLoginAttempts = Billion;
                 //config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
                 //double meanNumberOfLoginsPerBenignAccountDuringExperiment = 100d;
                 //double meanNumberOfLoginsPerAttackerControlledIP = 1000d;
 
-                ulong totalLoginAttempts = 100 * Million; // 2.5m // 500 * Thousand; // * Million;
-                config.TestTimeSpan = new TimeSpan(1, 0, 0, 0); // 7 days
+                //ulong totalLoginAttempts = 100 * Million; // 2.5m // 500 * Thousand; // * Million;
+                //config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
+                //double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
+                //double meanNumberOfLoginsPerAttackerControlledIP = 100d;
+
+                ulong totalLoginAttempts = 5 * Million; // 2.5m // 500 * Thousand; // * Million;
+                config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
-                config.OutputPath = @"d:\";
+                config.OutputPath = @"e:\";
 
                 // Figure out parameters from scale
                 double fractionOfLoginAttemptsFromAttacker = 0.5d;
