@@ -1,15 +1,62 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PostSimulationAnalysisOldRuntime
 {
 
+
     public static class Program
     {
+
+        private static Trial[] LoadDataParallel(string path)
+        {
+            BlockingCollection<string> inputLines = new BlockingCollection<string>();
+            ConcurrentBag<Trial> trials = new ConcurrentBag<Trial>();
+
+            Parallel.Invoke(
+                () =>
+                {
+                    int counter = 0;
+                    using (StreamReader file = new StreamReader(path))
+                    {
+                        // Skip header
+                        file.ReadLine();
+                        string line;
+                        while ((line = file.ReadLine()) != null)
+                        {
+                            inputLines.Add(line);
+                            if (++counter >= 100000)
+                            {
+                                counter = 0;
+                                Console.Out.WriteLine("Trial lines Read: {0}", inputLines.Count);
+                            }
+                        }
+                        inputLines.CompleteAdding();
+                    }
+
+                }, () => Parallel.ForEach(inputLines.GetConsumingPartitioner(), (line) =>
+                {
+                    string[] fields = line.Trim().Split(new char[] {','});
+                    if (fields.Length >= 11)
+                    {
+                        Trial trial = new Trial(fields);
+                        trials.Add(trial);
+                    }
+                    int trialsCount = trials.Count;
+                    if (trialsCount % 100000 == 0)
+                        Console.Out.WriteLine("Trial lines processed: {0}", trialsCount);
+                })
+
+                    )
+                    ;
+            return trials.ToArray();
+        }
 
         private static List<Trial> LoadData(string path)
         {
@@ -41,11 +88,11 @@ namespace PostSimulationAnalysisOldRuntime
         public static void Main()   // string[] args
         {
             string path = @"E:\Experiment_2_3_17_50_5m_avoid\";
-            List<Trial> trials = LoadData(path + "data.txt");
+            Trial[] trials = LoadDataParallel(path + "data.txt");
 
-            List<Trial> trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToList();
-            List<Trial> trialsUsersCorrectPassword = trialsWithCorrectPassword.Where(t => !t.IsFromAttacker || !t.IsAGuess).ToList();
-            List<Trial> trialsGuessesCorrectPassword = trialsWithCorrectPassword.Where(t => t.IsFromAttacker && t.IsAGuess).ToList();
+            Trial[] trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToArray();
+            Trial[] trialsUsersCorrectPassword = trialsWithCorrectPassword.Where(t => !t.IsFromAttacker || !t.IsAGuess).ToArray();
+            Trial[] trialsGuessesCorrectPassword = trialsWithCorrectPassword.Where(t => t.IsFromAttacker && t.IsAGuess).ToArray();
             int numConditions = trialsWithCorrectPassword.First().scoreForEachCondition.Length;
 
             //long numCorrectBenignFromAttackersIPpool = trialsUsersCorrectPassword.LongCount(t => t.IsIpInAttackersPool);
@@ -78,15 +125,24 @@ namespace PostSimulationAnalysisOldRuntime
                         "FNwBoth",
                         "Threshold");
 
-                    List<Trial> originalMalicious = new List<Trial>(trialsGuessesCorrectPassword);
-                    List<Trial> originalBenign = new List<Trial>(trialsUsersCorrectPassword);
-                    originalMalicious.Sort((a, b) => -a.CompareTo(b, conditionNumber));
-                    originalBenign.Sort((a, b) => -a.CompareTo(b, conditionNumber));
+                    //List<Trial> originalMalicious = new List<Trial>(trialsGuessesCorrectPassword);
+                    //List<Trial> originalBenign = new List<Trial>(trialsUsersCorrectPassword);
+                    //originalMalicious.Sort((a, b) => -a.CompareTo(b, conditionNumber));
+                    //originalBenign.Sort((a, b) => -a.CompareTo(b, conditionNumber));
+                    //Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
+                    //Queue<Trial> benign = new Queue<Trial>(originalBenign);
 
-                    Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
-                    Queue<Trial> benign = new Queue<Trial>(originalBenign);
 
-                    int falseNegatives = originalMalicious.Count;
+                    Console.Out.WriteLine("Writing Condition: {0}", conditionNumber);
+                    int c = conditionNumber;
+                    Queue<Trial> malicious = new Queue<Trial>(trialsGuessesCorrectPassword.AsParallel().OrderBy((x) => -x.scoreForEachCondition[c]));
+                    Console.Out.WriteLine("Sort 1 completed");
+                    Queue<Trial> benign = new Queue<Trial>(trialsUsersCorrectPassword.AsParallel().OrderBy((x) => -x.scoreForEachCondition[c]));
+                    Console.Out.WriteLine("Sort 2 completed");
+                    int originalMaliciousCount = malicious.Count;
+                    int originalBenignCount = benign.Count;
+
+                    int falseNegatives = malicious.Count;
                     int falsePositives = 0;
                     int falsePositivesWithProxy = 0;
                     int falsePositivesWithAttackerIp = 0;
@@ -102,7 +158,7 @@ namespace PostSimulationAnalysisOldRuntime
                     double blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
                     List<ROCPoint> rocPoints = new List<ROCPoint>
                     {
-                        new ROCPoint(0, 0, 0, 0, originalMalicious.Count, originalBenign.Count,
+                        new ROCPoint(0, 0, 0, 0, originalMaliciousCount, originalBenignCount,
                         falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,
                         falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
                         blockThreshold)
@@ -142,7 +198,7 @@ namespace PostSimulationAnalysisOldRuntime
                             falsePositiveUsers.Count(),
                             falsePositiveIPs.Count(),
                             //falseNegatives, //
-                            originalMalicious.Count - malicious.Count,
+                            originalMaliciousCount - malicious.Count,
                             malicious.Count,
                             benign.Count,
                             falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,

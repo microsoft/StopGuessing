@@ -133,8 +133,6 @@ namespace Simulator
                     for (additionalMistakes = 1; additionalMistakes < _experimentalConfiguration.LengthOfLongRepeatOfOldPassword; additionalMistakes++)
                     {
                         currentTimeUtc = currentTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword);
-                        DateTime futureMistakeEventTimeUtc = eventTimeUtc.AddSeconds(
-                            _experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword * additionalMistakes);
                         ScheduledBenignAttempts.Add(new SimulatedLoginAttempt(
                             account, password, false, false, clientIp, cookie, mistake, currentTimeUtc));
                     }
