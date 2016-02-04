@@ -18,6 +18,8 @@ namespace PostSimulationAnalysisOldRuntime
         {
             BlockingCollection<string> inputLines = new BlockingCollection<string>();
             ConcurrentBag<Trial> trials = new ConcurrentBag<Trial>();
+            int itemsAdded = 0;
+            int itemsProcessed = 0;
 
             Parallel.Invoke(
                 () =>
@@ -31,16 +33,17 @@ namespace PostSimulationAnalysisOldRuntime
                         while ((line = file.ReadLine()) != null)
                         {
                             inputLines.Add(line);
+                            ++itemsAdded;
                             if (++counter >= 100000)
                             {
                                 counter = 0;
-                                Console.Out.WriteLine("Trial lines Read: {0}", inputLines.Count);
+                                Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
                             }
                         }
                         inputLines.CompleteAdding();
                     }
 
-                }, () => Parallel.ForEach(inputLines.GetConsumingPartitioner(), (line) =>
+                }, () => Parallel.ForEach(inputLines.GetConsumingPartitioner(), (line, state) =>
                 {
                     string[] fields = line.Trim().Split(new char[] {','});
                     if (fields.Length >= 11)
@@ -48,9 +51,9 @@ namespace PostSimulationAnalysisOldRuntime
                         Trial trial = new Trial(fields);
                         trials.Add(trial);
                     }
-                    int trialsCount = trials.Count;
-                    if (trialsCount % 100000 == 0)
-                        Console.Out.WriteLine("Trial lines processed: {0}", trialsCount);
+                    int numProcessed = Interlocked.Increment(ref itemsProcessed);
+                    if (numProcessed % 100000 == 0)
+                        Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
                 })
 
                     )
