@@ -20,6 +20,7 @@ namespace PostSimulationAnalysisOldRuntime
             ConcurrentBag<Trial> trials = new ConcurrentBag<Trial>();
             int itemsAdded = 0;
             int itemsProcessed = 0;
+            const int outputFrequency = 100000;
 
             List<Task> consumerTasks = new List<Task>();
                 int counter = 0;
@@ -32,12 +33,12 @@ namespace PostSimulationAnalysisOldRuntime
                 {
                     inputLines.Add(lineRead);
                     ++itemsAdded;
-                    if (++counter >= 100000)
+                    if (++counter >= outputFrequency)
                     {
                         counter = 0;
                         Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
 
-                        if (inputLines.Count >= 10000)
+                        if (inputLines.Count >= outputFrequency * consumerTasks.Count)
                         {
                             consumerTasks.Add(Task.Run(() =>
                             {
