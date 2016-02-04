@@ -37,7 +37,7 @@ namespace PostSimulationAnalysisOldRuntime
                         counter = 0;
                         Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
 
-                        if (inputLines.Count > 10000)
+                        if (inputLines.Count >= 10000)
                         {
                             consumerTasks.Add(Task.Run(() =>
                             {
