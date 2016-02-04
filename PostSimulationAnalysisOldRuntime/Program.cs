@@ -43,18 +43,22 @@ namespace PostSimulationAnalysisOldRuntime
                             consumerTasks.Add(Task.Run(() =>
                             {
                                 string line;
-                                while (inputLines.TryTake(out line, -1))
+                                do
                                 {
-                                    string[] fields = line.Trim().Split(new char[] {','});
-                                    if (fields.Length >= 11)
+                                    while (inputLines.TryTake(out line))
                                     {
-                                        Trial trial = new Trial(fields);
-                                        trials.Add(trial);
+                                        string[] fields = line.Trim().Split(new char[] {','});
+                                        if (fields.Length >= 11)
+                                        {
+                                            Trial trial = new Trial(fields);
+                                            trials.Add(trial);
+                                        }
+                                        int numProcessed = Interlocked.Increment(ref itemsProcessed);
+                                        if (numProcessed%100000 == 0)
+                                            Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
                                     }
-                                    int numProcessed = Interlocked.Increment(ref itemsProcessed);
-                                    if (numProcessed%100000 == 0)
-                                        Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
-                                }
+                                    Thread.Sleep(100);
+                                } while (!inputLines.IsCompleted);
                             }));
                         }
 
