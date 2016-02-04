@@ -21,43 +21,50 @@ namespace PostSimulationAnalysisOldRuntime
             int itemsAdded = 0;
             int itemsProcessed = 0;
 
-            Parallel.Invoke(
-                () =>
+            List<Task> tasks = new List<Task>();
+            tasks.Add(Task.Run(() =>
+            {
+                int counter = 0;
+                using (StreamReader file = new StreamReader(path))
                 {
-                    int counter = 0;
-                    using (StreamReader file = new StreamReader(path))
+                    // Skip header
+                    file.ReadLine();
+                    string line;
+                    while ((line = file.ReadLine()) != null)
                     {
-                        // Skip header
-                        file.ReadLine();
-                        string line;
-                        while ((line = file.ReadLine()) != null)
+                        inputLines.Add(line);
+                        ++itemsAdded;
+                        if (++counter >= 100000)
                         {
-                            inputLines.Add(line);
-                            ++itemsAdded;
-                            if (++counter >= 100000)
-                            {
-                                counter = 0;
-                                Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
-                            }
+                            counter = 0;
+                            Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
                         }
-                        inputLines.CompleteAdding();
                     }
+                    inputLines.CompleteAdding();
+                }
+            }));
 
-                }, () => Parallel.ForEach(inputLines.GetConsumingPartitioner(), (line, state) =>
+            for (int i = 0; i < Environment.ProcessorCount; i++)
+            {
+                tasks.Add(Task.Run(() =>
                 {
-                    string[] fields = line.Trim().Split(new char[] {','});
-                    if (fields.Length >= 11)
+                    string line;
+                    while (inputLines.TryTake(out line, -1))
                     {
-                        Trial trial = new Trial(fields);
-                        trials.Add(trial);
+                        string[] fields = line.Trim().Split(new char[] {','});
+                        if (fields.Length >= 11)
+                        {
+                            Trial trial = new Trial(fields);
+                            trials.Add(trial);
+                        }
+                        int numProcessed = Interlocked.Increment(ref itemsProcessed);
+                        if (numProcessed%100000 == 0)
+                            Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
                     }
-                    int numProcessed = Interlocked.Increment(ref itemsProcessed);
-                    if (numProcessed % 100000 == 0)
-                        Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
-                })
+                }));
+            }
 
-                    )
-                    ;
+            Task.WaitAll(tasks.ToArray());
             return trials.ToArray();
         }
 
