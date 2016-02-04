@@ -132,7 +132,7 @@ namespace Simulator
                     DateTime currentTimeUtc = eventTimeUtc;
                     for (additionalMistakes = 1; additionalMistakes < _experimentalConfiguration.LengthOfLongRepeatOfOldPassword; additionalMistakes++)
                     {
-                        currentTimeUtc = currentTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword*additionalMistakes);
+                        currentTimeUtc = currentTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword);
                         DateTime futureMistakeEventTimeUtc = eventTimeUtc.AddSeconds(
                             _experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword * additionalMistakes);
                         ScheduledBenignAttempts.Add(new SimulatedLoginAttempt(
@@ -140,7 +140,7 @@ namespace Simulator
                     }
                     for (uint correctLogins = 1; correctLogins < _experimentalConfiguration.LengthOfLongRepeatOfOldPassword; correctLogins++)
                     {
-                        currentTimeUtc = currentTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword * additionalMistakes);
+                        currentTimeUtc = currentTimeUtc.AddSeconds(_experimentalConfiguration.MinutesBetweenLongRepeatOfOldPassword);
                         ScheduledBenignAttempts.Add(new SimulatedLoginAttempt(
                             account, newPassword, false, false, clientIp, cookie, mistake,currentTimeUtc));
                     }
