@@ -21,50 +21,48 @@ namespace PostSimulationAnalysisOldRuntime
             int itemsAdded = 0;
             int itemsProcessed = 0;
 
-            List<Task> tasks = new List<Task>();
-            tasks.Add(Task.Run(() =>
-            {
+            List<Task> consumerTasks = new List<Task>();
                 int counter = 0;
-                using (StreamReader file = new StreamReader(path))
-                {
-                    // Skip header
-                    file.ReadLine();
-                    string line;
-                    while ((line = file.ReadLine()) != null)
-                    {
-                        inputLines.Add(line);
-                        ++itemsAdded;
-                        if (++counter >= 100000)
-                        {
-                            counter = 0;
-                            Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
-                        }
-                    }
-                    inputLines.CompleteAdding();
-                }
-            }));
-
-            for (int i = 0; i < Environment.ProcessorCount; i++)
+            using (StreamReader file = new StreamReader(path))
             {
-                tasks.Add(Task.Run(() =>
+                // Skip header
+                file.ReadLine();
+                string lineRead;
+                while ((lineRead = file.ReadLine()) != null)
                 {
-                    string line;
-                    while (inputLines.TryTake(out line, -1))
+                    inputLines.Add(lineRead);
+                    ++itemsAdded;
+                    if (++counter >= 100000)
                     {
-                        string[] fields = line.Trim().Split(new char[] {','});
-                        if (fields.Length >= 11)
-                        {
-                            Trial trial = new Trial(fields);
-                            trials.Add(trial);
-                        }
-                        int numProcessed = Interlocked.Increment(ref itemsProcessed);
-                        if (numProcessed%100000 == 0)
-                            Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
-                    }
-                }));
-            }
+                        counter = 0;
+                        Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
 
-            Task.WaitAll(tasks.ToArray());
+                        if (inputLines.Count > 10000)
+                        {
+                            consumerTasks.Add(Task.Run(() =>
+                            {
+                                string line;
+                                while (inputLines.TryTake(out line, -1))
+                                {
+                                    string[] fields = line.Trim().Split(new char[] {','});
+                                    if (fields.Length >= 11)
+                                    {
+                                        Trial trial = new Trial(fields);
+                                        trials.Add(trial);
+                                    }
+                                    int numProcessed = Interlocked.Increment(ref itemsProcessed);
+                                    if (numProcessed%100000 == 0)
+                                        Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
+                                }
+                            }));
+                        }
+
+                    }
+                }
+                inputLines.CompleteAdding();
+            }
+            
+            Task.WaitAll(consumerTasks.ToArray());
             return trials.ToArray();
         }
 
