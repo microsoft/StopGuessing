@@ -128,84 +128,88 @@ namespace PostSimulationAnalysisOldRuntime
                 tasks[conditionNumber] = Task.Run(() =>
                 {
                     Console.Out.WriteLine("Starting work on Condition: {0}", conditionNumber);
-                    Queue<Trial> malicious =
+                    List<ROCPoint> rocPoints = new List<ROCPoint>();
+
+                    {
+                        Queue<Trial> malicious =
                         new Queue<Trial>(
                             trialsGuessesCorrectPassword.AsParallel().OrderBy((x) => -x.scoreForEachCondition[conditionNumber]));
-                    Console.Out.WriteLine("Sort 1 completed for Condition {0}", conditionNumber);
-                    Queue<Trial> benign =
-                        new Queue<Trial>(
-                            trialsUsersCorrectPassword.AsParallel().OrderBy((x) => -x.scoreForEachCondition[conditionNumber]));
-                    Console.Out.WriteLine("Sort 2 completed for Condition {0}", conditionNumber);
-                    int originalMaliciousCount = malicious.Count;
-                    int originalBenignCount = benign.Count;
+                        Console.Out.WriteLine("Sort 1 completed for Condition {0}", conditionNumber);
+                        Queue<Trial> benign =
+                            new Queue<Trial>(
+                                trialsUsersCorrectPassword.AsParallel().OrderBy((x) => -x.scoreForEachCondition[conditionNumber]));
+                        Console.Out.WriteLine("Sort 2 completed for Condition {0}", conditionNumber);
+                        int originalMaliciousCount = malicious.Count;
+                        int originalBenignCount = benign.Count;
 
-                    int falseNegatives = malicious.Count;
-                    int falsePositives = 0;
-                    int falsePositivesWithProxy = 0;
-                    int falsePositivesWithAttackerIp = 0;
-                    int falsePositivesWithProxyAndAttackerIp = 0;
-                    long falseNegativeWithProxy = numCorrectGuessesFromProxy;
-                    long falseNegativeBenignIp = numCorrectGuessesFromBenignIpPool;
-                    long falseNegativeBenignProxyIp = numCorrectGuessesFromBoth;
-                    HashSet<string> falsePositiveUsers = new HashSet<string>();
-                    HashSet<string> falsePositiveIPs = new HashSet<string>();
-                    //int falseNegativeFromDefendersIpPool;
+                        int falsePositives = 0;
+                        int falsePositivesWithProxy = 0;
+                        int falsePositivesWithAttackerIp = 0;
+                        int falsePositivesWithProxyAndAttackerIp = 0;
+                        long falseNegativeWithProxy = numCorrectGuessesFromProxy;
+                        long falseNegativeBenignIp = numCorrectGuessesFromBenignIpPool;
+                        long falseNegativeBenignProxyIp = numCorrectGuessesFromBoth;
+                        HashSet<string> falsePositiveUsers = new HashSet<string>();
+                        HashSet<string> falsePositiveIPs = new HashSet<string>();
+                        //int falseNegativeFromDefendersIpPool;
 
 
-                    double blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
-                    List<ROCPoint> rocPoints = new List<ROCPoint>
-                    {
-                        new ROCPoint(0, 0, 0, 0, originalMaliciousCount, originalBenignCount,
-                            falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,
-                            falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
-                            blockThreshold)
-                    };
-                    while (malicious.Count > 0)
-                    {
-                        // Remove all malicious requests above this new threshold
-                        while (malicious.Count > 0 &&
-                               malicious.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
+                        double blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
+                        rocPoints.Add(
+                            new ROCPoint(0, 0, 0, 0, originalMaliciousCount, originalBenignCount,
+                                falsePositivesWithAttackerIp, falsePositivesWithProxy,
+                                falsePositivesWithProxyAndAttackerIp,
+                                falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
+                                blockThreshold));
+
+                        while (malicious.Count > 0)
                         {
-                            Trial t = malicious.Dequeue();
-                            falseNegatives--;
-                            if (t.IsClientAProxyIP)
-                                falseNegativeWithProxy--;
-                            if (t.IsIpInBenignPool)
-                                falseNegativeBenignIp--;
-                            if (t.IsIpInBenignPool && t.IsClientAProxyIP)
-                                falseNegativeBenignProxyIp--;
+                            // Remove all malicious requests above this new threshold
+                            while (malicious.Count > 0 &&
+                                   malicious.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
+                            {
+                                Trial t = malicious.Dequeue();
+                                if (t.IsClientAProxyIP)
+                                    falseNegativeWithProxy--;
+                                if (t.IsIpInBenignPool)
+                                    falseNegativeBenignIp--;
+                                if (t.IsIpInBenignPool && t.IsClientAProxyIP)
+                                    falseNegativeBenignProxyIp--;
+                            }
+
+                            // Remove all benign requests above this new threshold
+                            while (benign.Count > 0 &&
+                                   benign.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
+                            {
+                                Trial t = benign.Dequeue();
+                                falsePositives++;
+                                falsePositiveUsers.Add(t.UserID);
+                                falsePositiveIPs.Add(t.ClientIP);
+                                if (t.IsIpInAttackersPool)
+                                    falsePositivesWithAttackerIp++;
+                                if (t.IsClientAProxyIP)
+                                    falsePositivesWithProxy++;
+                                if (t.IsIpInAttackersPool && t.IsClientAProxyIP)
+                                    falsePositivesWithProxyAndAttackerIp++;
+                            }
+
+                            rocPoints.Add(new ROCPoint(
+                                falsePositives, //originalBenign.Count - benign.Count,
+                                falsePositiveUsers.Count(),
+                                falsePositiveIPs.Count(),
+                                //falseNegatives, //
+                                originalMaliciousCount - malicious.Count,
+                                malicious.Count,
+                                benign.Count,
+                                falsePositivesWithAttackerIp, falsePositivesWithProxy,
+                                falsePositivesWithProxyAndAttackerIp,
+                                falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
+                                blockThreshold));
+
+                            // Identify next threshold
+                            if (malicious.Count > 0)
+                                blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
                         }
-
-                        // Remove all benign requests above this new threshold
-                        while (benign.Count > 0 && benign.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
-                        {
-                            Trial t = benign.Dequeue();
-                            falsePositives++;
-                            falsePositiveUsers.Add(t.UserID);
-                            falsePositiveIPs.Add(t.ClientIP);
-                            if (t.IsIpInAttackersPool)
-                                falsePositivesWithAttackerIp++;
-                            if (t.IsClientAProxyIP)
-                                falsePositivesWithProxy++;
-                            if (t.IsIpInAttackersPool && t.IsClientAProxyIP)
-                                falsePositivesWithProxyAndAttackerIp++;
-                        }
-
-                        rocPoints.Add(new ROCPoint(
-                            falsePositives, //originalBenign.Count - benign.Count,
-                            falsePositiveUsers.Count(),
-                            falsePositiveIPs.Count(),
-                            //falseNegatives, //
-                            originalMaliciousCount - malicious.Count,
-                            malicious.Count,
-                            benign.Count,
-                            falsePositivesWithAttackerIp, falsePositivesWithProxy, falsePositivesWithProxyAndAttackerIp,
-                            falseNegativeBenignIp, falseNegativeWithProxy, falseNegativeBenignProxyIp,
-                            blockThreshold));
-
-                        // Identify next threshold
-                        if (malicious.Count > 0)
-                            blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
                     }
 
                     Console.Out.WriteLine("ROC Points identified for Condition {0}", conditionNumber);
@@ -262,7 +266,7 @@ namespace PostSimulationAnalysisOldRuntime
 
 
                     }
-                    Console.Out.WriteLine("Finsihed with Condition {0}", conditionNumber);
+                    Console.Out.WriteLine("Finished with Condition {0}", conditionNumber);
                 });
             }
             Task.WaitAll(tasks);
