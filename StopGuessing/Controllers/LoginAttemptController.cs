@@ -411,7 +411,8 @@ namespace StopGuessing.Controllers
                 ? account.ComputePhase1Hash(passwordProvidedByClient)
                 : ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
                     passwordProvidedByClient,
-                    Encoding.UTF8.GetBytes(loginAttempt.AddressOfClientInitiatingRequest.ToString()),
+                    ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
+//                    Encoding.UTF8.GetBytes(loginAttempt.AddressOfClientInitiatingRequest.ToString()),
                     _options.ExpensiveHashingFunctionIterations);
             string phase1HashOfProvidedPasswordAsString = Convert.ToBase64String(phase1HashOfProvidedPassword);
 
@@ -421,7 +422,9 @@ namespace StopGuessing.Controllers
             // to guess passwords even if we'd blocked their IPs.
             IpHistory ip = await ipHistoryGetTask;
 
-            bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently = _recentIncorrectPasswords.AddMember(phase1HashOfProvidedPasswordAsString);
+            bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently =
+                account == null && 
+                _recentIncorrectPasswords.AddMember(phase1HashOfProvidedPasswordAsString + loginAttempt.UsernameOrAccountId);
 
             // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
             // as we are most concerned about frequently-guessed passwords.
