@@ -20,8 +20,8 @@ namespace PostSimulationAnalysisOldRuntime
         //public string TypeOfMistake;
         //public float IndustryBlockScore;
         //public float SSHBlockScore;
-        public string UserID;
-        public string ClientIP;
+        public int UserID;
+        public uint ClientIP;
         //public string Password;
         //public float[] scoreForEachCondition;
 
@@ -35,6 +35,7 @@ namespace PostSimulationAnalysisOldRuntime
                 ScoreTable[i] = new List<float>(1000*1000*1000);
             }
         }
+        
 
         public Trial(string[] fields)
         {
@@ -49,8 +50,12 @@ namespace PostSimulationAnalysisOldRuntime
                 IsIpInAttackersPool = fields[field++].Contains("InAttackersIpPool");
             IsClientAProxyIP = fields[field++] == "ProxyIP";
             field++; // TypeOfMistake = fields[field++];
-            UserID = fields[field++];
-            ClientIP = fields[field++];
+            if (!int.TryParse(fields[field++].Substring(5), out UserID))
+                UserID = -1; // Bad account
+            ClientIP = 0;
+            string[] ipAsByteStrings = fields[field++].Split('.');
+            foreach (string byteStr in ipAsByteStrings)
+                ClientIP = (ClientIP << 8) + uint.Parse(byteStr);
             field++; // Password = fields[field++];
             // Just in case password had comma in it.
             if (fields.Length - field > 15)

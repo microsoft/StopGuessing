@@ -151,8 +151,8 @@ namespace PostSimulationAnalysisOldRuntime
                         long falseNegativeWithProxy = numCorrectGuessesFromProxy;
                         long falseNegativeBenignIp = numCorrectGuessesFromBenignIpPool;
                         long falseNegativeBenignProxyIp = numCorrectGuessesFromBoth;
-                        HashSet<string> falsePositiveUsers = new HashSet<string>();
-                        HashSet<string> falsePositiveIPs = new HashSet<string>();
+                        HashSet<int> falsePositiveUsers = new HashSet<int>();
+                        HashSet<uint> falsePositiveIPs = new HashSet<uint>();
                         //int falseNegativeFromDefendersIpPool;
 
 
