@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PostSimulationAnalysisOldRuntime
@@ -9,7 +10,8 @@ namespace PostSimulationAnalysisOldRuntime
 
     public class Trial
     {
-        static List<float>[] ScoreTable;
+        static float[][] ScoreTable;
+        private static int MasterIndex = -1;
         public int Index;
         public bool IsPasswordCorrect;
         public bool IsFromAttacker;
@@ -27,19 +29,20 @@ namespace PostSimulationAnalysisOldRuntime
 
         static Trial()
         {
-            ScoreTable = new List<float>[15];
+            ScoreTable = new float[15][];
             for (int i = 0; i < 15; i++)
             {
                 if (i > 0 && i < 7)
                     continue;
-                ScoreTable[i] = new List<float>(1000*1000*1000);
+                ScoreTable[i] = new float[1000*1000*1000];
             }
         }
         
 
         public Trial(string[] fields)
         {
-            Index = ScoreTable[0].Count;
+            // Interlocked increment
+            Index = Interlocked.Increment(ref MasterIndex);
             int field = 0;
             IsPasswordCorrect = fields[field++] == "Correct";
             IsFromAttacker = fields[field++] == "FromAttacker";
@@ -67,7 +70,7 @@ namespace PostSimulationAnalysisOldRuntime
                 {
                     float f;
                     float.TryParse(fields[field], out f);
-                    ScoreTable[condition].Add(f);
+                    ScoreTable[condition][Index] = f;
                 }
                 condition++;
             }
