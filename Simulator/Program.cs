@@ -21,9 +21,15 @@ namespace Simulator
             {
                 // Scale of test
                 config.AttackersStrategy = ExperimentalConfiguration.AttackStrategy.BreadthFirst;
-                config.PopularPasswordsToRemoveFromDistribution = 100;
-                config.FractionOfBenignIPsBehindProxies = 0.1d;
-                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.01d; // 0.1;
+                config.PopularPasswordsToRemoveFromDistribution = 0;
+                config.FractionOfBenignIPsBehindProxies = 0;// 0.1d;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = 0; //0.01d; // 0.1;
+
+                config.BlockingOptions.PopularityBasedPenaltyMultiplier_h = (binomialLadder, frequency) =>
+                    frequency.Proportion.Numerator > 0 ? 5 : 1;
+
+                config.BlockingOptions.PopularityBasedThresholdMultiplier_T_multiplier = (binomialLadder, frequency) =>
+                    frequency.Proportion.Numerator > 0 ? 1 : 100;
 
                 //ulong totalLoginAttempts = Billion;
                 //config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
@@ -84,11 +90,6 @@ namespace Simulator
                 //config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 10d;
                 config.BlockingOptions.ExpensiveHashingFunctionIterations = 1;
 
-                config.BlockingOptions.PopularityBasedPenaltyMultiplier_h = (binomialLadder, frequency) => 
-                    frequency.Proportion.Numerator > 0 ? 10 : 1;
-
-                config.BlockingOptions.PopularityBasedThresholdMultiplier_T_multiplier = (binomialLadder, frequency) =>
-                    frequency.Proportion.Numerator > 0 ? 1 : 10;
 
        config.BlockingOptions.Conditions = new[]
                 {
