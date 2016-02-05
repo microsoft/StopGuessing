@@ -14,64 +14,64 @@ namespace PostSimulationAnalysisOldRuntime
     public static class Program
     {
 
-        private static Trial[] LoadDataParallel(string path)
-        {
-            BlockingCollection<string> inputLines = new BlockingCollection<string>();
-            ConcurrentBag<Trial> trials = new ConcurrentBag<Trial>();
-            int itemsAdded = 0;
-            int itemsProcessed = 0;
-            const int outputFrequency = 100000;
+        //private static Trial[] LoadDataParallel(string path)
+        //{
+        //    BlockingCollection<string> inputLines = new BlockingCollection<string>();
+        //    ConcurrentBag<Trial> trials = new ConcurrentBag<Trial>();
+        //    int itemsAdded = 0;
+        //    int itemsProcessed = 0;
+        //    const int outputFrequency = 100000;
 
-            List<Task> consumerTasks = new List<Task>();
-                int counter = 0;
-            using (StreamReader file = new StreamReader(path))
-            {
-                // Skip header
-                file.ReadLine();
-                string lineRead;
-                while ((lineRead = file.ReadLine()) != null)
-                {
-                    inputLines.Add(lineRead);
-                    ++itemsAdded;
-                    if (++counter >= outputFrequency)
-                    {
-                        counter = 0;
-                        Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
+        //    List<Task> consumerTasks = new List<Task>();
+        //        int counter = 0;
+        //    using (StreamReader file = new StreamReader(path))
+        //    {
+        //        // Skip header
+        //        file.ReadLine();
+        //        string lineRead;
+        //        while ((lineRead = file.ReadLine()) != null)
+        //        {
+        //            inputLines.Add(lineRead);
+        //            ++itemsAdded;
+        //            if (++counter >= outputFrequency)
+        //            {
+        //                counter = 0;
+        //                Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
 
-                        if (inputLines.Count >= outputFrequency * consumerTasks.Count)
-                        {
-                            consumerTasks.Add(Task.Run(() =>
-                            {
-                                string line;
-                                do
-                                {
-                                    while (inputLines.TryTake(out line))
-                                    {
-                                        string[] fields = line.Trim().Split(new char[] {','});
-                                        if (fields.Length >= 11)
-                                        {
-                                            Trial trial = new Trial(fields);
-                                            trials.Add(trial);
-                                        }
-                                        int numProcessed = Interlocked.Increment(ref itemsProcessed);
-                                        if (numProcessed%100000 == 0)
-                                            Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
-                                    }
-                                    Thread.Sleep(100);
-                                } while (!inputLines.IsCompleted);
-                            }));
-                        }
+        //                if (inputLines.Count >= outputFrequency * consumerTasks.Count)
+        //                {
+        //                    consumerTasks.Add(Task.Run(() =>
+        //                    {
+        //                        string line;
+        //                        do
+        //                        {
+        //                            while (inputLines.TryTake(out line))
+        //                            {
+        //                                string[] fields = line.Trim().Split(new char[] {','});
+        //                                if (fields.Length >= 11)
+        //                                {
+        //                                    Trial trial = new Trial(fields);
+        //                                    trials.Add(trial);
+        //                                }
+        //                                int numProcessed = Interlocked.Increment(ref itemsProcessed);
+        //                                if (numProcessed%100000 == 0)
+        //                                    Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
+        //                            }
+        //                            Thread.Sleep(100);
+        //                        } while (!inputLines.IsCompleted);
+        //                    }));
+        //                }
 
-                    }
-                }
-                inputLines.CompleteAdding();
-            }
+        //            }
+        //        }
+        //        inputLines.CompleteAdding();
+        //    }
             
-            Task.WaitAll(consumerTasks.ToArray());
-            return trials.ToArray();
-        }
+        //    Task.WaitAll(consumerTasks.ToArray());
+        //    return trials.ToArray();
+        //}
 
-        private static List<Trial> LoadData(string path)
+        private static Trial[] LoadData(string path)
         {
             List<Trial> trials = new List<Trial>();
             int counter = 0;
@@ -93,7 +93,7 @@ namespace PostSimulationAnalysisOldRuntime
                     }
                 }
             }
-            return trials;
+            return trials.ToArray();
         }
 
 
@@ -101,12 +101,12 @@ namespace PostSimulationAnalysisOldRuntime
         public static void Main()   // string[] args
         {
             string path = @"E:\Experiment_2_3_17_50_5m_avoid\";
-            Trial[] trials = LoadDataParallel(path + "data.txt");
+            Trial[] trials = LoadData(path + "data.txt");
 
             //Trial[] trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToArray();
             Trial[] trialsUsersCorrectPassword = trials.Where(t => t.IsPasswordCorrect && !(t.IsFromAttacker && t.IsAGuess)).ToArray();
             Trial[] trialsGuessesCorrectPassword = trials.Where(t => t.IsPasswordCorrect && (t.IsFromAttacker && t.IsAGuess)).ToArray();
-            int numConditions = trialsUsersCorrectPassword.First().scoreForEachCondition.Length;
+            int numConditions = 15;
 
             //long numCorrectBenignFromAttackersIPpool = trialsUsersCorrectPassword.LongCount(t => t.IsIpInAttackersPool);
             //long numCorrectBenignFromProxy = trialsUsersCorrectPassword.LongCount(t => t.IsClientAProxyIP);
@@ -114,7 +114,7 @@ namespace PostSimulationAnalysisOldRuntime
             long numCorrectGuessesFromProxy = trialsGuessesCorrectPassword.LongCount(t => t.IsClientAProxyIP);
             long numCorrectGuessesFromBenignIpPool = trialsGuessesCorrectPassword.LongCount(t => t.IsIpInBenignPool);
             long numCorrectGuessesFromBoth = trialsGuessesCorrectPassword.LongCount(t => t.IsIpInBenignPool && t.IsClientAProxyIP);
-            Task[] tasks = new Task[numConditions];
+            List<Task> tasks = new List<Task>();
             for (int c = 0; c < numConditions; c++)
             {
                 //List<Trial> originalMalicious = new List<Trial>(trialsGuessesCorrectPassword);
@@ -123,9 +123,11 @@ namespace PostSimulationAnalysisOldRuntime
                 //originalBenign.Sort((a, b) => -a.CompareTo(b, conditionNumber));
                 //Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
                 //Queue<Trial> benign = new Queue<Trial>(originalBenign);
+                if (c > 0 && c < 7)
+                    continue;
 
                 int conditionNumber = c;
-                tasks[conditionNumber] = Task.Run(() =>
+                tasks.Add( Task.Run(() =>
                 {
                     Console.Out.WriteLine("Starting work on Condition: {0}", conditionNumber);
                     List<ROCPoint> rocPoints = new List<ROCPoint>();
@@ -133,11 +135,11 @@ namespace PostSimulationAnalysisOldRuntime
                     {
                         Queue<Trial> malicious =
                         new Queue<Trial>(
-                            trialsGuessesCorrectPassword.AsParallel().OrderBy((x) => -x.scoreForEachCondition[conditionNumber]));
+                            trialsGuessesCorrectPassword.AsParallel().OrderByDescending((x) => x.GetScoreForCondition(conditionNumber)));
                         Console.Out.WriteLine("Sort 1 completed for Condition {0}", conditionNumber);
                         Queue<Trial> benign =
                             new Queue<Trial>(
-                                trialsUsersCorrectPassword.AsParallel().OrderBy((x) => -x.scoreForEachCondition[conditionNumber]));
+                                trialsUsersCorrectPassword.AsParallel().OrderByDescending((x) => x.GetScoreForCondition(conditionNumber)));
                         Console.Out.WriteLine("Sort 2 completed for Condition {0}", conditionNumber);
                         int originalMaliciousCount = malicious.Count;
                         int originalBenignCount = benign.Count;
@@ -267,9 +269,9 @@ namespace PostSimulationAnalysisOldRuntime
 
                     }
                     Console.Out.WriteLine("Finished with Condition {0}", conditionNumber);
-                });
+                }));
             }
-            Task.WaitAll(tasks);
+            Task.WaitAll(tasks.ToArray());
         }
     }
 }

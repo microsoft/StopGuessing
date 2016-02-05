@@ -9,6 +9,8 @@ namespace PostSimulationAnalysisOldRuntime
 
     public class Trial
     {
+        static List<float>[] ScoreTable;
+        public int Index;
         public bool IsPasswordCorrect;
         public bool IsFromAttacker;
         public bool IsAGuess;
@@ -21,10 +23,22 @@ namespace PostSimulationAnalysisOldRuntime
         public string UserID;
         public string ClientIP;
         //public string Password;
-        public float[] scoreForEachCondition;
+        //public float[] scoreForEachCondition;
+
+        static Trial()
+        {
+            ScoreTable = new List<float>[15];
+            for (int i = 0; i < 15; i++)
+            {
+                if (i > 0 && i < 7)
+                    continue;
+                ScoreTable[i] = new List<float>(1000*1000*1000);
+            }
+        }
 
         public Trial(string[] fields)
         {
+            Index = ScoreTable[0].Count;
             int field = 0;
             IsPasswordCorrect = fields[field++] == "Correct";
             IsFromAttacker = fields[field++] == "FromAttacker";
@@ -38,15 +52,25 @@ namespace PostSimulationAnalysisOldRuntime
             UserID = fields[field++];
             ClientIP = fields[field++];
             field++; // Password = fields[field++];
-            scoreForEachCondition = new float[fields.Length - field];
+            // Just in case password had comma in it.
+            if (fields.Length - field > 15)
+                field = fields.Length - 15;
             int condition = 0;
             for (; field < fields.Length; field++)
-                float.TryParse(fields[field], out scoreForEachCondition[condition++]);
+            {
+                if (condition == 0 || condition >= 7)
+                {
+                    float f;
+                    float.TryParse(fields[field], out f);
+                    ScoreTable[condition].Add(f);
+                }
+                condition++;
+            }
         }
 
         public float GetScoreForCondition(int condition)
         {
-            return scoreForEachCondition[condition];
+            return ScoreTable[condition][Index];
         }
 
         public int CompareTo(Trial other, int condition)
