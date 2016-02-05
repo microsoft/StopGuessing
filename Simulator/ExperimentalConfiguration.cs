@@ -34,6 +34,7 @@ namespace Simulator
         public AttackStrategy AttackersStrategy = AttackStrategy.BreadthFirst;
 
         public string OutputPath = @"e:\";
+        public string OutputDirectoryName = @"Experiment";
         public string PasswordFrequencyFile = @"..\..\rockyou-withcount.txt";
         public string PreviouslyKnownPopularPasswordFile = @"..\..\phpbb.txt";
 

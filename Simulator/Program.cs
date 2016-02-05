@@ -22,6 +22,8 @@ namespace Simulator
                 // Scale of test
                 config.AttackersStrategy = ExperimentalConfiguration.AttackStrategy.BreadthFirst;
                 config.PopularPasswordsToRemoveFromDistribution = 100;
+                config.FractionOfBenignIPsBehindProxies = 0.1d;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.01d; // 0.1;
 
                 //ulong totalLoginAttempts = Billion;
                 //config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
@@ -33,12 +35,21 @@ namespace Simulator
                 //double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 //double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
-                ulong totalLoginAttempts = 5 * Million; // 2.5m // 500 * Thousand; // * Million;
+                ulong totalLoginAttempts = 10 * Million; // 2.5m // 500 * Thousand; // * Million;
                 config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
+
                 config.OutputPath = @"e:\";
+                config.OutputDirectoryName = string.Format("Size_{0}_Strategy_{1}_Remove_{2}_Proxies_{3}_Overlap_{4}", 
+                    (int) Math.Log10(totalLoginAttempts),
+                    config.AttackersStrategy == ExperimentalConfiguration.AttackStrategy.BreadthFirst ? "BreadthFirst" :
+                    config.AttackersStrategy == ExperimentalConfiguration.AttackStrategy.Weighted ? "Weighted" : "Avoid",
+                    config.PopularPasswordsToRemoveFromDistribution,
+                    (int) 1000 * config.FractionOfBenignIPsBehindProxies,
+                    (int) 1000 * config.FractionOfMaliciousIPsToOverlapWithBenign
+                    );
 
                 // Figure out parameters from scale
                 double fractionOfLoginAttemptsFromAttacker = 0.5d;
@@ -63,9 +74,7 @@ namespace Simulator
                 config.NumberOfAttackerControlledAccounts = (uint)numberOfAttackerIps;
 
                 // Additional sources of false positives/negatives
-                config.FractionOfBenignIPsBehindProxies = 0.1d;
                 config.ProxySizeInUniqueClientIPs = 1000;
-                config.FractionOfMaliciousIPsToOverlapWithBenign = 0.01d; // 0.1;
 
                 // Blocking parameters
                 // Make typos almost entirely ignored

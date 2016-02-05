@@ -60,7 +60,7 @@ namespace Simulator
 
 
             DateTime now = DateTime.Now;
-            string dirName = baseConfig.OutputPath + "Experiment_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
+            string dirName = baseConfig.OutputPath + baseConfig.OutputDirectoryName + "_Run_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
             if (parameterSweeps != null)
                 Directory.CreateDirectory(dirName);
             for (int testIndex = startingTest; testIndex < totalTests; testIndex++)
