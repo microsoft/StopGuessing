@@ -47,16 +47,18 @@ namespace PostSimulationAnalysisOldRuntime
             BlockingThreshold = blockingThreshold;
         }
 
-        public static double fraction(int numerator, int denominator)
+        public static double fractionOrZeroIfNaN(int numerator, int denominator)
         {
+            if (denominator == 0)
+                return 0;
             return ((double)numerator / (double)denominator);
         }
 
 
-        public double FalsePositiveRate => fraction(FalsePositives, FalsePositives + TrueNegatives);
-        public double TruePositiveRate => fraction(TruePositives, TruePositives + FalseNegatives);
-        public double Precision => fraction(TruePositives, TruePositives + FalsePositives);
-        public double Recall => fraction(TruePositives, TruePositives + FalseNegatives);
+        public double FalsePositiveRate => fractionOrZeroIfNaN(FalsePositives, FalsePositives + TrueNegatives);
+        public double TruePositiveRate => fractionOrZeroIfNaN(TruePositives, TruePositives + FalseNegatives);
+        public double Precision => fractionOrZeroIfNaN(TruePositives, TruePositives + FalsePositives);
+        public double Recall => fractionOrZeroIfNaN(TruePositives, TruePositives + FalseNegatives);
 
     }
 }
