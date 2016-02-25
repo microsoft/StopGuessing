@@ -70,8 +70,8 @@ namespace StopGuessing.Models
 
         public double PopularityConfidenceLevel { get; set; } = 0.001d; // 1 in 100,000
 
-
-        public PasswordPopularityFunction PopularityBasedPenaltyMultiplier_h = (binomialLadder, frequency) =>
+        public double PhiIfFrequent = 5;
+        public PasswordPopularityFunction PopularityBasedPenaltyMultiplier_phi = (binomialLadder, frequency) =>
         {
             int ladderObservations = binomialLadder.CountObservationsForGivenConfidence(0.001d);
             double popularity = Math.Max((double) ladderObservations/(10d*1000d), frequency.Proportion.AsDouble);

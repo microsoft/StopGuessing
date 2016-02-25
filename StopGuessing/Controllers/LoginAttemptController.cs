@@ -102,14 +102,21 @@ namespace StopGuessing.Controllers
 #endif
         }
 
-        public async Task PrimeCommonPasswordAsync(string passwordProvidedByClient,
+        /// <summary>
+        /// Ensure that a known-common password is treated as frequent
+        /// </summary>
+        /// <param name="passwordToTreatAsFrequent">The password to treat as frequent</param>
+        /// <param name="numberOfTimesToPrime">The number of consecutive occurrences to simulate</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task PrimeCommonPasswordAsync(string passwordToTreatAsFrequent,
             int numberOfTimesToPrime,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            ILadder ladder = await _binomialLadderSketch.GetLadderAsync(passwordProvidedByClient, cancellationToken: cancellationToken);
+            ILadder ladder = await _binomialLadderSketch.GetLadderAsync(passwordToTreatAsFrequent, cancellationToken: cancellationToken);
 
             string easyHashOfPassword =
-                Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordProvidedByClient)));
+                Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordToTreatAsFrequent)));
             IUpdatableFrequency frequencies = await _incorrectPasswordFrequenciesProvider.GetFrequencyAsync(
                 easyHashOfPassword,
                 cancellationToken: cancellationToken);
@@ -241,12 +248,12 @@ namespace StopGuessing.Controllers
             {
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
                     double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
-                                     _options.PopularityBasedPenaltyMultiplier_h(ladder, frequency);
+                                     _options.PopularityBasedPenaltyMultiplier_phi(ladder, frequency);
                     currentBlockScore.Add(invalidAccontPenalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                     double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta *
-                                    _options.PopularityBasedPenaltyMultiplier_h(ladder,frequency);
+                                    _options.PopularityBasedPenaltyMultiplier_phi(ladder,frequency);
                     currentBlockScore.Add(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null)
                     {
@@ -304,7 +311,7 @@ namespace StopGuessing.Controllers
                         ? _options.PenaltyForInvalidAccount_Alpha
                         : _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= _options.PopularityBasedPenaltyMultiplier_h(ladder, frequency);
+                        penalty *= _options.PopularityBasedPenaltyMultiplier_phi(ladder, frequency);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 }
@@ -316,7 +323,7 @@ namespace StopGuessing.Controllers
                         return;
                     double penalty = _options.PenaltyForInvalidPassword_Beta;
                     if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= _options.PopularityBasedPenaltyMultiplier_h(ladder, frequency);
+                        penalty *= _options.PopularityBasedPenaltyMultiplier_phi(ladder, frequency);
                     cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null && cond.RecentPotentialTypos != null)
                     {
