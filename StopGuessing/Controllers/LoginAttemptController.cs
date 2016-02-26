@@ -414,18 +414,11 @@ namespace StopGuessing.Controllers
             UserAccount account = await userAccountRequestTask;
             bool accountChanged = false;
 
-            //byte[] phase1HashOfProvidedPassword = account != null
-            //    ? account.ComputePhase1Hash(passwordProvidedByClient)
-            //    : ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
-            //        passwordProvidedByClient,
-            //        ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
-            //        _options.ExpensiveHashingFunctionIterations);
-
             // Preform an analysis of the IPs past beavhior to determine if the IP has been performing so many failed guesses
             // that we disallow logins even if it got the right password.  We call this even when the submitted password is
             // correct lest we create a timing indicator (slower responses for correct passwords) that attackers could use
             // to guess passwords even if we'd blocked their IPs.
-            IpHistory ip = await ipHistoryGetTask;
+            //IpHistory ip = await ipHistoryGetTask;
 
             if (account == null)
             {
@@ -438,16 +431,13 @@ namespace StopGuessing.Controllers
                                                      ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
                                                      _options.ExpensiveHashingFunctionIterations);
 
-                bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently =
-                    _recentIncorrectPasswords.AddMember(Convert.ToBase64String(phase1HashOfProvidedPassword));
-
                 // This appears to be an loginAttempt to login to a non-existent account, and so all we need to do is
                 // mark it as such.  However, since it's possible that users will forget their account names and
                 // repeatedly loginAttempt to login to a nonexistent account, we'll want to track whether we've seen
-                // this clientsIpHistory/account/password tripple before and note in the outcome if it's a repeat so that.
+                // this account/password double before and note in the outcome if it's a repeat so that.
                 // the IP need not be penalized for issuign a query that isn't getting it any information it
                 // didn't already have.
-                loginAttempt.Outcome = didSketchIndicateThatTheSameGuessHasBeenMadeRecently
+                loginAttempt.Outcome = _recentIncorrectPasswords.AddMember(Convert.ToBase64String(phase1HashOfProvidedPassword))
                     ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
                     : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
             }
@@ -491,7 +481,7 @@ namespace StopGuessing.Controllers
                     // Determine if any of the outcomes for login attempts from the client IP for this request were the result of typos,
                     // as this might impact our decision about whether or not to block this client IP in response to its past behaviors.
                     AdjustBlockingScoreForPastTyposTreatedAsFullFailures(
-                        ip, account, loginAttempt.TimeOfAttemptUtc, passwordProvidedByClient, phase1HashOfProvidedPassword);
+                        await ipHistoryGetTask, account, loginAttempt.TimeOfAttemptUtc, passwordProvidedByClient, phase1HashOfProvidedPassword);
                 }
                 else
                 {
@@ -518,17 +508,17 @@ namespace StopGuessing.Controllers
                     // We actually have two data structures for catching this: A large sketch of clientsIpHistory/account/password triples and a
                     // tiny LRU cache of recent failed passwords for this account.  We'll check both.
 
-                    bool repeatFailureIdentifiedByAccountHashes =
-                        account.RecentIncorrectPhase2Hashes.Contains(phase2HashOfProvidedPassword);
-                    if (!repeatFailureIdentifiedByAccountHashes)
+                    if (account.RecentIncorrectPhase2Hashes.Contains(phase2HashOfProvidedPassword))
                     {
+                        loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword;
+                    }
+                    else
+                    {
+                        loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
                         account.RecentIncorrectPhase2Hashes.Add(phase2HashOfProvidedPassword);
                         accountChanged = true;
                     }
 
-                    loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes)
-                        ? AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword
-                        : AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
                 }
 
             }
@@ -547,6 +537,7 @@ namespace StopGuessing.Controllers
             //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
             loginAttempt.PasswordsPopularityAmongFailedGuesses = popularityOfPasswordAmongIncorrectPasswords;
 
+            IpHistory ip = await ipHistoryGetTask;
             double[] conditionScores = ip.SimulationConditions.Select( cond =>
                     cond.GetThresholdAdjustedScore(loginAttempt.PasswordsPopularityAmongFailedGuesses,
                         loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount,
