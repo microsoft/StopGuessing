@@ -414,14 +414,12 @@ namespace StopGuessing.Controllers
             UserAccount account = await userAccountRequestTask;
             bool accountChanged = false;
 
-            byte[] phase1HashOfProvidedPassword = account != null
-                ? account.ComputePhase1Hash(passwordProvidedByClient)
-                : ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
-                    passwordProvidedByClient,
-                    ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
-//                    Encoding.UTF8.GetBytes(loginAttempt.AddressOfClientInitiatingRequest.ToString()),
-                    _options.ExpensiveHashingFunctionIterations);
-            string phase1HashOfProvidedPasswordAsString = Convert.ToBase64String(phase1HashOfProvidedPassword);
+            //byte[] phase1HashOfProvidedPassword = account != null
+            //    ? account.ComputePhase1Hash(passwordProvidedByClient)
+            //    : ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
+            //        passwordProvidedByClient,
+            //        ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
+            //        _options.ExpensiveHashingFunctionIterations);
 
             // Preform an analysis of the IPs past beavhior to determine if the IP has been performing so many failed guesses
             // that we disallow logins even if it got the right password.  We call this even when the submitted password is
@@ -429,22 +427,20 @@ namespace StopGuessing.Controllers
             // to guess passwords even if we'd blocked their IPs.
             IpHistory ip = await ipHistoryGetTask;
 
-            bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently =
-                account == null && 
-                _recentIncorrectPasswords.AddMember(phase1HashOfProvidedPasswordAsString + loginAttempt.UsernameOrAccountId);
-
-            // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
-            // as we are most concerned about frequently-guessed passwords.
-            ILadder passwordLadder = await binomialLadderTask;
-            int ladderRungsWithConfidence = passwordLadder.CountObservationsForGivenConfidence(_options.PopularityConfidenceLevel);
-            //double ladderPopularity = 
-            IUpdatableFrequency passwordFrequency = await passwordFrequencyTask;
-            double trackedPopularity = passwordFrequency.Proportion.AsDouble;
-            double popularityOfPasswordAmongIncorrectPasswords = Math.Max((double)ladderRungsWithConfidence / (10d * 1000d), trackedPopularity);
-
-
             if (account == null)
             {
+                //
+                // This is an login attempt for an INvalid (NONexistent) account.
+                //
+                byte[] phase1HashOfProvidedPassword = 
+                    ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
+                                                     passwordProvidedByClient,
+                                                     ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
+                                                     _options.ExpensiveHashingFunctionIterations);
+
+                bool didSketchIndicateThatTheSameGuessHasBeenMadeRecently =
+                    _recentIncorrectPasswords.AddMember(Convert.ToBase64String(phase1HashOfProvidedPassword));
+
                 // This appears to be an loginAttempt to login to a non-existent account, and so all we need to do is
                 // mark it as such.  However, since it's possible that users will forget their account names and
                 // repeatedly loginAttempt to login to a nonexistent account, we'll want to track whether we've seen
@@ -458,8 +454,9 @@ namespace StopGuessing.Controllers
             else
             {
                 //
-                // This is an loginAttempt to login to a valid (existent) account.
+                // This is an login attempt for a valid (existent) account.
                 //
+                byte[] phase1HashOfProvidedPassword = account.ComputePhase1Hash(passwordProvidedByClient);
 
                 // Determine whether the client provided a cookie that indicate that it has previously logged
                 // into this account successfully---a very strong indicator that it is a client used by the
@@ -529,17 +526,26 @@ namespace StopGuessing.Controllers
                         accountChanged = true;
                     }
 
-                    loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes || didSketchIndicateThatTheSameGuessHasBeenMadeRecently)
+                    loginAttempt.Outcome = (repeatFailureIdentifiedByAccountHashes)
                         ? AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword
                         : AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
                 }
 
-                // When there's little data, we want to make sure the popularity is not overstated because           
-                // (e.g., if we've only seen 10 account failures since we started watching, it would not be
-                //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
-                loginAttempt.PasswordsPopularityAmongFailedGuesses = popularityOfPasswordAmongIncorrectPasswords;
-
             }
+
+            // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
+            // as we are most concerned about frequently-guessed passwords.
+            ILadder passwordLadder = await binomialLadderTask;
+            int ladderRungsWithConfidence = passwordLadder.CountObservationsForGivenConfidence(_options.PopularityConfidenceLevel);
+
+            IUpdatableFrequency passwordFrequency = await passwordFrequencyTask;
+            double trackedPopularity = passwordFrequency.Proportion.AsDouble;
+            double popularityOfPasswordAmongIncorrectPasswords = Math.Max((double)ladderRungsWithConfidence / (10d * 1000d), trackedPopularity);
+
+            // When there's little data, we want to make sure the popularity is not overstated because           
+            // (e.g., if we've only seen 10 account failures since we started watching, it would not be
+            //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
+            loginAttempt.PasswordsPopularityAmongFailedGuesses = popularityOfPasswordAmongIncorrectPasswords;
 
             double[] conditionScores = ip.SimulationConditions.Select( cond =>
                     cond.GetThresholdAdjustedScore(loginAttempt.PasswordsPopularityAmongFailedGuesses,
