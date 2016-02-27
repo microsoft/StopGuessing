@@ -12,9 +12,9 @@ namespace StopGuessing
     {
         Task<TValue> ReadAsync(TId id, CancellationToken cancellationToken = default(CancellationToken));
 
-        Task WriteNewAsync(TValue value, CancellationToken cancellationToken = default(CancellationToken));
+        Task WriteNewAsync(TId id, TValue value, CancellationToken cancellationToken = default(CancellationToken));
 
-        Task SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken));
+        Task SaveChangesAsync(TId id, TValue value, CancellationToken cancellationToken = default(CancellationToken));
     }
 
 
@@ -41,15 +41,15 @@ namespace StopGuessing
         }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-        public async Task WriteNewAsync(UserAccount account, CancellationToken cancellationToken = new CancellationToken())
+        public async Task WriteNewAsync(string id, UserAccount account, CancellationToken cancellationToken = new CancellationToken())
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _store[account.UsernameOrAccountId] = account;
+            _store[id] = account;
         }
         
 #pragma warning disable 1998
-        public async Task SaveChangesAsync(CancellationToken cancellationToken = new CancellationToken())
+        public async Task SaveChangesAsync(string id, UserAccount account, CancellationToken cancellationToken = new CancellationToken())
 #pragma warning restore 1998
         {
             // FUTURE -- remove async and return Task.CompletedTask when this .NET 4.6 property is availble

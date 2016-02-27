@@ -48,6 +48,8 @@ namespace StopGuessing.Models
 
         public double BlockThresholdPopularPassword_T_base { get; set; } = 50d;
 
+        public double MultiplierIfClientCookieIndicatesPriorSuccessfulLogin_Kappa = 0d;
+
         public TimeSpan BlockScoreHalfLife = new TimeSpan(12,0,0); // 12 hours
 
 

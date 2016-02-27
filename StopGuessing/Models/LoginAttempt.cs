@@ -8,6 +8,8 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
+
+
     /// <summary>
     /// Describes an attempt to login using a password to an account from a given IP address.
     /// </summary>
@@ -23,7 +25,7 @@ namespace StopGuessing.Models
         /// <summary>
         /// The IP address of the client that was attempting to login to.  This is
         /// </summary>
-        //FIXMEIMMEDIATELY[DataMember]
+        [DataMember]
         public System.Net.IPAddress AddressOfClientInitiatingRequest { get; set; }
 
         /// <summary>
@@ -31,7 +33,7 @@ namespace StopGuessing.Models
         /// ID for each request without requiring coordination between servers to ensure they are
         /// generating numbers that other servers are not generating.
         /// </summary>
-        //FIXMEIMMEDIATELY[DataMember]
+        [DataMember]
         public System.Net.IPAddress AddressOfServerThatInitiallyReceivedLoginAttempt { get; set; }
 
         /// <summary>
@@ -42,7 +44,7 @@ namespace StopGuessing.Models
         /// of the correct password--which would indicate it was likely a (benign) typo and not a random guess. 
         /// </summary>
         [DataMember]
-        public string EncryptedIncorrectPassword { get; set; }
+        public EncryptedStringField EncryptedIncorrectPassword;
 
         /// <summary>
         /// The phase2 hash of the incorrect password, which is available for future analysis.  We can use
@@ -105,17 +107,6 @@ namespace StopGuessing.Models
         public double PasswordsPopularityAmongFailedGuesses { get; set; }
 
         /// <summary>
-        /// When calculating the likelihood that an IP address is conducting a brute-force attack,
-        /// successful logins can be used to offset failures (reducing the likelihood that the IP will
-        /// be deemed as attacking).  To prevent attackers from generating lots of successes using
-        /// accounts they control, we only allow successes to counter failures if there is enough
-        /// anti-blocking currency in the account.  We set this value to true if anti-blocking
-        /// currency has been provided so that this success (if it is one) can offset the failure.
-        /// </summary>
-        [DataMember]
-        public bool HasReceivedCreditForUseToReduceBlockingScore { get; set; }
-
-        /// <summary>
         /// A setter used to provide a client-specific cookie.  This cookie should be random value
         /// from a large space assigned to the client the first time it connects and provided on that
         /// and every future login attempt.  If the client does not support cookies (e.g., POP)
@@ -148,47 +139,7 @@ namespace StopGuessing.Models
         {
             return UrlEncoder.Default.UrlEncode(UsernameOrAccountId) + "&" + AddressOfServerThatInitiallyReceivedLoginAttempt + "&" + TimeOfAttemptUtc.Ticks.ToString();
         }
-
-        /// <summary>
-        /// Encrypt a plaintext incorrect password with the account's EC Diffie Helman public key so that it can
-        /// be safely stored until the correct password is provided in the future.  Store it in the
-        /// EncryptedIncorrectPassword field.  (This doesn't expose information about the correct password because
-        /// the corresponding EC secret key needed to decrypt this incorrect password is itself encrypted with the
-        /// phase1 hash of the correct password.)
-        /// 
-        /// The encryption format is a JSON-encoded EcEncryptedMessageAesCbcHmacSha256.
-        /// </summary>
-        /// <param name="incorrectPassword">The incorrect password to be stored into the EncryptedIncorrectPassword
-        /// field.</param>
-        /// <param name="ecPublicLogKey">The public key used to encrypt the incorrect password.</param>
-        public void EncryptAndWriteIncorrectPassword(string incorrectPassword, byte[] ecPublicLogKey)
-        {
-            using (ECDiffieHellmanPublicKey ecPublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(ecPublicLogKey, CngKeyBlobFormat.EccPublicBlob))
-            {
-                EncryptedIncorrectPassword = JsonConvert.SerializeObject(
-                    new EcEncryptedMessageAesCbcHmacSha256(ecPublicKey, Encoding.UTF8.GetBytes(incorrectPassword)));
-            }
-        }
-
-        /// <summary>
-        /// Decrypt an EncryptedIncorrectPassword by provide the EC Diffie Helman private key
-        /// matching the public key used to encrypt it.
-        /// 
-        /// Note that any decryption exceptions, such as occur if the data is corrupted or the wrong
-        /// private key provided, will be passed up to the caller.
-        /// </summary>
-        /// <param name="ecPrivateLogKey">The private key that can be used to decrypt the encrypted incorrect password.</param>
-        /// <returns>The password that was provided during this login attempt.</returns>
-        public string DecryptAndGetIncorrectPassword(ECDiffieHellmanCng ecPrivateLogKey)
-        {
-            EcEncryptedMessageAesCbcHmacSha256 messageDeserializedFromJson =
-                JsonConvert.DeserializeObject<EcEncryptedMessageAesCbcHmacSha256>(EncryptedIncorrectPassword);
-            byte[] passwordAsUtf8 = messageDeserializedFromJson.Decrypt(ecPrivateLogKey);
-            return Encoding.UTF8.GetString(passwordAsUtf8);
-        }
-
-
-
+        
     }
 
 }

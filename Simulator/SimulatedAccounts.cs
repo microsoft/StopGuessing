@@ -124,7 +124,7 @@ namespace Simulator
                     if (index % 10000 == 0)
                         _logger.WriteStatus("Created account {0:N0}", index);
                     UserAccount account = UserAccount.Create(simAccount.UniqueId,
-                        experimentalConfiguration.BlockingOptions.Conditions.Length,
+//                        experimentalConfiguration.BlockingOptions.Conditions.Length,
                         experimentalConfiguration.BlockingOptions.AccountCreditLimit,
                         experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
                         simAccount.Password,
@@ -133,7 +133,7 @@ namespace Simulator
                     foreach (string cookie in simAccount.Cookies)
                         account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
                             LoginAttempt.HashCookie(cookie));
-                    await accountContextFactory.Get().WriteNewAsync(account, cancelToken);
+                    await accountContextFactory.Get().WriteNewAsync(account.UsernameOrAccountId, account, cancelToken);
                 },
                 cancellationToken: cancellationToken);
             _logger.WriteStatus("Finished creating user accounts for each simluated account record");

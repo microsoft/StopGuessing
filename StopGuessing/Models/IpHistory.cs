@@ -1,4 +1,5 @@
-﻿#define Simulation
+﻿//#define Simulation
+// FIXME
 using System;
 using System.Net;
 using StopGuessing.DataStructures;
@@ -35,7 +36,7 @@ namespace StopGuessing.Models
     /// </summary>
         public class IpHistory
     {
-        public IPAddress Address;
+        public readonly IPAddress Address;
         
         public SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos; 
 

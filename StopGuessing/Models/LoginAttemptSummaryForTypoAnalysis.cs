@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using StopGuessing.DataStructures;
+using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
@@ -20,6 +21,6 @@ namespace StopGuessing.Models
         /// we can go back and audit the incorrect password to see if it was within a short edit distance
         /// of the correct password--which would indicate it was likely a (benign) typo and not a random guess. 
         /// </summary>
-        public string EncryptedIncorrectPassword { get; set; }
+        public EncryptedStringField EncryptedIncorrectPassword { get; set; }
     }
 }

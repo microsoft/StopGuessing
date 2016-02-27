@@ -1,4 +1,4 @@
-﻿#define Simulation
+﻿//#define Simulation
 // FIXME above
 using System;
 using System.Collections.Generic;
@@ -46,6 +46,7 @@ namespace StopGuessing.Controllers
 
         public LoginAttemptController(
             IStableStoreFactory<string, UserAccount> userAccountContextFactory,
+            //IStableStoreFactory<string, IpHistory> ipHistoryContextFactory,
             IBinomialLadderSketch binomialLadderSketch,
             IFrequenciesProvider<string> incorrectPasswordFrequenciesProvider,
             MemoryUsageLimiter memoryUsageLimiter,
@@ -200,11 +201,8 @@ namespace StopGuessing.Controllers
                         string incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword;
 #else
                         // Attempt to decrypt the password.
-                        EcEncryptedMessageAesCbcHmacSha256 messageDeserializedFromJson =
-                            JsonConvert.DeserializeObject<EcEncryptedMessageAesCbcHmacSha256>(
-                                potentialTypo.EncryptedIncorrectPassword);
-                        byte[] passwordAsUtf8 = messageDeserializedFromJson.Decrypt(ecPrivateAccountLogKey);
-                        string incorrectPasswordFromPreviousAttempt = Encoding.UTF8.GetString(passwordAsUtf8);
+                        string incorrectPasswordFromPreviousAttempt =
+                            potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
 #endif
 
                         // Use an edit distance calculation to determine if it was a likely typo
@@ -285,6 +283,7 @@ namespace StopGuessing.Controllers
             }
         }
 
+#if Simulation
 
         protected void SimUpdateBlockScores(IEnumerable<SimulationConditionIpHistoryState> conditions, LoginAttempt loginAttempt, UserAccount account,
             ILadder ladder, IUpdatableFrequency frequency,
@@ -295,7 +294,6 @@ namespace StopGuessing.Controllers
                 SimUpdateBlockScore(condition,loginAttempt,account, ladder, frequency, ref accountChanged);
             }
         }
-
         protected void SimUpdateBlockScore(SimulationConditionIpHistoryState cond, LoginAttempt loginAttempt, UserAccount account,
             ILadder ladder, IUpdatableFrequency frequency, ref bool accountChanged)
         {
@@ -353,7 +351,7 @@ namespace StopGuessing.Controllers
                     return;
             }
         }
-
+#endif
 
 
         /// <returns></returns>
@@ -406,7 +404,7 @@ namespace StopGuessing.Controllers
                 cancellationToken: cancellationToken);
 
             //
-            // End parallel operations
+            // Start processing information as it comes in
             //
 
             // We'll need the salt from the account record before we can calculate the expensive hash,
@@ -446,23 +444,21 @@ namespace StopGuessing.Controllers
                 //
                 // This is an login attempt for a valid (existent) account.
                 //
+
+                // Test to see if the password is correct by calculating the Phase2Hash and comparing it with the Phase2 hash
+                // in this record.  The expensive (phase1) hash which is used to encrypt the EC public key for this account
+                // (which we use to store the encryptions of incorrect passwords)
                 byte[] phase1HashOfProvidedPassword = account.ComputePhase1Hash(passwordProvidedByClient);
 
-                // Determine whether the client provided a cookie that indicate that it has previously logged
+                // Determine whether the client provided a cookie to indicate that it has previously logged
                 // into this account successfully---a very strong indicator that it is a client used by the
                 // legitimate user and not an unknown client performing a guessing attack.
                 loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount =
                     account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(
                         loginAttempt.HashOfCookieProvidedByBrowser);
 
-                // Test to see if the password is correct by calculating the Phase2Hash and comparing it with the Phase2 hash
-                // in this record
-                //
-                // First, the expensive (phase1) hash which is used to encrypt the EC public key for this account
-                // (which we use to store the encryptions of incorrect passwords)
-                //byte[] phase1HashOfProvidedPassword = account.ComputePhase1Hash(passwordProvidedByClient);
                 // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
-                // hash of the phase1 hash.
+                // hash of the phase1 hash, which we call the phase 2 hash.
                 string phase2HashOfProvidedPassword =
                     Convert.ToBase64String(ManagedSHA256.Hash(phase1HashOfProvidedPassword));
 
@@ -496,10 +492,9 @@ namespace StopGuessing.Controllers
                     //  don't already know the correct password.)
                     loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
 #if Simulation
-                    loginAttempt.EncryptedIncorrectPassword = passwordProvidedByClient;
+                    loginAttempt.EncryptedIncorrectPassword.Ciphertext = passwordProvidedByClient;
 #else
-                    loginAttempt.EncryptAndWriteIncorrectPassword(passwordProvidedByClient,
-                        account.EcPublicAccountLogKey);
+                    loginAttempt.EncryptedIncorrectPassword.Write(passwordProvidedByClient, account.EcPublicAccountLogKey);
 #endif
                     // Next, if it's possible to declare more about this outcome than simply that the 
                     // user provided the incorrect password, let's do so.
@@ -538,10 +533,12 @@ namespace StopGuessing.Controllers
             loginAttempt.PasswordsPopularityAmongFailedGuesses = popularityOfPasswordAmongIncorrectPasswords;
 
             IpHistory ip = await ipHistoryGetTask;
+#if Simulation
             double[] conditionScores = ip.SimulationConditions.Select( cond =>
                     cond.GetThresholdAdjustedScore(loginAttempt.PasswordsPopularityAmongFailedGuesses,
                         loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount,
                         passwordLadder, passwordFrequency, loginAttempt.TimeOfAttemptUtc)).ToArray();
+#endif
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
             {
@@ -552,14 +549,15 @@ namespace StopGuessing.Controllers
                 double blockScore = ip.CurrentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc);
                 // If the client provided a cookie proving a past successful login, we'll ignore the block condition
                 if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
-                    blockScore *= 0; // FUTURE
+                    blockScore *= _options.MultiplierIfClientCookieIndicatesPriorSuccessfulLogin_Kappa;
                 if (blockScore > blockingThreshold)
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
             }
             
             UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, passwordLadder, passwordFrequency,  ref accountChanged);
+#if Simulation
             SimUpdateBlockScores(ip.SimulationConditions, loginAttempt, account, passwordLadder, passwordFrequency, ref accountChanged);
-
+#endif
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
                 loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
             {
@@ -579,7 +577,7 @@ namespace StopGuessing.Controllers
 
             if (accountChanged)
             {
-                Task backgroundTask = userAccountContext.SaveChangesAsync(new CancellationToken());
+                Task backgroundTask = userAccountContext.SaveChangesAsync(account.UsernameOrAccountId, account, new CancellationToken());
             }
 
 #if Simulation

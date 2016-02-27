@@ -54,7 +54,7 @@ namespace StopGuessing.Models
                 // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
                 try
                 {
-                    string incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword;
+                    string incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
                     // Use an edit distance calculation to determine if it was a likely typo
                     bool likelyTypo = EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
                                         Condition.Options.MaxEditDistanceConsideredATypo;

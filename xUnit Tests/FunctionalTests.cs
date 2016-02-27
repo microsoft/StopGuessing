@@ -64,15 +64,16 @@ namespace xUnit_Tests
             return configuration;
         }
 
-        public async static Task<UserAccount> CreateTestAccountAsync(TestConfiguration configuration, string usernameOrAccountId, string password)
+        public async static Task<UserAccount> CreateTestAccountAsync(TestConfiguration configuration, string usernameOrAccountId, string password,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             UserAccount account = UserAccount.Create(usernameOrAccountId,
-              configuration.MyBlockingAlgorithmOptions.Conditions.Length,
+//              configuration.MyBlockingAlgorithmOptions.Conditions.Length,
               configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
               configuration.MyBlockingAlgorithmOptions.BlockScoreHalfLife,
               password,
               numberOfIterationsToUseForPhase1Hash: 1);
-            await configuration.MyAccountContextFactory.Get().WriteNewAsync(account);
+            await configuration.MyAccountContextFactory.Get().WriteNewAsync(account.UsernameOrAccountId, account, cancellationToken);
             return account;
         }
 

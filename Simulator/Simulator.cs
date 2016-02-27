@@ -208,9 +208,10 @@ namespace Simulator
                     simAttempt = _attemptGenerator.BenignLoginAttempt(eventTimeUtc, _accountContextFactory);                    
                 }
 
-                double[] scores = await
-                    _loginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
-                        cancellationToken: cancellationToken);
+                double[] scores = new double[0]; //= FIXME
+//                await
+//                    _loginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
+//                        cancellationToken: cancellationToken);
 
                 var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
                 string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",

@@ -1,7 +1,6 @@
-﻿#define Simulation
+﻿//#define Simulation
 // FIXME remove
 using System;
-using System.Collections.Generic;
 using System.Security.Cryptography;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
@@ -81,16 +80,6 @@ namespace StopGuessing.Models
 #if Simulation
         public DoubleThatDecaysWithTime[] ConsumedCreditsForSimulation;
 #endif
-
-        ///// <summary>
-        ///// A member used exclusively to set the password.  This is primarily a convenience member for testing.
-        ///// If the old password is available, it is better to use the SetPassword() method and provide the old passowrd
-        ///// so that information encrypted with the old password can be recovered.
-        ///// </summary>
-        //[IgnoreDataMember]
-        //[JsonIgnore]
-        //public string Password { set { SetPassword(value); } }
-
 
         /// <summary>
         /// Computes the phase1 (expensive) hash of a password using the algorithm specified for
@@ -251,6 +240,7 @@ namespace StopGuessing.Models
         /// <param name="numberOfIterationsToUseForPhase1Hash">The number of iterations to use when hashing the password.</param>
         /// <param name="saltUniqueToThisAccount">The salt for this account.  If null or not provided, a random salt is generated with length determined
         /// by parameter <paramref name="saltLength"/>.</param>
+        /// <param name="currentDateTimeUtc">The current UTC time on the instant this record has been created</param>
         /// <param name="maxNumberOfCookiesToTrack">This class tracks cookies associated with browsers that have 
         /// successfully logged into this account.  This parameter, if set, overrides the default maximum number of such cookies to track.</param>
         /// <param name="maxFailedPhase2HashesToTrack">Phase2hashes of recent failed passwords so that we can avoid counting
