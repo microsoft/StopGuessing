@@ -376,7 +376,6 @@ namespace StopGuessing.Controllers
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-
             //
             // In parallel fetch information we'll need to determine the outcome
             //
@@ -454,8 +453,7 @@ namespace StopGuessing.Controllers
                 // into this account successfully---a very strong indicator that it is a client used by the
                 // legitimate user and not an unknown client performing a guessing attack.
                 loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount =
-                    account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(
-                        loginAttempt.HashOfCookieProvidedByBrowser);
+                    account.HasDeviceWithThisHashedCookieSuccessfullyLoggedInBefore(loginAttempt.HashOfCookieProvidedByBrowser);
 
                 // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
                 // hash of the phase1 hash, which we call the phase 2 hash.
@@ -492,7 +490,7 @@ namespace StopGuessing.Controllers
                     //  don't already know the correct password.)
                     loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
 #if Simulation
-                    loginAttempt.EncryptedIncorrectPassword.Ciphertext = passwordProvidedByClient;
+                    loginAttempt.EncryptedIncorrectPassword = passwordProvidedByClient;
 #else
                     loginAttempt.EncryptedIncorrectPassword.Write(passwordProvidedByClient, account.EcPublicAccountLogKey);
 #endif
@@ -503,14 +501,13 @@ namespace StopGuessing.Controllers
                     // We actually have two data structures for catching this: A large sketch of clientsIpHistory/account/password triples and a
                     // tiny LRU cache of recent failed passwords for this account.  We'll check both.
 
-                    if (account.RecentIncorrectPhase2Hashes.Contains(phase2HashOfProvidedPassword))
+                    if (account.AddIncorrectPhase2Hash(phase2HashOfProvidedPassword))
                     {
                         loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword;
                     }
                     else
                     {
                         loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
-                        account.RecentIncorrectPhase2Hashes.Add(phase2HashOfProvidedPassword);
                         accountChanged = true;
                     }
 
@@ -552,6 +549,12 @@ namespace StopGuessing.Controllers
                     blockScore *= _options.MultiplierIfClientCookieIndicatesPriorSuccessfulLogin_Kappa;
                 if (blockScore > blockingThreshold)
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
+                else
+                {
+                    account?.RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(
+                        loginAttempt.HashOfCookieProvidedByBrowser);
+                    accountChanged = true;
+                }
             }
             
             UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, passwordLadder, passwordFrequency,  ref accountChanged);
@@ -575,7 +578,7 @@ namespace StopGuessing.Controllers
                     await passwordLadder.StepAsync(cancellationToken);
             }
 
-            if (accountChanged)
+            if (accountChanged && account != null)
             {
                 Task backgroundTask = userAccountContext.SaveChangesAsync(account.UsernameOrAccountId, account, new CancellationToken());
             }

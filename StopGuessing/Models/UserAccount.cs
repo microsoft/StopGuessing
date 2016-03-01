@@ -13,24 +13,24 @@ namespace StopGuessing.Models
         /// <summary>
         /// A string that uniquely identifies the account.
         /// </summary>
-        public string UsernameOrAccountId { get; set; }
+        public string UsernameOrAccountId { get; protected set; }
 
         /// <summary>
         /// The salt is a random unique sequence of bytes that is included when the password is hashed (phase 1 of hashing)
         /// to ensure that attackers who might obtain the set of account hashes cannot hash a password once and then compare
         /// the hash against every account.
         /// </summary>
-        public byte[] SaltUniqueToThisAccount { get; set; }
+        public byte[] SaltUniqueToThisAccount { get; protected set; }
 
         /// <summary>
         /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
         /// </summary>
-        public string PasswordHashPhase1FunctionName { get; set; } = ExpensiveHashFunctionFactory.DefaultFunctionName;
+        public string PasswordHashPhase1FunctionName { get; protected set; } = ExpensiveHashFunctionFactory.DefaultFunctionName;
 
         /// <summary>
         /// The number of iterations to use for the phase 1 hash to make it more expensive.
         /// </summary>
-        public int NumberOfIterationsToUseForPhase1Hash { get; set; } = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
+        public int NumberOfIterationsToUseForPhase1Hash { get; protected set; } = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
 
         /// <summary>
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
@@ -38,7 +38,7 @@ namespace StopGuessing.Models
         /// </summary>
 //public ECDiffieHellmanPublicKey EcPublicAccountLogKey { get; set; }
 #if !Simulation
-        public byte[] EcPublicAccountLogKey { get; set; }
+        public byte[] EcPublicAccountLogKey { get; protected set; }
 
         /// <summary>
         /// The EC private symmetricKey encrypted with phase 1 (expensive) hash of the password
@@ -50,20 +50,20 @@ namespace StopGuessing.Models
         /// then hasing that Phase1 hash (this time without the salt) using SHA256 so as to make it unnecessary to store the
         /// phase1 hash in this record.  Doing so allows the Phase1 hash to be used as a symmetric encryption symmetricKey for the log. 
         /// </summary>
-        public string PasswordHashPhase2 { get; set; }
+        public string PasswordHashPhase2 { get; protected set; }
 
         /// <summary>
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
         /// that have successfully logged into this account.
         /// </summary>
-        public SmallCapacityConstrainedSet<string> HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
+        protected SmallCapacityConstrainedSet<string> HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
 
         ///// <summary>
         ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 
         ///// </summary>
         //public Sequence<LoginAttempt> PasswordVerificationFailures { get; set; }
 
-        public SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
+        protected SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
 
         /// <summary>
         /// The account's credit limit for offsetting penalties for IP addresses from which
@@ -75,7 +75,7 @@ namespace StopGuessing.Models
         /// A decaying double with the amount of credits consumed against the credit limit
         /// used to offset IP blocking penalties.
         /// </summary>
-        public DoubleThatDecaysWithTime ConsumedCredits { get; set; }
+        protected DoubleThatDecaysWithTime ConsumedCredits { get; set; }
 
 #if Simulation
         public DoubleThatDecaysWithTime[] ConsumedCreditsForSimulation;
@@ -98,6 +98,8 @@ namespace StopGuessing.Models
         {
             return Convert.ToBase64String(ManagedSHA256.Hash(phase1Hash));
         }
+
+        public bool AddIncorrectPhase2Hash(string phase2Hash) => RecentIncorrectPhase2Hashes.Add(phase2Hash);
 
         /// <summary>
         /// Sets the password of a user.
@@ -202,6 +204,16 @@ namespace StopGuessing.Models
         }
 #endif
 
+        public bool HasDeviceWithThisHashedCookieSuccessfullyLoggedInBefore(string hashofCookie) =>
+                HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashofCookie);
+
+        public bool HasDeviceWithThisCookieSuccessfullyLoggedInBefore(string cookie) =>
+                HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(LoginAttempt.HashCookie(cookie));
+
+        public void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie)
+        {
+            HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
+        }
 
         public double TryGetCredit(double amountRequested, DateTime timeOfRequestUtc)
         {

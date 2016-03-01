@@ -131,8 +131,7 @@ namespace Simulator
                         "PBKDF2_SHA256",
                         experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations);
                     foreach (string cookie in simAccount.Cookies)
-                        account.HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(
-                            LoginAttempt.HashCookie(cookie));
+                        account.HasDeviceWithThisCookieSuccessfullyLoggedInBefore(cookie);
                     await accountContextFactory.Get().WriteNewAsync(account.UsernameOrAccountId, account, cancelToken);
                 },
                 cancellationToken: cancellationToken);
