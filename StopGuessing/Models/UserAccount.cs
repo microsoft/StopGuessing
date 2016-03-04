@@ -7,6 +7,8 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
+
+
     public class UserAccount : IDisposable
     {
 
@@ -36,7 +38,6 @@ namespace StopGuessing.Models
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
         /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private symmetricKey.
         /// </summary>
-//public ECDiffieHellmanPublicKey EcPublicAccountLogKey { get; set; }
 #if !Simulation
         public byte[] EcPublicAccountLogKey { get; protected set; }
 
@@ -56,20 +57,18 @@ namespace StopGuessing.Models
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
         /// that have successfully logged into this account.
         /// </summary>
-        protected SmallCapacityConstrainedSet<string> HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
+        protected SmallCapacityConstrainedSet<string> HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
 
         ///// <summary>
         ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 
         ///// </summary>
-        //public Sequence<LoginAttempt> PasswordVerificationFailures { get; set; }
-
         protected SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
 
         /// <summary>
         /// The account's credit limit for offsetting penalties for IP addresses from which
         /// the account has logged in successfully.
         /// </summary>
-        public double CreditLimit { get; set; }
+        public double CreditLimit { get; protected set; }
 
         /// <summary>
         /// A decaying double with the amount of credits consumed against the credit limit
@@ -93,8 +92,7 @@ namespace StopGuessing.Models
                 password, SaltUniqueToThisAccount, NumberOfIterationsToUseForPhase1Hash);
         }
 
-
-        public static string ComputerPhase2HashFromPhase1Hash(byte[] phase1Hash)
+        public static string ComputePhase2HashFromPhase1Hash(byte[] phase1Hash)
         {
             return Convert.ToBase64String(ManagedSHA256.Hash(phase1Hash));
         }
@@ -135,13 +133,13 @@ namespace StopGuessing.Models
             // Calculate the Phase2 hash by hasing the phase 1 hash with SHA256.
             // We can store this without revealing the phase 1 hash used to encrypt the EC account log symmetricKey.
             // We can use it to verify whether a provided password is correct
-            PasswordHashPhase2 = ComputerPhase2HashFromPhase1Hash(newPasswordHashPhase1);
+            PasswordHashPhase2 = ComputePhase2HashFromPhase1Hash(newPasswordHashPhase1);
 
 #if !Simulation
             // Store the EC UsernameOrAccountId log symmetricKey encrypted with the phase 1 hash.
             byte[] oldPasswordHashPhase1;
             if (oldPassword != null &&
-                ComputerPhase2HashFromPhase1Hash(oldPasswordHashPhase1 = ComputePhase1Hash(oldPassword)) ==
+                ComputePhase2HashFromPhase1Hash(oldPasswordHashPhase1 = ComputePhase1Hash(oldPassword)) ==
                 PasswordHashPhase2)
             {
                 // If we have a valid old password, Decrypt the private log decryption symmetricKey so we can re-encrypt it
@@ -204,15 +202,12 @@ namespace StopGuessing.Models
         }
 #endif
 
-        public bool HasDeviceWithThisHashedCookieSuccessfullyLoggedInBefore(string hashofCookie) =>
-                HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashofCookie);
+        public bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashofCookie) =>
+                HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashofCookie);
 
-        public bool HasDeviceWithThisCookieSuccessfullyLoggedInBefore(string cookie) =>
-                HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Contains(LoginAttempt.HashCookie(cookie));
-
-        public void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie)
+        public bool RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie)
         {
-            HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
+            return HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
         }
 
         public double TryGetCredit(double amountRequested, DateTime timeOfRequestUtc)
@@ -220,7 +215,6 @@ namespace StopGuessing.Models
             double amountAvailable = CreditLimit - ConsumedCredits.GetValue(timeOfRequestUtc);
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
             ConsumedCredits.Add(amountConsumed, timeOfRequestUtc);
-
             return amountConsumed;
         }
 
@@ -288,7 +282,7 @@ namespace StopGuessing.Models
             {
                 UsernameOrAccountId = usernameOrAccountId,
                 SaltUniqueToThisAccount = saltUniqueToThisAccount,
-                HashesOfDeviceCookiesThatHaveSuccessfullyLoggedIntoThisAccount =
+                HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
                     new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
                 RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack),
                 ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife, 0, currentDateTimeUtc),

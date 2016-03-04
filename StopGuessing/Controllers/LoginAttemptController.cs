@@ -453,12 +453,12 @@ namespace StopGuessing.Controllers
                 // into this account successfully---a very strong indicator that it is a client used by the
                 // legitimate user and not an unknown client performing a guessing attack.
                 loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount =
-                    account.HasDeviceWithThisHashedCookieSuccessfullyLoggedInBefore(loginAttempt.HashOfCookieProvidedByBrowser);
+                    account.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(loginAttempt.HashOfCookieProvidedByBrowser);
 
                 // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
-                // hash of the phase1 hash, which we call the phase 2 hash.
-                string phase2HashOfProvidedPassword =
-                    Convert.ToBase64String(ManagedSHA256.Hash(phase1HashOfProvidedPassword));
+                // hash of the phase1 hash, which we call the phase 2 hash, and use that to compare the provided password
+                // with the correct password.
+                string phase2HashOfProvidedPassword = UserAccount.ComputePhase2HashFromPhase1Hash(phase1HashOfProvidedPassword);
 
                 // To determine if the password is correct, compare the phase2 has we just generated (phase2HashOfProvidedPassword)
                 // with the one generated from the correct password when the user chose their password (account.PasswordHashPhase2).  
