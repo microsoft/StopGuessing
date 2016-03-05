@@ -67,11 +67,12 @@ namespace xUnit_Tests
         public async static Task<UserAccount> CreateTestAccountAsync(TestConfiguration configuration, string usernameOrAccountId, string password,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            UserAccount account = UserAccount.Create(usernameOrAccountId,
-//              configuration.MyBlockingAlgorithmOptions.Conditions.Length,
+            MemoryUserAccount account = new MemoryUserAccount();
+            account.Initialize(usernameOrAccountId,
+              password,
+              //              configuration.MyBlockingAlgorithmOptions.Conditions.Length,
               configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
               configuration.MyBlockingAlgorithmOptions.BlockScoreHalfLife,
-              password,
               numberOfIterationsToUseForPhase1Hash: 1);
             await configuration.MyAccountContextFactory.Get().WriteNewAsync(account.UsernameOrAccountId, account, cancellationToken);
             return account;

@@ -123,11 +123,12 @@ namespace Simulator
                 {
                     if (index % 10000 == 0)
                         _logger.WriteStatus("Created account {0:N0}", index);
-                    UserAccount account = UserAccount.Create(simAccount.UniqueId,
-//                        experimentalConfiguration.BlockingOptions.Conditions.Length,
+                    MemoryUserAccount account = new MemoryUserAccount();
+                    account.Initialize(simAccount.UniqueId,
+                        simAccount.Password,
+                        //                        experimentalConfiguration.BlockingOptions.Conditions.Length,
                         experimentalConfiguration.BlockingOptions.AccountCreditLimit,
                         experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
-                        simAccount.Password,
                         "PBKDF2_SHA256",
                         experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations);
                     foreach (string cookie in simAccount.Cookies)

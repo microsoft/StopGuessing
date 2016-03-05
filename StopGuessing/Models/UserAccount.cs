@@ -2,16 +2,13 @@
 // FIXME remove
 using System;
 using System.Security.Cryptography;
-using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
 
-
-    public class UserAccount : IDisposable
+    public abstract class UserAccount : IDisposable
     {
-
         /// <summary>
         /// A string that uniquely identifies the account.
         /// </summary>
@@ -38,14 +35,13 @@ namespace StopGuessing.Models
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
         /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private symmetricKey.
         /// </summary>
-#if !Simulation
         public byte[] EcPublicAccountLogKey { get; protected set; }
 
         /// <summary>
         /// The EC private symmetricKey encrypted with phase 1 (expensive) hash of the password
         /// </summary>        
         public byte[] EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 { get; private set; }
-#endif
+
         /// <summary>
         /// The Phase2 password hash is the result of hasing the password (and salt) first with the expensive hash function to create a Phase1 hash,
         /// then hasing that Phase1 hash (this time without the salt) using SHA256 so as to make it unnecessary to store the
@@ -54,27 +50,15 @@ namespace StopGuessing.Models
         public string PasswordHashPhase2 { get; protected set; }
 
         /// <summary>
-        /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
-        /// that have successfully logged into this account.
-        /// </summary>
-        protected SmallCapacityConstrainedSet<string> HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
-
-        ///// <summary>
-        ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 
-        ///// </summary>
-        protected SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
-
-        /// <summary>
         /// The account's credit limit for offsetting penalties for IP addresses from which
         /// the account has logged in successfully.
         /// </summary>
-        public double CreditLimit { get; protected set; }
+        public double CreditLimit { get; protected set; } = double.MinValue;
 
         /// <summary>
-        /// A decaying double with the amount of credits consumed against the credit limit
-        /// used to offset IP blocking penalties.
+        /// The half life with which used credits are removed from the system freeing up new credit
         /// </summary>
-        protected DoubleThatDecaysWithTime ConsumedCredits { get; set; }
+        public TimeSpan CreditHalfLife { get; protected set; } = TimeSpan.Zero;
 
 #if Simulation
         public DoubleThatDecaysWithTime[] ConsumedCreditsForSimulation;
@@ -97,7 +81,7 @@ namespace StopGuessing.Models
             return Convert.ToBase64String(ManagedSHA256.Hash(phase1Hash));
         }
 
-        public bool AddIncorrectPhase2Hash(string phase2Hash) => RecentIncorrectPhase2Hashes.Add(phase2Hash);
+        public abstract bool AddIncorrectPhase2Hash(string phase2Hash);
 
         /// <summary>
         /// Sets the password of a user.
@@ -201,20 +185,18 @@ namespace StopGuessing.Models
             }
         }
 #endif
+        public abstract bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashOfCookie);
+        public abstract void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie);
 
-        public bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashofCookie) =>
-                HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashofCookie);
+        public abstract double GetCreditsConsumed(DateTime asOfTimeUtc);
+        public abstract void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc);
 
-        public bool RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie)
-        {
-            return HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
-        }
 
         public double TryGetCredit(double amountRequested, DateTime timeOfRequestUtc)
         {
-            double amountAvailable = CreditLimit - ConsumedCredits.GetValue(timeOfRequestUtc);
+            double amountAvailable = CreditLimit - GetCreditsConsumed(timeOfRequestUtc);
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            ConsumedCredits.Add(amountConsumed, timeOfRequestUtc);
+            ConsumeCredit(amountConsumed, timeOfRequestUtc);
             return amountConsumed;
         }
 
@@ -232,9 +214,11 @@ namespace StopGuessing.Models
 #endif
 
 
-        private const int DefaultSaltLength = 8;
-        private const int DefaultMaxFailedPhase2HashesToTrack = 8;
-        private const int DefaultMaxNumberOfCookiesToTrack = 24;
+        protected const int DefaultSaltLength = 8;
+        protected const int DefaultMaxFailedPhase2HashesToTrack = 8;
+        protected const int DefaultMaxNumberOfCookiesToTrack = 24;
+        protected const int DefaultCreditHalfLifeInHours = 12;
+        protected const double DefaultCreditLimit = 50;
 
         /// <summary>
         /// Create a UserAccount record to match a given username or account id.
@@ -247,59 +231,68 @@ namespace StopGuessing.Models
         /// <param name="saltUniqueToThisAccount">The salt for this account.  If null or not provided, a random salt is generated with length determined
         /// by parameter <paramref name="saltLength"/>.</param>
         /// <param name="currentDateTimeUtc">The current UTC time on the instant this record has been created</param>
-        /// <param name="maxNumberOfCookiesToTrack">This class tracks cookies associated with browsers that have 
-        /// successfully logged into this account.  This parameter, if set, overrides the default maximum number of such cookies to track.</param>
-        /// <param name="maxFailedPhase2HashesToTrack">Phase2hashes of recent failed passwords so that we can avoid counting
-        /// repeat failures with the same incorrect password against a client.</param>
         /// <param name="phase1HashFunctionName">A hash function that is expensive enough to calculate to make offline dictionary attacks 
         /// expensive, but not so expensive as to slow the authentication system to a halt.  If not specified, a default function will be
         /// used.</param>
         /// <param name="saltLength">If <paramref name="saltUniqueToThisAccount"/>is not specified or null, the constructor will create
         /// a random salt of this length.  If this length is not specified, a default will be used.</param>
-        public static UserAccount Create(string usernameOrAccountId,
+        protected void Initialize(
+            string usernameOrAccountId = null,
 #if Simulation
             int numberOfConditions,
 #endif
-            double creditLimit,
-            TimeSpan creditHalfLife,
             string password = null,
-            string phase1HashFunctionName = ExpensiveHashFunctionFactory.DefaultFunctionName,
-            int numberOfIterationsToUseForPhase1Hash = ExpensiveHashFunctionFactory.DefaultNumberOfIterations,
+            double creditLimit = double.NaN,
+            TimeSpan? creditHalfLife = null,
+            string phase1HashFunctionName = null,
+            int numberOfIterationsToUseForPhase1Hash = 0,
             byte[] saltUniqueToThisAccount = null,
             DateTime? currentDateTimeUtc = null,
-            int maxNumberOfCookiesToTrack = DefaultMaxNumberOfCookiesToTrack,
-            int maxFailedPhase2HashesToTrack = DefaultMaxFailedPhase2HashesToTrack,
             int saltLength = DefaultSaltLength)
         {
+            // Set values if specified.
+            // If no field value specified, and the data structure's field is not yet initialized to a valid value,
+            // then set it to the default value.
+            if (usernameOrAccountId != null && usernameOrAccountId != UsernameOrAccountId)
+                UsernameOrAccountId = usernameOrAccountId;
+            
+            if (!double.IsNaN(creditLimit) )
+                CreditLimit = creditLimit;
+            else if (CreditLimit < 0)
+                CreditLimit = DefaultCreditLimit;
+            
+            if (creditHalfLife.HasValue)
+                CreditHalfLife = creditHalfLife.Value;
+            else if (CreditHalfLife == TimeSpan.Zero)
+                CreditHalfLife = new TimeSpan(DefaultCreditHalfLifeInHours, 0, 0);
 
-            if (saltUniqueToThisAccount == null)
+            if (saltUniqueToThisAccount != null)
             {
-                saltUniqueToThisAccount = new byte[DefaultSaltLength];
-                StrongRandomNumberGenerator.GetBytes(saltUniqueToThisAccount);
+                SaltUniqueToThisAccount = saltUniqueToThisAccount;
+            }
+            else if (SaltUniqueToThisAccount == null)
+            {
+                SaltUniqueToThisAccount = new byte[saltLength];
+                StrongRandomNumberGenerator.GetBytes(SaltUniqueToThisAccount);
             }
 
-            UserAccount newAccount = new UserAccount
-            {
-                UsernameOrAccountId = usernameOrAccountId,
-                SaltUniqueToThisAccount = saltUniqueToThisAccount,
-                HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                    new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack),
-                RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack),
-                ConsumedCredits = new DoubleThatDecaysWithTime(creditHalfLife, 0, currentDateTimeUtc),
-                CreditLimit = creditLimit,
-                PasswordHashPhase1FunctionName = phase1HashFunctionName,
-                NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash
+            if (phase1HashFunctionName != null)
+                PasswordHashPhase1FunctionName = phase1HashFunctionName;
+            else if (PasswordHashPhase1FunctionName == null)
+                PasswordHashPhase1FunctionName = ExpensiveHashFunctionFactory.DefaultFunctionName;
+
+            if (numberOfIterationsToUseForPhase1Hash > 0)
+                NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForPhase1Hash;
+            else if (NumberOfIterationsToUseForPhase1Hash == 0)
+                NumberOfIterationsToUseForPhase1Hash = ExpensiveHashFunctionFactory.DefaultNumberOfIterations;
+
 #if Simulation
         , ConsumedCreditsForSimulation = new DoubleThatDecaysWithTime[numberOfConditions]
 #endif
-    };
 
             if (password != null)
-            {
-                newAccount.SetPassword(password);
-            }
+                SetPassword(password);
 
-            return newAccount;
         }
 
         public virtual void Dispose()
