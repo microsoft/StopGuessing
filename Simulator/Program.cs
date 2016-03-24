@@ -22,13 +22,13 @@ namespace Simulator
                 // Scale of test
                 config.AttackersStrategy = ExperimentalConfiguration.AttackStrategy.BreadthFirst;
                 config.PopularPasswordsToRemoveFromDistribution = 0;
-                config.FractionOfBenignIPsBehindProxies = 0;// 0.1d;
-                config.FractionOfMaliciousIPsToOverlapWithBenign = 0; //0.01d; // 0.1;
+                config.FractionOfBenignIPsBehindProxies = 0;//0.1d;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = 0;//0.01d; // 0.1;
 
-                config.BlockingOptions.PopularityBasedPenaltyMultiplier_h = (binomialLadder, frequency) =>
+                config.BlockingOptions.PopularityBasedPenaltyMultiplier_phi = (keyHeight, ladderHeight, frequency) =>
                     frequency.Proportion.Numerator > 0 ? 5 : 1;
 
-                config.BlockingOptions.PopularityBasedThresholdMultiplier_T_multiplier = (binomialLadder, frequency) =>
+                config.BlockingOptions.PopularityBasedThresholdMultiplier_T_multiplier = (keyHeight, ladderHeight, frequency) =>
                     frequency.Proportion.Numerator > 0 ? 1 : 100;
 
                 //ulong totalLoginAttempts = Billion;
@@ -41,10 +41,10 @@ namespace Simulator
                 //double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 //double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
-                ulong totalLoginAttempts = 10 * Million; // 2.5m // 500 * Thousand; // * Million;
+                ulong totalLoginAttempts = 5 * Million; // 2.5m // 500 * Thousand; // * Million;
                 config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
-                double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
-                double meanNumberOfLoginsPerAttackerControlledIP = 100d;
+                double meanNumberOfLoginsPerBenignAccountDuringExperiment = 100d;
+                double meanNumberOfLoginsPerAttackerControlledIP = 1000d;
 
 
                 config.OutputPath = @"e:\";
@@ -84,7 +84,7 @@ namespace Simulator
 
                 // Blocking parameters
                 // Make typos almost entirely ignored
-                config.BlockingOptions.NumberOfRungsInBinomialLadder_K = 48;
+                config.BlockingOptions.HeightOfBinomialLadder_H = 48;
                 config.BlockingOptions.NumberOfElementsInBinomialLadderSketch_N = 1 << 29;
                 config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
                 //config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 10d;
