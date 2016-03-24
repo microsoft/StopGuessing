@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ namespace StopGuessing.DataStructures
     {
         private readonly double[] _probabilityExactlyThisManySetByChance;
         private readonly double[] _probabilityThisManyOrFewerSetByChance;
+
+        public double this[int index] => _probabilityExactlyThisManySetByChance[index];
 
         public double ProbabilityThisManySetByChance(int howMany)
         {

@@ -12,13 +12,13 @@ namespace StopGuessing.Models
         public SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos;
 
         public double GetThresholdAdjustedScore(double popularityOfPassword, bool hasCookieProvingPriorLogin,
-            ILadder ladder, IUpdatableFrequency frequency, DateTime timeOfAttemptUtc)
+            int keyHeight, int ladderHeight, IUpdatableFrequency frequency, DateTime timeOfAttemptUtc)
         {
             double score = Score.GetValue(timeOfAttemptUtc);
             if (hasCookieProvingPriorLogin && Condition.RewardsClientCookies)
                 score = 0;
             else if (Condition.ProtectsAccountsWithPopularPasswords)
-                score /= Condition.Options.PopularityBasedThresholdMultiplier_T_multiplier(ladder, frequency);
+                score /= Condition.Options.PopularityBasedThresholdMultiplier_T_multiplier(keyHeight, ladderHeight, frequency);
             if (double.IsNaN(score))
             {
                 //FIXME

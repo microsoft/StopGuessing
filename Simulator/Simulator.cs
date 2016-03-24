@@ -122,7 +122,7 @@ namespace Simulator
             
             _logger.WriteStatus("Creating binomial ladder");
             BinomialLadderSketch localPasswordBinomialLadderSketch =
-                new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.NumberOfRungsInBinomialLadder_K);
+                new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
             MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
                 new MultiperiodFrequencyTracker<string>(
                     options.NumberOfPopularityMeasurementPeriods,

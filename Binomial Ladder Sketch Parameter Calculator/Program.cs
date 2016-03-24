@@ -207,6 +207,7 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
             StreamWriter writer = new StreamWriter(basePath + "params_" + k + "_" + Math.Round(1/f_c) + "=" + Math.Round(1/f_u) + ".csv");
             BinomialLadderParameters blp =
                 new BinomialLadderParameters(writer, k, k-4, f_c, f_u);
+            
             Tuple<string, double, bool>[] Probabilities = new Tuple<string, double, bool>[]
             {
                 //new Tuple<string, double, bool>("DOneInFiftyMillionAny", f_u, true),

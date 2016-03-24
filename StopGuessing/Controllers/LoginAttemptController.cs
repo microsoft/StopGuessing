@@ -113,9 +113,7 @@ namespace StopGuessing.Controllers
         public async Task PrimeCommonPasswordAsync(string passwordToTreatAsFrequent,
             int numberOfTimesToPrime,
             CancellationToken cancellationToken = default(CancellationToken))
-        {
-            ILadder ladder = await _binomialLadderSketch.GetLadderAsync(passwordToTreatAsFrequent, cancellationToken: cancellationToken);
-
+        {            
             string easyHashOfPassword =
                 Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordToTreatAsFrequent)));
             IUpdatableFrequency frequencies = await _incorrectPasswordFrequenciesProvider.GetFrequencyAsync(
@@ -124,7 +122,7 @@ namespace StopGuessing.Controllers
 
             for (int i = 0; i < numberOfTimesToPrime; i++)
             {
-                await ladder.StepAsync(cancellationToken);
+                await _binomialLadderSketch.StepAsync(passwordToTreatAsFrequent, cancellationToken: cancellationToken);
                 await frequencies.RecordObservationAsync(cancellationToken: cancellationToken);
             }
         }
@@ -240,18 +238,18 @@ namespace StopGuessing.Controllers
 
         protected void UpdateBlockScore(DoubleThatDecaysWithTime currentBlockScore,
             SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
-            LoginAttempt loginAttempt, UserAccount account, ILadder ladder, IUpdatableFrequency frequency, ref bool accountChanged)
+            LoginAttempt loginAttempt, UserAccount account, int keyHeight, int ladderHeight, IUpdatableFrequency frequency, ref bool accountChanged)
         {
             switch (loginAttempt.Outcome)
             {
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
                     double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
-                                     _options.PopularityBasedPenaltyMultiplier_phi(ladder, frequency);
+                                     _options.PopularityBasedPenaltyMultiplier_phi(keyHeight, ladderHeight, frequency);
                     currentBlockScore.Add(invalidAccontPenalty, loginAttempt.TimeOfAttemptUtc);
                     return;
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                     double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta *
-                                    _options.PopularityBasedPenaltyMultiplier_phi(ladder,frequency);
+                                    _options.PopularityBasedPenaltyMultiplier_phi(keyHeight, ladderHeight, frequency);
                     currentBlockScore.Add(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc);
                     if (account != null)
                     {
@@ -391,8 +389,7 @@ namespace StopGuessing.Controllers
                 cancellationToken);
 
             // Get a binomial ladder to estimate if the password is common
-            Task<ILadder> binomialLadderTask = _binomialLadderSketch.GetLadderAsync(passwordProvidedByClient,
-                cancellationToken: cancellationToken);
+            Task<int> passwordsHeightOnBinomialLadderTask = _binomialLadderSketch.GetHeightAsync(passwordProvidedByClient, cancellationToken: cancellationToken);
 
             // Get a more-accurate count of the passwords' frequency if it is already known to be common
             string easyHashOfPassword =
@@ -517,17 +514,15 @@ namespace StopGuessing.Controllers
 
             // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
             // as we are most concerned about frequently-guessed passwords.
-            ILadder passwordLadder = await binomialLadderTask;
-            int ladderRungsWithConfidence = passwordLadder.CountObservationsForGivenConfidence(_options.PopularityConfidenceLevel);
-
+            int passwordsHeightOnBinomialLadder = await passwordsHeightOnBinomialLadderTask;
+            
             IUpdatableFrequency passwordFrequency = await passwordFrequencyTask;
             double trackedPopularity = passwordFrequency.Proportion.AsDouble;
-            double popularityOfPasswordAmongIncorrectPasswords = Math.Max((double)ladderRungsWithConfidence / (10d * 1000d), trackedPopularity);
 
             // When there's little data, we want to make sure the popularity is not overstated because           
             // (e.g., if we've only seen 10 account failures since we started watching, it would not be
             //  appropriate to conclude that something we've seen once before represents 10% of likely guesses.)
-            loginAttempt.PasswordsPopularityAmongFailedGuesses = popularityOfPasswordAmongIncorrectPasswords;
+            loginAttempt.PasswordsPopularityAmongFailedGuesses = trackedPopularity;
 
             IpHistory ip = await ipHistoryGetTask;
 #if Simulation
@@ -542,7 +537,8 @@ namespace StopGuessing.Controllers
                 // We only need to decide whether to block if the credentials provided were valid.
                 // We'll get the blocking threshold, blocking condition, and block if the condition exceeds the threshold.
                 double blockingThreshold = _options.BlockThresholdPopularPassword_T_base *
-                    _options.PopularityBasedThresholdMultiplier_T_multiplier(passwordLadder, passwordFrequency);
+                    _options.PopularityBasedThresholdMultiplier_T_multiplier(passwordsHeightOnBinomialLadder, 
+                    _options.HeightOfBinomialLadder_H, passwordFrequency);
                 double blockScore = ip.CurrentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc);
                 // If the client provided a cookie proving a past successful login, we'll ignore the block condition
                 if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
@@ -557,7 +553,8 @@ namespace StopGuessing.Controllers
                 }
             }
             
-            UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, passwordLadder, passwordFrequency,  ref accountChanged);
+            UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, passwordsHeightOnBinomialLadder,
+                _options.HeightOfBinomialLadder_H, passwordFrequency,  ref accountChanged);
 #if Simulation
             SimUpdateBlockScores(ip.SimulationConditions, loginAttempt, account, passwordLadder, passwordFrequency, ref accountChanged);
 #endif
@@ -566,7 +563,7 @@ namespace StopGuessing.Controllers
             {
                 if (trackedPopularity > 0 ||
                     // FIXME with configuration values
-                    passwordLadder.HeightOfKeyInRungs == passwordLadder.HeightOfLadderInRungs)
+                    passwordsHeightOnBinomialLadder == _options.HeightOfBinomialLadder_H)
                 {
                     // FIXME
                     //Task background1 = 
@@ -575,7 +572,7 @@ namespace StopGuessing.Controllers
 
                 // FIXME
                 //Task background2 = 
-                    await passwordLadder.StepAsync(cancellationToken);
+                    await _binomialLadderSketch.StepAsync(passwordProvidedByClient, cancellationToken: cancellationToken);
             }
 
             if (accountChanged && account != null)

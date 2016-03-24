@@ -80,25 +80,30 @@ namespace StopGuessing.DataStructures
                     char yChar = ystr[y - 1];
 
                     // The default cost is to substitute the character that's supposed to be here
-                    // with anotehr character
+                    // with another character
                     float cost = costMatrix[x - 1, y - 1] + costs.Substitute;
 
                     if (xChar == yChar)
+                    {
                         // The two current characters match
                         cost = Math.Min(cost, costMatrix[x - 1, y - 1]);
-                    else if (Char.ToLower(xChar) == Char.ToLower(yChar))
+                    } else if (char.ToLower(xChar) == char.ToLower(yChar))
+                    {
                         // The characters match if case insensitive
-                        cost = Math.Min(cost, costMatrix[x - 1, y - 1] + costs.CaseChange);                    
+                        cost = Math.Min(cost, costMatrix[x - 1, y - 1] + costs.CaseChange);
+                    }
 
                     // Cost of deletion
                     cost = Math.Min(cost, costMatrix[x - 1, y] + costs.Delete);
                     
                     // Cost of addition
-                    cost = Math.Min(cost, costMatrix[x, y - 1] + costs.Add);            
+                    cost = Math.Min(cost, costMatrix[x, y - 1] + costs.Add);
 
                     if (x >= 2 && y >= 2 && xstr[x - 2] == yChar && ystr[y - 2] == xChar)
+                    {
                         // Transposition
                         cost = Math.Min(cost, costMatrix[x - 2, y - 2] + costs.Transpose);
+                    }
 
                     costMatrix[x,y] = cost;
                 }

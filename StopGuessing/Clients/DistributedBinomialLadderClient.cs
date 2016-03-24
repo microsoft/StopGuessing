@@ -4,116 +4,70 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using StopGuessing.DataStructures;
+using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
 
 namespace StopGuessing.Clients
 {
 
-
     public class DistributedBinomialLadderClient : IBinomialLadderSketch
     {
-        /// <summary>
-        /// The number of hosts to distribute a ladder over
-        /// </summary>
-        public int HostsPerLadder;
+        public readonly int NumberOfVirtualNodes;
+        protected UniversalHashFunction VirtualNodeHash;
+        public IDistributedResponsibilitySet<RemoteHost> VirtualNodeToHostMapping;
 
-        /// <summary>
-        /// The number of rungs that each key's ladder should have
-        /// </summary>
-        public int HeightOfLadderInRungs;
-
-        public class RemoteRungNotYetClimbed
+        public DistributedBinomialLadderClient(int numberOfVirtualNodes, IDistributedResponsibilitySet<RemoteHost> virtualNodeToHostMapping,  string configurationKey)
         {
-            public RemoteHost Host;
-            public int Index;
-
-            public RemoteRungNotYetClimbed(RemoteHost host, int index)
-            {
-                Host = host;
-                Index = index;
-            }
+            NumberOfVirtualNodes = numberOfVirtualNodes;
+            VirtualNodeHash = new UniversalHashFunction(configurationKey);
+            VirtualNodeToHostMapping = virtualNodeToHostMapping;
+        }
+        public int GetRandomVirtualNode()
+        {
+            return (int)StrongRandomNumberGenerator.Get32Bits(NumberOfVirtualNodes);
         }
 
-        private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
-
-        public async Task<ILadder> GetLadderAsync(string key,
-            TimeSpan? timeout = null, 
-            CancellationToken cancellationToken = default(CancellationToken))
+        public void ClearRandomElement(int? virtualNode = null)
         {
-            List<RemoteHost> hosts = _responsibleHosts.FindMembersResponsible(key, HostsPerLadder);
-            int rungsPerHost = HeightOfLadderInRungs / hosts.Count;
-            ConcurrentBag<RemoteRungNotYetClimbed> rungsNotYetClimbed = new ConcurrentBag<RemoteRungNotYetClimbed>();
-            int rungsCalculated = 0;
-            object rungLock = new object();
+            int virtualNodeForClear = virtualNode ?? GetRandomVirtualNode();
+            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNodeForClear.ToString());
+            RestClientHelper.PostBackground(host.Uri, "/api/DistributedBinomialLadderSketch/ClearRandomElement/" + virtualNodeForClear);
+        }
 
-            await TaskParalllel.ForEachWithWorkers(hosts,
-                async (host, itemNumber, iterationCancellationToken) =>
-                {
-                    int[] indexesOfRungsNotYetClimbed = await RestClientHelper.GetAsync<int[]>(
-                        host.Uri,
-                        "BinomialLadder/" + Microsoft.Framework.WebEncoders.UrlEncoder.Default.UrlEncode(key),
-                        new[]
+        public void SetRandomElement(int? virtualNode = null)
+        {
+            int virtualNodeForSet = virtualNode ?? GetRandomVirtualNode();
+            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNodeForSet.ToString());
+            RestClientHelper.PostBackground(host.Uri, "/api/DistributedBinomialLadderSketch/SetRandomElement/" + virtualNodeForSet);
+        }
+
+        public async Task<int> StepAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null, CancellationToken cancellationToken = new CancellationToken())
+        {
+            int virtualNode = GetVirtualNodeForKey(key);
+            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNode.ToString());
+            return await RestClientHelper.PostAsync<int>(host.Uri, "/api/DistributedBinomialLadderSketch/Key/" + Uri.EscapeUriString(key), 
+                timeout: timeout, cancellationToken: cancellationToken, 
+                parameters: (!heightOfLadderInRungs.HasValue) ? null : new object[]
                         {
-                            new KeyValuePair<string, string>("numberOfRungs", rungsPerHost.ToString())
-                        },
-                        timeout: timeout, cancellationToken: cancellationToken);
-                    foreach (int indexOfRungNotYetClimbed in indexesOfRungsNotYetClimbed)
-                        rungsNotYetClimbed.Add(new RemoteRungNotYetClimbed(host, indexOfRungNotYetClimbed));
-                    lock (rungLock)
-                    {
-                        rungsCalculated += rungsPerHost;
-                    }
-                },
-                //(e, exceptionCancellationToken) =>
-                //{
-                //    // FIXME -- what to do with exceptions?
-                //}, 
-                cancellationToken: cancellationToken);
-
-            return new DistributedBinomialLadder(rungsNotYetClimbed, rungsCalculated);
+                            new KeyValuePair<string, int>("heightOfLadderInRungs", heightOfLadderInRungs.Value)
+                        } );
         }
+        public int GetVirtualNodeForKey(string key)
+            => (int) (VirtualNodeHash.Hash(key)%(uint) NumberOfVirtualNodes);
 
-        protected static async Task StepAsync(RemoteRungNotYetClimbed rungToClimb, CancellationToken cancellationToken = default(CancellationToken))
+
+        public async Task<int> GetHeightAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null, CancellationToken cancellationToken = new CancellationToken())
         {
-            await RestClientHelper.PutAsync(
-                   rungToClimb.Host.Uri,
-                   "BinomialLadderRung/" + rungToClimb.Index,
-                   "1",
-                   cancellationToken: cancellationToken);
+            int virtualNode = GetVirtualNodeForKey(key);
+            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNode.ToString());
+            Task<int> heightTask = RestClientHelper.GetAsync<int>(host.Uri, "/api/DistributedBinomialLadderSketch/Key/" + Uri.EscapeUriString(key), cancellationToken: cancellationToken,
+                uriParameters: (!heightOfLadderInRungs.HasValue) ? null :  new KeyValuePair<string,string>[]
+                        {
+                            new KeyValuePair<string, string>("heightOfLadderInRungs", heightOfLadderInRungs.Value.ToString())
+                        } );
+            return await heightTask;
         }
 
-
-        public DistributedBinomialLadderClient(IDistributedResponsibilitySet<RemoteHost> responsibleHosts,
-            int hostsPerLadder,
-            int heightOfLadderInRungs)
-        {
-            _responsibleHosts = responsibleHosts;
-            HostsPerLadder = hostsPerLadder;
-            HeightOfLadderInRungs = heightOfLadderInRungs;
-        }
-
-
-        public class DistributedBinomialLadder : BinomialLadder<RemoteRungNotYetClimbed>
-        {
-            public DistributedBinomialLadder(IEnumerable<RemoteRungNotYetClimbed> rungsNotYetClimbed, int heightOfLadderInRungs) : base(rungsNotYetClimbed, heightOfLadderInRungs)
-            {
-            }
-
-            // ReSharper disable once MemberHidesStaticFromOuterClass
-            protected override async Task StepAsync(RemoteRungNotYetClimbed rungToClimb, CancellationToken cancellationToken = default(CancellationToken))
-            {
-                await DistributedBinomialLadderClient.StepAsync(rungToClimb, cancellationToken);
-            }
-
-
-            // ReSharper disable once MemberHidesStaticFromOuterClass
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-            protected override async Task StepOverTopAsync(CancellationToken cancellationToken = default(CancellationToken))
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-            {
-                // FIXME
-            }
-
-        }
     }
+
 }

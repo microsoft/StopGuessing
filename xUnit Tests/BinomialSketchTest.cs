@@ -13,7 +13,7 @@ namespace xUnit_Tests
             BinomialLadderSketch sketch = new BinomialLadderSketch(1024*1024*1024, 64);
             string somethingToObserve = "Gosh.  It's a nice day out, isn't it?";
 
-            int observationCount = sketch.GetLadder(somethingToObserve).HeightOfKeyInRungs;
+            int observationCount = sketch.GetHeight(somethingToObserve);
 
             for (int i = 0; i < 25; i++)
             {
@@ -22,12 +22,7 @@ namespace xUnit_Tests
                 observationCount++;
             }
 
-            Assert.Equal(observationCount, sketch.GetLadder(somethingToObserve).HeightOfKeyInRungs);
-
-
-            int minObservationsAtOnePercentConfidence = sketch.GetLadder(somethingToObserve).
-                CountObservationsForGivenConfidence(0.01d);
-            Assert.True(minObservationsAtOnePercentConfidence > 5);
+            Assert.Equal(observationCount, sketch.GetHeight(somethingToObserve));
         }
         
 

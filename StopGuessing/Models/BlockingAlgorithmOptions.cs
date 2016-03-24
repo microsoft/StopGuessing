@@ -28,14 +28,20 @@ namespace StopGuessing.Models
 
     }
 
-    public delegate double PasswordPopularityFunction(ILadder binomialLadder, IUpdatableFrequency frequency);
+    public delegate double PasswordPopularityFunction(int keyHeight, int ladderHeight, IUpdatableFrequency frequency);
 
     public class BlockingAlgorithmOptions
     {
         public int NumberOfRedundantHostsToCacheIPs = 1;
         public int NumberOfRedundantHostsToCachePasswordPopularity = 1;
-        public int NumberOfRungsInBinomialLadder_K = 48;
+        public int HeightOfBinomialLadder_H = 48;
         public int NumberOfElementsInBinomialLadderSketch_N = 1 << 29;
+        public int NumberOfVirtualNodesForDistributedBinomialLadder = 1 << 10;
+
+        public string PrivateConfigurationKey = "ChangeThisToSomethingUniqueForYourEnvironment";
+
+        public int NumberOfElementsPerNodeInBinomialLadderSketch
+            => NumberOfElementsInBinomialLadderSketch_N/NumberOfVirtualNodesForDistributedBinomialLadder;
 
         public int NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos = 8;
 
@@ -73,83 +79,16 @@ namespace StopGuessing.Models
         public double PopularityConfidenceLevel { get; set; } = 0.001d; // 1 in 100,000
 
         public double PhiIfFrequent = 5;
-        public PasswordPopularityFunction PopularityBasedPenaltyMultiplier_phi = (binomialLadder, frequency) =>
+        public PasswordPopularityFunction PopularityBasedPenaltyMultiplier_phi = (keyHeight, ladderHeight, frequency) =>
         {
-            int ladderObservations = binomialLadder.CountObservationsForGivenConfidence(0.001d);
-            double popularity = Math.Max((double) ladderObservations/(10d*1000d), frequency.Proportion.AsDouble);
-            if (popularity > .01d)
-                return 10;
-            else if (popularity > .001d)
-                return 9;
-            else if (popularity > .0001d)
-                return 7;
-            else if (popularity > .00001d)
-                return 5;
-            else if (popularity > .000001d)
-                return 3;
-            return 1;
+            return frequency.Proportion.Numerator > 0 ? 5 : 1;
         };
 
 
-        public PasswordPopularityFunction PopularityBasedThresholdMultiplier_T_multiplier = (binomialLadder, frequency) =>
+        public PasswordPopularityFunction PopularityBasedThresholdMultiplier_T_multiplier = (keyHeight, ladderHeight, frequency) =>
         {
-            if ((frequency.Proportion.AsDouble) > 0)
-            {
-                double popularity = frequency.Proportion.AsDouble;
-                if (popularity > .0001d)
-                    return 1;
-                else if (popularity > .00001d)
-                    return 2;
-                else if (popularity > .000001d)
-                    return 3;
-                return 5;
-            }
-            int midpoint = binomialLadder.HeightOfLadderInRungs/2;
-            int heightOfKey = binomialLadder.HeightOfKeyInRungs;
-            if (heightOfKey <= midpoint)
-                return 100;
-            int heightAboveMidpoint = heightOfKey - midpoint;
-            if (heightAboveMidpoint == 1)
-                return 50;
-            else if (heightAboveMidpoint == 2)
-                return 45;
-            else if (heightAboveMidpoint == 3)
-                return 40;
-            else if (heightAboveMidpoint == 4)
-                return 35;
-            else if (heightAboveMidpoint == 5)
-                return 30;
-            else if (heightAboveMidpoint == 6)
-                return 26;
-            else if (heightAboveMidpoint == 7)
-                return 23;
-            else if (heightAboveMidpoint == 8)
-                return 20;
-            else if (heightAboveMidpoint == 9)
-                return 17;
-            else if (heightAboveMidpoint == 10)
-                return 14;
-            else if (heightAboveMidpoint == 11)
-                return 11;
-            else if (heightAboveMidpoint == 12)
-                return 11;
-            else if (heightAboveMidpoint == 13)
-                return 11;
-            else if (heightAboveMidpoint == 14)
-                return 10;
-            else if (heightAboveMidpoint == 15)
-                return 9;
-            else if (heightAboveMidpoint == 16)
-                return 8;
-            else if (heightAboveMidpoint == 17)
-                return 7.5;
-            else if (heightAboveMidpoint == 16)
-                return 7;
-            return 5;
+            return frequency.Proportion.Numerator > 0 ? 1 : 100;
         };
-
-        //public double ThresholdAtWhichAccountsPasswordIsDeemedPopular { get; set; } = 1d / (100d * 1000d); // default 1 in 100,000
-        //public double BlockThresholdMultiplierForUnpopularPasswords { get; set; } = 20d;
 
 
 

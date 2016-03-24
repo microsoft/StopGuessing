@@ -56,8 +56,7 @@ namespace StopGuessing
             hosts.Add("localhost", localHost);
             services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>(x => hosts);
 
-            BinomialLadderSketch localPasswordBinomialLadderSketch =
-                new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.NumberOfRungsInBinomialLadder_K);
+
             MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
                 new MultiperiodFrequencyTracker<string>(
                     options.NumberOfPopularityMeasurementPeriods,
@@ -75,19 +74,28 @@ namespace StopGuessing
 
             if (hosts.Count > 0)
             {
-                // If running as a distributed system
-                services.AddSingleton<IBinomialLadderSketch, DistributedBinomialLadderClient>(x => 
-                new DistributedBinomialLadderClient(
+                DistributedBinomialLadderClient dblClient = new DistributedBinomialLadderClient(
+                    options.NumberOfVirtualNodesForDistributedBinomialLadder,
                     hosts,
-                    options.NumberOfRedundantHostsToCachePasswordPopularity,
-                    options.NumberOfRungsInBinomialLadder_K));
+                    options.PrivateConfigurationKey);
+                // If running as a distributed system
+                services.AddSingleton<IBinomialLadderSketch, DistributedBinomialLadderClient>(x => dblClient);
+                
+                DistributedBinomialLadderSketchController sketchController =
+                    new DistributedBinomialLadderSketchController(dblClient, options.HeightOfBinomialLadder_H, options.NumberOfElementsPerNodeInBinomialLadderSketch);
+                services.AddSingleton<DistributedBinomialLadderSketchController>(x => sketchController);
+
                 services.AddSingleton<IFrequenciesProvider<string>>(x =>
                     new IncorrectPasswordFrequencyClient(hosts, options.NumberOfRedundantHostsToCachePasswordPopularity));
             }  else
             {
+                BinomialLadderSketch localPasswordBinomialLadderSketch =
+                    new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
                 services.AddSingleton<IBinomialLadderSketch>(x => localPasswordBinomialLadderSketch);
                 services.AddSingleton<IFrequenciesProvider<string>>(x => localPasswordFrequencyTracker);
             }
+
+
 
             services.AddSingleton<LoginAttemptClient>();
             services.AddSingleton<LoginAttemptController>();

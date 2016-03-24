@@ -12,10 +12,14 @@ namespace StopGuessing.DataStructures
 {
     public interface IBinomialLadderSketch
     {
-        Task<ILadder> GetLadderAsync(string key,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default(CancellationToken));
+        Task<int> StepAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null,
+            CancellationToken cancellationToken = new CancellationToken());
+
+        Task<int> GetHeightAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null,
+            CancellationToken cancellationToken = new CancellationToken());
     }
+
+
     /// <summary>
     /// A binomial ladder maps keys to k indexes in an n bit table of bits, which are initially set at random
     /// with a probability 0.5.  Each index represents a rung on a ladder. The indexes set to 1/true are rungs that
@@ -41,28 +45,7 @@ namespace StopGuessing.DataStructures
     /// </summary>
     public class BinomialLadderSketch : IBinomialLadderSketch
     {
-
-        /// <summary>
-        /// The number of hash functions that will index keys to rungs
-        /// </summary>
-        public int MaxLadderHeightInRungs { get; }
-
-        /// <summary>
-        /// The size of the sketch in bits
-        /// </summary>
-        public int TotalNumberOfRungElements => RungElements.Length;
-
-        /// <summary>
-        /// The bits of the array that can be used as rungs of a ladder
-        /// </summary>
-        protected readonly BitArray RungElements;
-
-        /// <summary>
-        /// The hash functions used to index into the sketch to map keys to rungs
-        /// (There is one hash function per rung)
-        /// </summary>
-        protected readonly UniversalHashFunction[] HashFunctionsMappingKeysToRungs;
-
+        public readonly SketchArray Elements;
 
         /// <summary>
         /// Construct a binomial sketch, in which a set of k hash functions (k=MaxLadderHeightInRungs) will map any
@@ -78,87 +61,25 @@ namespace StopGuessing.DataStructures
         /// hash function.  This is typically referred to by the letter k.</param>
         public BinomialLadderSketch(int numberOfRungsInSketch, int maxLadderHeightInRungs)
         {
-            MaxLadderHeightInRungs = maxLadderHeightInRungs;
-
-            // Align on byte boundary to guarantee no less than numberOfRungsInSketch
-            int capacityInBytes = (numberOfRungsInSketch + 7) / 8;
-
-            // Create hash functions for each rung
-            HashFunctionsMappingKeysToRungs = new UniversalHashFunction[maxLadderHeightInRungs];
-            for (int i = 0; i < HashFunctionsMappingKeysToRungs.Length; i++)
-            {
-                HashFunctionsMappingKeysToRungs[i] =
-                    new UniversalHashFunction(64);
-            }
-
-            // Initialize the sketch setting ~half the bits randomly to zero by using the
-            // cryptographic random number generator.
-            byte[] initialSketchValues = new byte[capacityInBytes];
-            StrongRandomNumberGenerator.GetBytes(initialSketchValues);
-            RungElements = new BitArray(initialSketchValues);
+            Elements = new SketchArray(numberOfRungsInSketch, maxLadderHeightInRungs, true);
         }
 
-        /// <summary>
-        /// Map a key to its corresponding rungs (indexes) on the ladder (array).
-        /// </summary>
-        /// <param name="key">The key to be mapped to indexes</param>
-        /// <param name="heightOfLadderInRungs">The number of rungs to get keys for.  If not set,
-        /// uses the MaxLadderHeightInRungs specified in the constructor.</param>
-        /// <returns>The rungs (array indexes) associated with the key</returns>
-        protected IEnumerable<int> GetRungs(byte[] key, int? heightOfLadderInRungs = null)
+        public int GetHeight(string key, int? heightOfLadderInRungs = null)
         {
-
-            byte[] sha256HashOfKey = ManagedSHA256.Hash(key);
-
-            if (heightOfLadderInRungs == null || heightOfLadderInRungs.Value >= HashFunctionsMappingKeysToRungs.Length)
-                return HashFunctionsMappingKeysToRungs.Select(f => (int) (f.Hash(sha256HashOfKey)%(uint) TotalNumberOfRungElements));
-            else
-                return HashFunctionsMappingKeysToRungs.Take(heightOfLadderInRungs.Value).Select(f => (int)(f.Hash(sha256HashOfKey) % (uint)TotalNumberOfRungElements));
+            return Elements.GetElementIndexesForKey(key, heightOfLadderInRungs).Count(rung => Elements[rung]);
         }
 
-        protected IEnumerable<int> GetRungs(string key, int? heightOfLadderInRungs = null)
+        protected int GetRandomIndexWithElementOfDesiredValue(bool desiredValueOfElement)
         {
-            return GetRungs(Encoding.UTF8.GetBytes(key), heightOfLadderInRungs);
-        }
-
-        /// <summary>
-        /// Get the subset of indexes for a given key that map to bits that are not set (a.k.a. 0 or false).
-        /// </summary>
-        /// <param name="key">The key to be mapped to indexes</param>
-        /// <param name="heightOfLadderInRungs">The number of rungs to get keys for.  If not set,
-        /// uses the MaxLadderHeightInRungs specified in the constructor.</param>
-        /// <returns>The rungs (array indexes) associated with the key that are above the position
-        /// of the key on the ladder (the elements at these indexes are set to zero/false).</returns>
-        public IEnumerable<int> GetRungsAbove(string key, int? heightOfLadderInRungs = null)
-        {
-            return GetRungs(key, heightOfLadderInRungs).Where(index => !RungElements[index]);
-        }
-
-
-        public void Step(int? indexOfElementToSetOrNull = null)
-        {
-            int indexOfElementToSet;
-            if (indexOfElementToSetOrNull.HasValue)
-                indexOfElementToSet = indexOfElementToSetOrNull.Value;
-            else
-            {
-                do
-                {
-                    // Iterate through random elements until we find one that is set to one (true) and can be cleared
-                    indexOfElementToSet = (int)(StrongRandomNumberGenerator.Get64Bits((ulong)RungElements.Length));
-                } while (RungElements[indexOfElementToSet] == true);
-            }
-            int indexOfElementToClear;
+            int elementIndex;
+            // Iterate through random elements until we find one that is set to one (true) and can be cleared
             do
             {
-                // Iterate through random elements until we find one that is set to one (true) and can be cleared
-                indexOfElementToClear = (int) (StrongRandomNumberGenerator.Get64Bits((ulong) RungElements.Length));
-            } while (RungElements[indexOfElementToClear] == false);
+                elementIndex = (int)(StrongRandomNumberGenerator.Get64Bits((ulong)Elements.Length));
+            } while (Elements[elementIndex] != desiredValueOfElement);
 
-            RungElements[indexOfElementToSet] = true;
-            RungElements[indexOfElementToClear] = false;
+            return elementIndex;
         }
-
 
         /// <summary>
         /// When one Adds a key to a binomial sketch, a random bit among the subset of k that are currently 0 (false)
@@ -174,69 +95,64 @@ namespace StopGuessing.DataStructures
         /// result is MaxLadderHeightInRungs/2, but will vary with the binomial distribution.</returns>
         public int Step(string key, int? heightOfLadderInRungs = null)
         {
-            // Get a list of indexes that are not yet set
-            List<int> rungsAbove = GetRungsAbove(key, heightOfLadderInRungs).ToList();
+            // Get the set of rungs
+            List<int> rungs = Elements.GetElementIndexesForKey(key, heightOfLadderInRungs).ToList();
+            // Select the subset of rungs that have value zero (that are above the key in the ladder)
+            List<int> rungsAbove = rungs.Where(rung => !Elements[rung]).ToList();
 
-            // We can only update state to record the observation if there is an unset (0) index that we can set (to 1).
-            if (rungsAbove.Count == 0)
-            {
-                Step();
-            }
-            else
-            {
-                // First, pick an index to a zero element at random.
-                int indexToSet = rungsAbove[ (int) (StrongRandomNumberGenerator.Get32Bits((uint) rungsAbove.Count)) ];
+            // Identify an element of the array to set
+            int indexOfElementToSet = (rungsAbove.Count > 0) ?
+                // If there are rungs with value value zero/false (rungs above the key), pick one at random
+                rungsAbove[(int) (StrongRandomNumberGenerator.Get32Bits((uint) rungsAbove.Count))] :
+                // otherwise, pick an element with value zero/false from the entire array
+                GetRandomIndexWithElementOfDesiredValue(false);
 
-                // Next, set the zero element associted with the key and clear a random one element from the entire array
-                Step(indexToSet);
-            }
+            // Identify an index to clear from the entire array (selected from those elements with value 1/true)
+            int indexOfElementToClear = GetRandomIndexWithElementOfDesiredValue(true);
 
-            // The number of bits set to 1/true is the number that were not 0/false.
-            return MaxLadderHeightInRungs - rungsAbove.Count;
-        }
+            // Swap the values of element to be set with the element to be cleared
+            Elements.SwapElements(indexOfElementToSet, indexOfElementToClear);
 
-
-        public BinomialLadder GetLadder(string key, int? heightOfLadderInRungs = null)
-        {
-            int heightOfLadderInRungsOrDefault = heightOfLadderInRungs ?? MaxLadderHeightInRungs;
-            return new BinomialLadder(this, GetRungsAbove(key, heightOfLadderInRungsOrDefault), heightOfLadderInRungsOrDefault);
+            // Return the height of the ladder before the step
+            return rungs.Count - rungsAbove.Count;
         }
 
 #pragma warning disable 1998
-        public async Task<ILadder> GetLadderAsync(string key,
+        public async Task<int> StepAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null,
+            CancellationToken cancellationToken = new CancellationToken())
+            => Step(key, heightOfLadderInRungs);
+
+        public async Task<int> GetHeightAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null,
+            CancellationToken cancellationToken = new CancellationToken()) => GetHeight(key, heightOfLadderInRungs);
 #pragma warning restore 1998
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default(CancellationToken))
+
+        public void ClearRandomElement()
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            return GetLadder(key);
+            Elements.ClearElement((int) StrongRandomNumberGenerator.Get32Bits((uint) Elements.Length));
+        }
+
+        public void SetRandomElement()
+        {
+            Elements.SetElement((int)StrongRandomNumberGenerator.Get32Bits((uint)Elements.Length));
         }
 
 
-        public class BinomialLadder : BinomialLadder<int>
-        {
-            protected BinomialLadderSketch Sketch;
-            public BinomialLadder(BinomialLadderSketch sketch, IEnumerable<int> rungsNotYetClimbed, int heightOfLadderInRungs)
-                : base(rungsNotYetClimbed, heightOfLadderInRungs)
-            {
-                Sketch = sketch;
-            }
 
-#pragma warning disable 1998
-            protected override async Task StepAsync(int rungToClimb, CancellationToken cancellationToken = new CancellationToken())
-#pragma warning restore 1998
+        public static int HeightRequiredForToAchieveConfidenceOfPriorObservations(int heightOfLadderInRungs, double confidenceLevelCommonlyCalledPValue)
+        {
+            BinomialDistribution binomialDistribution = BinomialDistribution.ForCoinFlips(heightOfLadderInRungs);
+            int minRequired = heightOfLadderInRungs + 1;
+            double p = 0;
+            while (minRequired > 0)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                Sketch.Step(rungToClimb);
+                p += binomialDistribution[minRequired - 1];
+                if (p > confidenceLevelCommonlyCalledPValue || minRequired == 0)
+                    break;
+                minRequired--;
             }
-#pragma warning disable 1998
-            protected override async Task StepOverTopAsync(CancellationToken cancellationToken = new CancellationToken())
-#pragma warning restore 1998
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                Sketch.Step();
-            }
+            return minRequired;
         }
 
     }
+
 }
