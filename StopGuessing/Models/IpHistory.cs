@@ -9,20 +9,20 @@ namespace StopGuessing.Models
 
     public class IPReputationData
     {
-        public DoubleThatDecaysWithTime InvalidAccountFrequentlyGuessed;
-        public DoubleThatDecaysWithTime InvalidAccountRarelyGuessed;
-        public DoubleThatDecaysWithTime InvalidPasswordFrequentlyGuessed;
-        public DoubleThatDecaysWithTime InvalidPasswordRarelyGuessed;
+        public DecayingDouble InvalidAccountFrequentlyGuessed;
+        public DecayingDouble InvalidAccountRarelyGuessed;
+        public DecayingDouble InvalidPasswordFrequentlyGuessed;
+        public DecayingDouble InvalidPasswordRarelyGuessed;
 
 
         public double ToScore(BlockingAlgorithmOptions options, DateTime whenUtc)
         {
             double score = 0;
             score += options.PenaltyForInvalidAccount_Alpha*
-                     (InvalidAccountRarelyGuessed.GetValue(whenUtc) +
-                      InvalidAccountFrequentlyGuessed.GetValue(whenUtc) * options.PhiIfFrequent);
-            score += options.PenaltyForInvalidPassword_Beta*InvalidPasswordFrequentlyGuessed.GetValue(whenUtc) +
-                     InvalidPasswordRarelyGuessed;
+                     (InvalidAccountRarelyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc) +
+                      InvalidAccountFrequentlyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc) * options.PhiIfFrequent);
+            score += options.PenaltyForInvalidPassword_Beta * InvalidPasswordFrequentlyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc) +
+                     InvalidPasswordRarelyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc);
 
             return score;
         }
@@ -40,7 +40,7 @@ namespace StopGuessing.Models
         
         public SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos; 
 
-        public DoubleThatDecaysWithTime CurrentBlockScore;
+        public DecayingDouble CurrentBlockScore;
 #if Simulation
         public SimulationConditionIpHistoryState[] SimulationConditions;
 #endif
@@ -52,7 +52,7 @@ namespace StopGuessing.Models
             BlockingAlgorithmOptions options)
         {
             Address = address;
-            CurrentBlockScore = new DoubleThatDecaysWithTime(options.BlockScoreHalfLife, 0, currentDateTimeUtc);
+            CurrentBlockScore = new DecayingDouble(0, currentDateTimeUtc);
 #if Simulation
             SimulationConditions = new SimulationConditionIpHistoryState[options.Conditions.Length];
             for (int i=0; i < SimulationConditions.Length; i++)

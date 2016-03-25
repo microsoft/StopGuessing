@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using StopGuessing.DataStructures;
 
@@ -16,9 +15,9 @@ namespace StopGuessing.Models
 
     public class IncorrectPhaseTwoHash
     {
-        string DbUserAccountId { get; set; }
-        DateTime TimeLastSeen { get; set; }
-        string HashValue { get; set; }
+        public string DbUserAccountId { get; set; }
+        public DateTime TimeLastSeen { get; set; }
+        public string HashValue { get; set; }
     }
 
 
@@ -46,42 +45,52 @@ namespace StopGuessing.Models
         /// A decaying double with the amount of credits consumed against the credit limit
         /// used to offset IP blocking penalties.
         /// </summary>
-        protected DoubleThatDecaysWithTime ConsumedCredits { get; set; }
+        protected double ConsumedCreditsLastValue { get; set; }
+        protected DateTime ConsumedCreditsLastUpdatedUtc { get; set; }
 
-
-
-        public override bool AddIncorrectPhase2Hash(string phase2Hash)
-        {
-            return false; // FIXME
-            //RecentIncorrectPhase2Hashes.Add(phase2Hash);
-        }
 
         public override bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashOfCookie)
         {
-            return SuccessfulLoginCookies.Count( x => x.HashedValue ==  hashOfCookie ) > 0;
+            return SuccessfulLoginCookies.Count( x => x.HashedValue == hashOfCookie ) > 0;
         }
 
-        public override void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie)
+        public override void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null)
         {
-            SuccessfulLoginCookie cookie = SuccessfulLoginCookies.Where(x => x.HashedValue == hashOfCookie).FirstOrDefault();
-            if (cookie == null)
+            SuccessfulLoginCookie cookie = SuccessfulLoginCookies.FirstOrDefault(x => x.HashedValue == hashOfCookie);
+            if (cookie != null)
             {
-                SuccessfulLoginCookies.Add(new SuccessfulLoginCookie {DbUserAccountId = this.DbUserAccountId, HashedValue = hashOfCookie, TimeLastSeen = DateTime.UtcNow});
-                //return false;
+                // The cookie already exists in the history.  Just updated the most-recently-seen time
+                cookie.TimeLastSeen = whenSeenUtc ?? DateTime.UtcNow;
             }
-            else
+            else 
             {
-                cookie.TimeLastSeen = DateTime.UtcNow;
-                //return true;
+                // FIXME -- write cookie to database
+
             }
         }
 
-        public override double GetCreditsConsumed(DateTime asOfTimeUtc) => ConsumedCredits.GetValue(asOfTimeUtc);
+        public override bool AddIncorrectPhase2Hash(string phase2Hash, DateTime? whenSeenUtc = null)
+        {
+            IncorrectPhaseTwoHash incorrectHashRecord = RecentIncorrectPhase2Hashes.FirstOrDefault(x => x.HashValue == phase2Hash);
+            if (incorrectHashRecord != null)
+            {
+                incorrectHashRecord.TimeLastSeen = whenSeenUtc ?? DateTime.UtcNow;
+                return true;
+            }
+            
+            // FIXME write record to database
+
+            return false;
+        }
+
+        public override double GetCreditsConsumed(DateTime asOfTimeUtc) => DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, asOfTimeUtc);
 
         public override void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc)
         {
-            ConsumedCredits.Add(amountConsumed, timeOfConsumptionUtc);
+            ConsumedCreditsLastValue = DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, ConsumedCreditsLastUpdatedUtc, timeOfConsumptionUtc);
+            ConsumedCreditsLastUpdatedUtc = timeOfConsumptionUtc;
         }
+
         /// <summary>
         /// Create a UserAccount record to match a given username or account id.
         /// </summary>
@@ -117,12 +126,10 @@ namespace StopGuessing.Models
         {
             base.Initialize(usernameOrAccountId, password, creditLimit, creditHalfLife, phase1HashFunctionName,
                 numberOfIterationsToUseForPhase1Hash, saltUniqueToThisAccount, currentDateTimeUtc, saltLength);
-
-            HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack);
-            RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack);
-            ConsumedCredits = new DoubleThatDecaysWithTime(CreditHalfLife, 0, currentDateTimeUtc);
+            ConsumedCreditsLastValue = 0;
+            ConsumedCreditsLastUpdatedUtc = currentDateTimeUtc ?? DateTime.UtcNow;
         }
+
 
     }
 }

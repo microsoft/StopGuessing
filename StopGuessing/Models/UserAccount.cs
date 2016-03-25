@@ -81,7 +81,7 @@ namespace StopGuessing.Models
             return Convert.ToBase64String(ManagedSHA256.Hash(phase1Hash));
         }
 
-        public abstract bool AddIncorrectPhase2Hash(string phase2Hash);
+        public abstract bool AddIncorrectPhase2Hash(string phase2Hash, DateTime? whenSeenUtc = null);
 
         /// <summary>
         /// Sets the password of a user.
@@ -186,7 +186,7 @@ namespace StopGuessing.Models
         }
 #endif
         public abstract bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashOfCookie);
-        public abstract void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie);
+        public abstract void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null);
 
         public abstract double GetCreditsConsumed(DateTime asOfTimeUtc);
         public abstract void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc);

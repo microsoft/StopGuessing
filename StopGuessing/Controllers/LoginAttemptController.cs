@@ -214,7 +214,7 @@ namespace StopGuessing.Controllers
                             : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
 
                         // Add this to the list of changed attempts
-                        credit += potentialTypo.Penalty.GetValue(whenUtc)*(1d - _options.PenaltyMulitiplierForTypo);
+                        credit += potentialTypo.Penalty.GetValue(_options.AccountCreditLimitHalfLife, whenUtc)*(1d - _options.PenaltyMulitiplierForTypo);
 
                         // FUTURE -- find and update the login attempt in the background
 
@@ -227,7 +227,7 @@ namespace StopGuessing.Controllers
                     }
                     clientsIpHistory.RecentPotentialTypos.Remove(potentialTypo);
                 }
-                clientsIpHistory.CurrentBlockScore.Add(-credit, whenUtc);
+                clientsIpHistory.CurrentBlockScore.Add(-credit, _options.AccountCreditLimitHalfLife, whenUtc);
             }
             finally
             {
@@ -236,7 +236,7 @@ namespace StopGuessing.Controllers
         }
 
 
-        protected void UpdateBlockScore(DoubleThatDecaysWithTime currentBlockScore,
+        protected void UpdateBlockScore(DecayingDouble currentBlockScore,
             SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
             LoginAttempt loginAttempt, UserAccount account, int keyHeight, int ladderHeight, IUpdatableFrequency frequency, ref bool accountChanged)
         {
@@ -245,18 +245,18 @@ namespace StopGuessing.Controllers
                 case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
                     double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
                                      _options.PopularityBasedPenaltyMultiplier_phi(keyHeight, ladderHeight, frequency);
-                    currentBlockScore.Add(invalidAccontPenalty, loginAttempt.TimeOfAttemptUtc);
+                    currentBlockScore.Add(invalidAccontPenalty, _options.BlockScoreHalfLife, loginAttempt.TimeOfAttemptUtc);
                     return;
                 case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
                     double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta *
                                     _options.PopularityBasedPenaltyMultiplier_phi(keyHeight, ladderHeight, frequency);
-                    currentBlockScore.Add(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc);
+                    currentBlockScore.Add(invalidPasswordPenalty, _options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc);
                     if (account != null)
                     {
                         recentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
                         {
                             EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
-                            Penalty = new DoubleThatDecaysWithTime(currentBlockScore.HalfLife, invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc),
+                            Penalty = new DecayingDouble(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc),
                             UsernameOrAccountId = loginAttempt.UsernameOrAccountId
                         });
                     }
@@ -266,13 +266,13 @@ namespace StopGuessing.Controllers
                     // No penalty
                     return;
                 case AuthenticationOutcome.CredentialsValid:
-                    if (currentBlockScore > 0)
+                    if (currentBlockScore.GetValue(_options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc) > 0)
                     {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma, currentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc));
+                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma, currentBlockScore.GetValue(_options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc));
                         double credit = account.TryGetCredit(desiredCredit, loginAttempt.TimeOfAttemptUtc);
                         if (credit > 0)
                             accountChanged = true;
-                        currentBlockScore.Add(-credit, loginAttempt.TimeOfAttemptUtc);
+                        currentBlockScore.Add(-credit, _options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc);
                     }
                     break;
                 case AuthenticationOutcome.CredentialsValidButBlocked:
@@ -539,7 +539,7 @@ namespace StopGuessing.Controllers
                 double blockingThreshold = _options.BlockThresholdPopularPassword_T_base *
                     _options.PopularityBasedThresholdMultiplier_T_multiplier(passwordsHeightOnBinomialLadder, 
                     _options.HeightOfBinomialLadder_H, passwordFrequency);
-                double blockScore = ip.CurrentBlockScore.GetValue(loginAttempt.TimeOfAttemptUtc);
+                double blockScore = ip.CurrentBlockScore.GetValue(_options.BlockScoreHalfLife, loginAttempt.TimeOfAttemptUtc);
                 // If the client provided a cookie proving a past successful login, we'll ignore the block condition
                 if (loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
                     blockScore *= _options.MultiplierIfClientCookieIndicatesPriorSuccessfulLogin_Kappa;

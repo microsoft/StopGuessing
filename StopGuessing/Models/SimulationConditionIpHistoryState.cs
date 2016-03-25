@@ -8,13 +8,13 @@ namespace StopGuessing.Models
     public class SimulationConditionIpHistoryState
     {
         public SimulationCondition Condition;
-        public DoubleThatDecaysWithTime Score;
+        public DecayingDouble Score;
         public SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos;
 
         public double GetThresholdAdjustedScore(double popularityOfPassword, bool hasCookieProvingPriorLogin,
             int keyHeight, int ladderHeight, IUpdatableFrequency frequency, DateTime timeOfAttemptUtc)
         {
-            double score = Score.GetValue(timeOfAttemptUtc);
+            double score = Score.GetValue(Condition.Options.BlockScoreHalfLife, timeOfAttemptUtc);
             if (hasCookieProvingPriorLogin && Condition.RewardsClientCookies)
                 score = 0;
             else if (Condition.ProtectsAccountsWithPopularPasswords)
@@ -30,7 +30,7 @@ namespace StopGuessing.Models
         public SimulationConditionIpHistoryState(SimulationCondition condition, DateTime? currentDateTimeUtc)
         {
             Condition = condition;
-            Score = new DoubleThatDecaysWithTime(Condition.Options.BlockScoreHalfLife, 0, currentDateTimeUtc);
+            Score = new DecayingDouble(0, currentDateTimeUtc);
             RecentPotentialTypos = !Condition.FixesTypos ? null :
                 new SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(
                     Condition.Options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
@@ -65,7 +65,7 @@ namespace StopGuessing.Models
                         : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
 
                     // Add this to the list of changed attempts
-                    credit += potentialTypo.Penalty.GetValue(whenUtc) * (1d - Condition.Options.PenaltyMulitiplierForTypo);
+                    credit += potentialTypo.Penalty.GetValue(Condition.Options.BlockScoreHalfLife, whenUtc) * (1d - Condition.Options.PenaltyMulitiplierForTypo);
 
                     // FUTURE -- find and update the login attempt in the background
 
@@ -79,7 +79,7 @@ namespace StopGuessing.Models
 
                 RecentPotentialTypos.Remove(potentialTypo);
             }
-            Score.Add(-credit, whenUtc);
+            Score.Add(-credit, Condition.Options.BlockScoreHalfLife, whenUtc);
             return;
         }
     }

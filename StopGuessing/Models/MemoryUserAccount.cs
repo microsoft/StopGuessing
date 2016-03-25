@@ -21,25 +21,24 @@ namespace StopGuessing.Models
         /// A decaying double with the amount of credits consumed against the credit limit
         /// used to offset IP blocking penalties.
         /// </summary>
-        protected DoubleThatDecaysWithTime ConsumedCredits { get; set; }
-
-
-
-        public override bool AddIncorrectPhase2Hash(string phase2Hash) => RecentIncorrectPhase2Hashes.Add(phase2Hash);
+        protected DecayingDouble ConsumedCredits { get; set; }
+        
+        public override bool AddIncorrectPhase2Hash(string phase2Hash, DateTime? whenSeenUtc = null) => 
+            RecentIncorrectPhase2Hashes.Add(phase2Hash);
 
         public override bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashOfCookie) =>
                 HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie);
 
-        public override void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie)
+        public override void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null)
         {
             HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
         }
 
-        public override double GetCreditsConsumed(DateTime asOfTimeUtc) => ConsumedCredits.GetValue(asOfTimeUtc);
+        public override double GetCreditsConsumed(DateTime asOfTimeUtc) => ConsumedCredits.GetValue(CreditHalfLife, asOfTimeUtc);
 
         public override void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc)
         {
-            ConsumedCredits.Add(amountConsumed, timeOfConsumptionUtc);
+            ConsumedCredits.Add(amountConsumed, CreditHalfLife, timeOfConsumptionUtc);
         }
         /// <summary>
         /// Create a UserAccount record to match a given username or account id.
@@ -83,7 +82,7 @@ namespace StopGuessing.Models
             HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
                 new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack);
             RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack);
-            ConsumedCredits = new DoubleThatDecaysWithTime(CreditHalfLife, 0, currentDateTimeUtc);
+            ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc);
         }
 
     }

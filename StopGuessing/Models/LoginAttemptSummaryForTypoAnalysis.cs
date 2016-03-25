@@ -10,7 +10,7 @@ namespace StopGuessing.Models
 {
     public class LoginAttemptSummaryForTypoAnalysis
     {
-        public DoubleThatDecaysWithTime Penalty { get; set; }
+        public DecayingDouble Penalty { get; set; }
 
         public string UsernameOrAccountId { get; set;  }
 
