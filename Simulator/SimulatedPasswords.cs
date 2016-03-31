@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
+using StopGuessing.EncryptionPrimitives;
 
 namespace Simulator
 {
@@ -78,12 +80,15 @@ namespace Simulator
         /// This method will prime the simulator with known-popular passwords so that they are treated
         /// as if the simulator had already observed them (or been configured with them)
         /// </summary>
-        /// <param name="loginAttemptController"></param>
         /// <returns></returns>
-        public async Task PrimeWithKnownPasswordsAsync(LoginAttemptController loginAttemptController)
+        public void PrimeWithKnownPasswordsAsync(BinomialLadderSketch sketch, int numberOfTimesToPrime)
         {
-            await TaskParalllel.ForEachWithWorkers(_passwordsAlreadyKnownToBePopular, async (password, itemNumer, cancelToken) =>
-                await loginAttemptController.PrimeCommonPasswordAsync(password, 100, cancelToken));
+
+            for (int i = 0; i < numberOfTimesToPrime; i++)
+            {
+                Parallel.ForEach(_passwordsAlreadyKnownToBePopular,
+                    (password) => sketch.Step(password));
+            }
         }
 
         /// <summary>

@@ -21,15 +21,15 @@ namespace Simulator
             {
                 // Scale of test
                 config.AttackersStrategy = ExperimentalConfiguration.AttackStrategy.BreadthFirst;
-                config.PopularPasswordsToRemoveFromDistribution = 0;
+                config.PopularPasswordsToRemoveFromDistribution = 10000;
                 config.FractionOfBenignIPsBehindProxies = 0;//0.1d;
                 config.FractionOfMaliciousIPsToOverlapWithBenign = 0;//0.01d; // 0.1;
 
-                config.BlockingOptions.PopularityBasedPenaltyMultiplier_phi = (keyHeight, ladderHeight, frequency) =>
-                    frequency.Proportion.Numerator > 0 ? 5 : 1;
+                //config.BlockingOptions.PopularityBasedPenaltyMultiplier_phi = (keyHeight, ladderHeight, frequency) =>
+                //    frequency.Proportion.Numerator > 0 ? 5 : 1;
 
-                config.BlockingOptions.PopularityBasedThresholdMultiplier_T_multiplier = (keyHeight, ladderHeight, frequency) =>
-                    frequency.Proportion.Numerator > 0 ? 1 : 100;
+                //config.BlockingOptions.PopularityBasedThresholdMultiplier_T_multiplier = (keyHeight, ladderHeight, frequency) =>
+                //    frequency.Proportion.Numerator > 0 ? 1 : 100;
 
                 //ulong totalLoginAttempts = Billion;
                 //config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days

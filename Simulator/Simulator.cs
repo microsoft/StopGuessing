@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,12 +20,17 @@ using StopGuessing.Models;
 namespace Simulator
 {
     public partial class Simulator
-    {      
-        private readonly LoginAttemptController _loginAttemptController;
-        private readonly IUserAccountContextFactory _accountContextFactory;     
-        private readonly ExperimentalConfiguration _experimentalConfiguration;
+    {
+        //private readonly LoginAttemptController _loginAttemptController;
+        //private readonly IUserAccountContextFactory _accountContextFactory;
+        public BinomialLadderSketch _binomialLadderSketch;
+        public AgingMembershipSketch _recentIncorrectPasswords;
+        public SelfLoadingCache<IPAddress, SimIpHistory> _ipHistoryCache;
+        public readonly ExperimentalConfiguration _experimentalConfiguration;
 
-        private readonly TextWriter _outputWriter;
+        private readonly TextWriter _AttackAttemptsWithValidPasswords;
+        private readonly TextWriter _LegitiamteAttemptsWithValidPasswords;
+        private readonly TextWriter _OtherAttempts;
         private readonly DebugLogger _logger;
         private readonly SimulatedPasswords _simPasswords;
         private IpPool _ipPool;
@@ -87,13 +93,13 @@ namespace Simulator
                 }
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
-                TextWriter dataWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "data.txt"));
+                //TextWriter dataWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "data.txt"));
                 TextWriter errorWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "error.txt"));
                 DebugLogger logger = new DebugLogger(errorWriter);
                 try
                 {
                     SimulatedPasswords simPasswords = new SimulatedPasswords(logger, config);
-                    Simulator simulator = new Simulator(logger, dataWriter, config, simPasswords);
+                    Simulator simulator = new Simulator(logger, path, config, simPasswords);
                     await simulator.Run();
                 }
                 catch (Exception e)
@@ -110,33 +116,47 @@ namespace Simulator
             }
         }
 
-        public Simulator(DebugLogger logger, TextWriter outputWriter, ExperimentalConfiguration myExperimentalConfiguration, SimulatedPasswords simPasswords)
+        public void ReduceMemoryUsage(object sender, MemoryUsageLimiter.ReduceMemoryUsageEventParameters parameters)
         {
-            _outputWriter = outputWriter;
+            _ipHistoryCache.RecoverSpace(parameters.FractionOfMemoryToTryToRemove);
+        }
+
+        public Simulator(DebugLogger logger, string path, ExperimentalConfiguration myExperimentalConfiguration, SimulatedPasswords simPasswords)
+        {
+            
             _simPasswords = simPasswords;
             _logger = logger;
-
+            _AttackAttemptsWithValidPasswords = System.IO.TextWriter.Synchronized(new StreamWriter(path + "AttackAttemptsWithValidPasswords.txt"));
+            _LegitiamteAttemptsWithValidPasswords = System.IO.TextWriter.Synchronized(new StreamWriter(path + "LegitiamteAttemptsWithValidPasswords.txt"));
+            _OtherAttempts = System.IO.TextWriter.Synchronized(new StreamWriter(path + "OtherAttempts.txt"));
             _logger.WriteStatus("Entered Simulator constructor");
             _experimentalConfiguration = myExperimentalConfiguration;
             BlockingAlgorithmOptions options = _experimentalConfiguration.BlockingOptions;
             
             _logger.WriteStatus("Creating binomial ladder");
-            BinomialLadderSketch localPasswordBinomialLadderSketch =
+            _binomialLadderSketch =
                 new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
-            MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
-                new MultiperiodFrequencyTracker<string>(
-                    options.NumberOfPopularityMeasurementPeriods,
-                    options.LengthOfShortestPopularityMeasurementPeriod,
-                    options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
-            _logger.WriteStatus("Finished creating binomial ladder");
-
-
-            _accountContextFactory = new MemoryOnlyAccountContextFactory();
+            _ipHistoryCache = new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
-            _loginAttemptController = new LoginAttemptController(
-                _accountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
-                memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StartTimeUtc);
+            memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
+
+            _recentIncorrectPasswords = new AgingMembershipSketch(16, 128 * 1024);
+
+            //MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
+            //    new MultiperiodFrequencyTracker<string>(
+            //        options.NumberOfPopularityMeasurementPeriods,
+            //        options.LengthOfShortestPopularityMeasurementPeriod,
+            //        options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
+            //_logger.WriteStatus("Finished creating binomial ladder");
+
+
+            //_accountContextFactory = new MemoryOnlyAccountContextFactory();
+
+            //_loginAttemptController = new LoginAttemptController(
+            //    _accountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
+            //
+            // memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StartTimeUtc);
 
             _logger.WriteStatus("Exiting Simulator constructor");
         }
@@ -151,30 +171,33 @@ namespace Simulator
             _logger.WriteStatus("In Run");
 
             _logger.WriteStatus("Priming password-tracking with known common passwords");
-            await _simPasswords.PrimeWithKnownPasswordsAsync(_loginAttemptController);
+            _simPasswords.PrimeWithKnownPasswordsAsync(_binomialLadderSketch, 40);
             _logger.WriteStatus("Finished priming password-tracking with known common passwords");
 
             _logger.WriteStatus("Creating IP Pool");
             _ipPool = new IpPool(_experimentalConfiguration);
             _logger.WriteStatus("Generating simualted account records");
             _simAccounts = new SimulatedAccounts(_ipPool, _simPasswords, _logger);
-            await _simAccounts.GenerateAsync(_experimentalConfiguration, _accountContextFactory, cancellationToken);
+            await _simAccounts.GenerateAsync(_experimentalConfiguration, cancellationToken);
 
             _logger.WriteStatus("Creating login-attempt generator");
             _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool, _simPasswords);
             _logger.WriteStatus("Finiished creating login-attempt generator");
 
-            _outputWriter.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
+
+            foreach (TextWriter writer in new TextWriter[] { _AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts })
+                writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", //,{9}
+                "Password",
+                "UserID",
+                "IP",
+                "IsFrequentlyGuessedPw",
                 "IsPasswordCorrect",
                 "IsFromAttackAttacker",
                 "IsAGuess",
                 "IPInOposingPool",
                 "IsClientAProxyIP",
-                "TypeOfMistake",
-                "UserID",
-                "IP",
-                "Password",
-                string.Join(",", _experimentalConfiguration.BlockingOptions.Conditions.Select( cond => cond.Name ))
+                "TypeOfMistake"
+                //string.Join(",")
                 );
 
             TimeSpan testTimeSpan = _experimentalConfiguration.TestTimeSpan;
@@ -205,16 +228,23 @@ namespace Simulator
                 }
                 else
                 {
-                    simAttempt = _attemptGenerator.BenignLoginAttempt(eventTimeUtc, _accountContextFactory);                    
+                    simAttempt = _attemptGenerator.BenignLoginAttempt(eventTimeUtc);                    
                 }
 
-                double[] scores = new double[0]; //= FIXME
-//                await
-//                    _loginAttemptController.DetermineLoginAttemptOutcomeAsync(simAttempt.Attempt, simAttempt.Password,
-//                        cancellationToken: cancellationToken);
+                // Get information about the client's IP
+                SimIpHistory ipHistory = await _ipHistoryCache.GetAsync(simAttempt.AddressOfClientInitiatingRequest, cancelToken);
 
-                var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.Attempt.AddressOfClientInitiatingRequest);
-                string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
+                double[] scores = ipHistory.GetAllScores(_experimentalConfiguration.BlockingOptions.BlockScoreHalfLife,
+                    simAttempt.TimeOfAttemptUtc);
+
+                simAttempt.UpdateSimulatorState(this, ipHistory);
+
+                var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.AddressOfClientInitiatingRequest);
+                string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}", 
+                    simAttempt.Password, 
+                    simAttempt.SimAccount?.UniqueId ?? "<null>",
+                    simAttempt.AddressOfClientInitiatingRequest,
+                    simAttempt.IsFrequentlyGuessedPassword ? "Frequent" : "Infrequent",
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                     simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                     simAttempt.IsGuess ? "IsGuess" : "NotGuess",
@@ -222,14 +252,24 @@ namespace Simulator
                                                 (ipInfo.UsedByAttackers ? "IsInAttackersIpPool" : "NotUsedByAttacker"),
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
-                    simAttempt.Attempt.UsernameOrAccountId ?? "<null>",
-                    simAttempt.Attempt.AddressOfClientInitiatingRequest,
-                    simAttempt.Password,
+ 
                     string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
                     );
 
-                await _outputWriter.WriteLineAsync(outputString);
-                await _outputWriter.FlushAsync();
+                if (simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
+                {
+                    await _AttackAttemptsWithValidPasswords.WriteLineAsync(outputString);
+                    await _AttackAttemptsWithValidPasswords.FlushAsync();
+                } else if (!simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
+                {
+                    await _LegitiamteAttemptsWithValidPasswords.WriteLineAsync(outputString);
+                    await _LegitiamteAttemptsWithValidPasswords.FlushAsync();
+                }
+                else
+                {
+                    await _OtherAttempts.WriteLineAsync(outputString);
+                    await _OtherAttempts.FlushAsync();
+                }
             },
             //(e) => {
             //},

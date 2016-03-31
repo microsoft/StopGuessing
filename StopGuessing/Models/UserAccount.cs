@@ -221,7 +221,7 @@ namespace StopGuessing.Models
         protected const double DefaultCreditLimit = 50;
 
         /// <summary>
-        /// Create a UserAccount record to match a given username or account id.
+        /// Initializes a UserAccount record to match a given username or account id.
         /// </summary>
         /// <param name="usernameOrAccountId">A unique identifier for this account, such as a username, email address, or data index for the account record.</param>
         /// <param name="creditLimit"></param>

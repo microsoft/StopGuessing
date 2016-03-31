@@ -47,6 +47,8 @@ namespace StopGuessing.DataStructures
     {
         public readonly SketchArray Elements;
 
+        public int MaxHeight => Elements.MaximumElementsPerKey;
+
         /// <summary>
         /// Construct a binomial sketch, in which a set of k hash functions (k=MaxLadderHeightInRungs) will map any
         /// key to k points with an array of n bits (numberOfRungsInSketch).

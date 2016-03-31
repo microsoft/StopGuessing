@@ -7,26 +7,6 @@ using StopGuessing.DataStructures;
 namespace StopGuessing.Models
 {
 
-    public class IPReputationData
-    {
-        public DecayingDouble InvalidAccountFrequentlyGuessed;
-        public DecayingDouble InvalidAccountRarelyGuessed;
-        public DecayingDouble InvalidPasswordFrequentlyGuessed;
-        public DecayingDouble InvalidPasswordRarelyGuessed;
-
-
-        public double ToScore(BlockingAlgorithmOptions options, DateTime whenUtc)
-        {
-            double score = 0;
-            score += options.PenaltyForInvalidAccount_Alpha*
-                     (InvalidAccountRarelyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc) +
-                      InvalidAccountFrequentlyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc) * options.PhiIfFrequent);
-            score += options.PenaltyForInvalidPassword_Beta * InvalidPasswordFrequentlyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc) +
-                     InvalidPasswordRarelyGuessed.GetValue(options.BlockScoreHalfLife, whenUtc);
-
-            return score;
-        }
-    }
 
 
     /// <summary>
@@ -48,11 +28,10 @@ namespace StopGuessing.Models
 
         public IpHistory(//bool isIpAKnownAggregatorThatWeCannotBlock = false,
             IPAddress address,
-            DateTime? currentDateTimeUtc,
             BlockingAlgorithmOptions options)
         {
             Address = address;
-            CurrentBlockScore = new DecayingDouble(0, currentDateTimeUtc);
+            CurrentBlockScore = new DecayingDouble();
 #if Simulation
             SimulationConditions = new SimulationConditionIpHistoryState[options.Conditions.Length];
             for (int i=0; i < SimulationConditions.Length; i++)

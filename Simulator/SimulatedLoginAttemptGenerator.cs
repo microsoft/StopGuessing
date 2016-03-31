@@ -23,7 +23,7 @@ namespace Simulator
 
         public readonly SortedSet<SimulatedLoginAttempt> ScheduledBenignAttempts = new SortedSet<SimulatedLoginAttempt>(
             Comparer<SimulatedLoginAttempt>.Create( (a, b) => 
-                a.Attempt.TimeOfAttemptUtc.CompareTo(b.Attempt.TimeOfAttemptUtc)));
+                a.TimeOfAttemptUtc.CompareTo(b.TimeOfAttemptUtc)));
 
 
         /// <summary>
@@ -59,14 +59,14 @@ namespace Simulator
         /// Get a benign login attempt to simulate
         /// </summary>
         /// <returns></returns>
-        public SimulatedLoginAttempt BenignLoginAttempt(DateTime eventTimeUtc, IUserAccountContextFactory accountContextFactory)
+        public SimulatedLoginAttempt BenignLoginAttempt(DateTime eventTimeUtc)
         {
             // If there is a benign login attempt already scheduled to occur by now,
             // send it instaed
             lock (ScheduledBenignAttempts)
             {
                 if (ScheduledBenignAttempts.Count > 0 &&
-                    ScheduledBenignAttempts.First().Attempt.TimeOfAttemptUtc < eventTimeUtc)
+                    ScheduledBenignAttempts.First().TimeOfAttemptUtc < eventTimeUtc)
                 {
                     SimulatedLoginAttempt result = ScheduledBenignAttempts.First();
                     ScheduledBenignAttempts.Remove(result);
@@ -121,7 +121,7 @@ namespace Simulator
             {
                 // To cause this client to be out of date, we'll change the password here.
                 string newPassword = _simPasswords.GetPasswordFromWeightedDistribution();
-                accountContextFactory.Get().ReadAsync(account.UniqueId).Result.SetPassword(newPassword, account.Password);
+                account.Account.SetPassword(newPassword, account.Password);
                 account.Password = newPassword;
                 mistake += "StalePassword";
 

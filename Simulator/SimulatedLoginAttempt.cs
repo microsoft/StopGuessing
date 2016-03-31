@@ -1,5 +1,11 @@
 ﻿using System;
 using System.Net;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Linq;
+using StopGuessing;
+using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
 
@@ -14,7 +20,14 @@ namespace Simulator
     /// </summary>
     public class SimulatedLoginAttempt
     {
-        public LoginAttempt Attempt;
+        public SimulatedAccount SimAccount;
+        public string UserNameOrAccountId;
+        public IPAddress AddressOfClientInitiatingRequest { get; set; }
+        public DateTime TimeOfAttemptUtc { get; set; }
+        public string CookieProvidedByBrowser { get; set; }
+        public bool DeviceCookieHadPriorSuccessfulLoginForThisAccount { get; set; }
+        public bool IsFrequentlyGuessedPassword = false;
+        public bool IsRepeatFailure;
         public string Password;
         public bool IsPasswordValid;
         public bool IsFromAttacker;
@@ -29,25 +42,103 @@ namespace Simulator
             string cookieProvidedByBrowser,
             string mistakeType,
             DateTime eventTimeUtc
-        )
+            )
         {
-            string accountId = account != null ? account.UniqueId : StrongRandomNumberGenerator.Get64Bits().ToString();
-            bool isPasswordValid = account != null && account.Password == password;
-
-            Attempt = new LoginAttempt
-            {
-                UsernameOrAccountId = accountId,
-                AddressOfClientInitiatingRequest = clientAddress,
-                AddressOfServerThatInitiallyReceivedLoginAttempt = new IPAddress(new byte[] { 127, 1, 1, 1 }),
-                TimeOfAttemptUtc = eventTimeUtc,
-                Api = "web",
-                CookieProvidedByBrowser = cookieProvidedByBrowser
-            };
+            SimAccount = account;
+            UserNameOrAccountId = account != null ? account.UniqueId : StrongRandomNumberGenerator.Get64Bits().ToString();
+            IsPasswordValid = account != null && account.Password == password;
+            AddressOfClientInitiatingRequest = clientAddress;
+            TimeOfAttemptUtc = eventTimeUtc;
+            CookieProvidedByBrowser = cookieProvidedByBrowser;
             Password = password;
-            IsPasswordValid = isPasswordValid;
             IsFromAttacker = isFromAttacker;
             IsGuess = isGuess;
             MistakeType = mistakeType;
         }
+
+        public void UpdateSimulatorState(Simulator simulator, SimIpHistory ipHistory)
+        {
+
+            IsRepeatFailure = (SimAccount == null)
+                ? simulator._recentIncorrectPasswords.AddMember(UserNameOrAccountId + "\n" + Password)
+                : SimAccount.Account.AddIncorrectPhase2Hash(Password);
+
+            int passwordsHeightOnBinomialLadder = IsPasswordValid
+                ? simulator._binomialLadderSketch.GetHeight(Password)
+                : simulator._binomialLadderSketch.Step(Password);
+
+            IsFrequentlyGuessedPassword = passwordsHeightOnBinomialLadder + 1 >=
+                                          simulator._binomialLadderSketch.MaxHeight;
+
+
+            if (SimAccount != null)
+            {
+                DeviceCookieHadPriorSuccessfulLoginForThisAccount =
+                    SimAccount.Account.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(CookieProvidedByBrowser);
+            }
+
+            if (IsPasswordValid)
+            {
+                // Determine if any of the outcomes for login attempts from the client IP for this request were the result of typos,
+                // as this might impact our decision about whether or not to block this client IP in response to its past behaviors.
+                ipHistory.AdjustBlockingScoreForPastTyposTreatedAsFullFailures(simulator, SimAccount, TimeOfAttemptUtc,
+                    Password);
+                SimAccount?.Account?.RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(CookieProvidedByBrowser);
+            }
+
+            if (!IsPasswordValid && !IsRepeatFailure && SimAccount != null)
+            {
+                ipHistory.RecentPotentialTypos.Add(new SimLoginAttemptSummaryForTypoAnalysis()
+                {
+                    WhenUtc = TimeOfAttemptUtc,
+                    Password = Password,
+                    UsernameOrAccountId = UserNameOrAccountId,
+                    WasPasswordFrequent = IsFrequentlyGuessedPassword
+                });
+            }
+
+            DecayingDouble decayingOneFromThisInstant = new DecayingDouble(1, TimeOfAttemptUtc);
+            TimeSpan halfLife = simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife;
+            if (IsPasswordValid)
+            {
+                ipHistory.SuccessfulLogins.AddInPlace(halfLife, decayingOneFromThisInstant);
+            } else if (SimAccount == null)
+            {
+                if (IsRepeatFailure)
+                {
+                    if (IsFrequentlyGuessedPassword)
+                        ipHistory.RepeatAccountFailuresFrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                    else
+                        ipHistory.RepeatAccountFailuresInfrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                }
+                else
+                {
+                    if (IsFrequentlyGuessedPassword)
+                        ipHistory.AccountFailuresFrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                    else
+                        ipHistory.AccountFailuresInfrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                }
+            }
+            else
+            {
+                if (IsRepeatFailure)
+                {
+                    if (IsFrequentlyGuessedPassword)
+                        ipHistory.RepeatPasswordFailuresNoTypoFrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                    else
+                        ipHistory.RepeatPasswordFailuresNoTypoInfrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                }
+                else
+                {
+                    if (IsFrequentlyGuessedPassword)
+                        ipHistory.PasswordFailuresNoTypoFrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                    else
+                        ipHistory.PasswordFailuresNoTypoInfrequentPassword.AddInPlace(halfLife, decayingOneFromThisInstant);
+                }
+            }
+
+        }
+
+        
     }
 }

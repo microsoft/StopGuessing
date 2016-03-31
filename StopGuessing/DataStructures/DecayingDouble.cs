@@ -26,7 +26,7 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// The last time the value was updated (UTC).
         /// </summary>
-        public DateTime LastUpdatedUtc { get; private set; }
+        public DateTime? LastUpdatedUtc { get; private set; }
 
         /// <summary>
         /// The value at the time of last update.  The current value must be
@@ -49,12 +49,14 @@ namespace StopGuessing.DataStructures
             return Decay(ValueAtTimeOfLastUpdate, halfLife, LastUpdatedUtc, whenUtc);
         }
 
-        public static double Decay(double valueLastSetTo, TimeSpan halfLife, DateTime whenLastSetUtc, DateTime? timeToDecayTo = null)
+        public static double Decay(double valueLastSetTo, TimeSpan halfLife, DateTime? whenLastSetUtc, DateTime? timeToDecayTo = null)
         {
-            DateTime whenUtcTime = timeToDecayTo ?? DateTime.UtcNow;
-            if (whenUtcTime <= whenLastSetUtc)
+            if (whenLastSetUtc == null)
                 return valueLastSetTo;
-            TimeSpan timeSinceLastUpdate = whenUtcTime - whenLastSetUtc;
+            DateTime whenUtcTime = timeToDecayTo ?? DateTime.UtcNow;
+            if (whenUtcTime <= whenLastSetUtc.Value)
+                return valueLastSetTo;
+            TimeSpan timeSinceLastUpdate = whenUtcTime - whenLastSetUtc.Value;
             double halfLivesSinceLastUpdate = timeSinceLastUpdate.TotalMilliseconds / halfLife.TotalMilliseconds;
             return valueLastSetTo / Math.Pow(2, halfLivesSinceLastUpdate);
         }
@@ -69,7 +71,7 @@ namespace StopGuessing.DataStructures
         /// The default time is the current system time adjusted to UTC.</param>
         public void SetValue(double newValue, DateTime? whenUtc = null)
         {
-            LastUpdatedUtc = whenUtc ?? DateTime.UtcNow;
+            LastUpdatedUtc = whenUtc;
             ValueAtTimeOfLastUpdate = newValue;
         }
 
@@ -78,17 +80,100 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="initialValue">The initial value of the double, which defaults to zero.</param>
         /// <param name="initialLastUpdateUtc">The time when the value was set, which defaults to now.</param>
-        public DecayingDouble(double initialValue, DateTime? initialLastUpdateUtc)
+        public DecayingDouble(double initialValue = 0d, DateTime? initialLastUpdateUtc = null)
         {
             ValueAtTimeOfLastUpdate = initialValue;
-            LastUpdatedUtc = initialLastUpdateUtc ?? DateTime.UtcNow;
+            LastUpdatedUtc = initialLastUpdateUtc;
         }
 
-        //public static double Add(double lastValue, DateTime whenWasValueLastSetUtc, double amountToAdd, TimeSpan halfLife,
-        //    DateTime? timeOfAddOperationUtc = null)
-        //{
-        //    return Decay(lastValue, halfLife, whenWasValueLastSetUtc, timeOfAddOperationUtc) + amountToAdd;
-        //}
+        public DecayingDouble Add(TimeSpan halfLife, DecayingDouble amountToAdd)
+        {
+            if (!LastUpdatedUtc.HasValue)
+            {
+                return new DecayingDouble(ValueAtTimeOfLastUpdate + amountToAdd.ValueAtTimeOfLastUpdate, amountToAdd.LastUpdatedUtc);
+            }
+            else if (!amountToAdd.LastUpdatedUtc.HasValue)
+            {
+                return new DecayingDouble(ValueAtTimeOfLastUpdate + amountToAdd.ValueAtTimeOfLastUpdate, LastUpdatedUtc);
+            }
+            else if (LastUpdatedUtc.Value > amountToAdd.LastUpdatedUtc.Value)
+            {
+                return new DecayingDouble(
+                        ValueAtTimeOfLastUpdate + amountToAdd.GetValue(halfLife, LastUpdatedUtc.Value),
+                        LastUpdatedUtc.Value);
+            }
+            else
+            {
+                return new DecayingDouble(amountToAdd.ValueAtTimeOfLastUpdate + GetValue(halfLife, amountToAdd.LastUpdatedUtc.Value), amountToAdd.LastUpdatedUtc.Value);
+            }
+        }
+
+        public void AddInPlace(TimeSpan halfLife, DecayingDouble amountToAdd)
+        {
+            if (!LastUpdatedUtc.HasValue)
+            {
+                ValueAtTimeOfLastUpdate += amountToAdd.ValueAtTimeOfLastUpdate;
+                LastUpdatedUtc = amountToAdd.LastUpdatedUtc;
+            }
+            else if (!amountToAdd.LastUpdatedUtc.HasValue)
+            {
+                ValueAtTimeOfLastUpdate += amountToAdd.ValueAtTimeOfLastUpdate;
+            } else if (LastUpdatedUtc.Value > amountToAdd.LastUpdatedUtc.Value)
+            {
+                ValueAtTimeOfLastUpdate += amountToAdd.GetValue(halfLife, LastUpdatedUtc.Value);
+            }
+            else
+            {
+                ValueAtTimeOfLastUpdate = GetValue(halfLife, amountToAdd.LastUpdatedUtc.Value) +
+                                          amountToAdd.ValueAtTimeOfLastUpdate;
+                LastUpdatedUtc = amountToAdd.LastUpdatedUtc.Value;
+            }
+        }
+
+        public  DecayingDouble Subtract(TimeSpan halfLife, DecayingDouble amountToRemove)
+        {
+            if (!LastUpdatedUtc.HasValue)
+            {
+                return new DecayingDouble(ValueAtTimeOfLastUpdate - amountToRemove.ValueAtTimeOfLastUpdate, amountToRemove.LastUpdatedUtc);
+            }
+            else if (!amountToRemove.LastUpdatedUtc.HasValue)
+            {
+                return new DecayingDouble(ValueAtTimeOfLastUpdate - amountToRemove.ValueAtTimeOfLastUpdate, LastUpdatedUtc);
+            } else if (LastUpdatedUtc.Value > amountToRemove.LastUpdatedUtc.Value)
+            {
+                return
+                    new DecayingDouble(
+                        ValueAtTimeOfLastUpdate - amountToRemove.GetValue(halfLife, LastUpdatedUtc.Value),
+                        LastUpdatedUtc.Value);
+            }
+            else
+            {
+                return new DecayingDouble(amountToRemove.ValueAtTimeOfLastUpdate - GetValue(halfLife, amountToRemove.LastUpdatedUtc.Value), amountToRemove.LastUpdatedUtc.Value);
+            }
+        }
+
+        public void SubtractInPlace(TimeSpan halfLife, DecayingDouble amountToAdd)
+        {
+            if (!LastUpdatedUtc.HasValue)
+            {
+                ValueAtTimeOfLastUpdate -= -amountToAdd.ValueAtTimeOfLastUpdate;
+                LastUpdatedUtc = amountToAdd.LastUpdatedUtc;
+            }
+            else if (!amountToAdd.LastUpdatedUtc.HasValue)
+            {
+                ValueAtTimeOfLastUpdate -= amountToAdd.ValueAtTimeOfLastUpdate;
+            }
+            else if (LastUpdatedUtc.Value > amountToAdd.LastUpdatedUtc.Value)
+            {
+                ValueAtTimeOfLastUpdate -= amountToAdd.GetValue(halfLife, LastUpdatedUtc.Value);
+            }
+            else
+            {
+                ValueAtTimeOfLastUpdate = GetValue(halfLife, amountToAdd.LastUpdatedUtc.Value) -
+                                          amountToAdd.ValueAtTimeOfLastUpdate;
+                LastUpdatedUtc = amountToAdd.LastUpdatedUtc.Value;
+            }
+        }
 
         /// <summary>
         /// In-place addition

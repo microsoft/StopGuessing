@@ -54,7 +54,7 @@ namespace Simulator
         /// Create accounts, generating passwords, primary IP
         /// </summary>
         public async Task GenerateAsync(ExperimentalConfiguration experimentalConfiguration,
-            IUserAccountContextFactory accountContextFactory,
+            //IUserAccountContextFactory accountContextFactory,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             _logger.WriteStatus("Creating {0:N0} benign accounts", experimentalConfiguration.NumberOfBenignAccounts);        
@@ -118,13 +118,13 @@ namespace Simulator
             
             //
             // Now create full UserAccount records for each simulated account and store them into the account context
-            await TaskParalllel.ForEachWithWorkers(BenignAccounts.Union(AttackerAccounts),
-                async (simAccount, index, cancelToken) =>
+            Parallel.ForEach(BenignAccounts.Union(AttackerAccounts),
+                (simAccount, loopState) =>
                 {
-                    if (index % 10000 == 0)
-                        _logger.WriteStatus("Created account {0:N0}", index);
-                    MemoryUserAccount account = new MemoryUserAccount();
-                    account.Initialize(simAccount.UniqueId,
+                    //if (loopState. % 10000 == 0)
+                    //    _logger.WriteStatus("Created account {0:N0}", index);
+                    simAccount.Account = new MemoryUserAccount();
+                    simAccount.Account.Initialize(simAccount.UniqueId,
                         simAccount.Password,
                         //                        experimentalConfiguration.BlockingOptions.Conditions.Length,
                         experimentalConfiguration.BlockingOptions.AccountCreditLimit,
@@ -132,10 +132,9 @@ namespace Simulator
                         "PBKDF2_SHA256",
                         experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations);
                     foreach (string cookie in simAccount.Cookies)
-                        account.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(LoginAttempt.HashCookie(cookie));
-                    await accountContextFactory.Get().WriteNewAsync(account.UsernameOrAccountId, account, cancelToken);
-                },
-                cancellationToken: cancellationToken);
+                        simAccount.Account.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(LoginAttempt.HashCookie(cookie));
+                   // await accountContextFactory.Get().WriteNewAsync(simAccount.Account.UsernameOrAccountId, simAccount.Account, cancelToken);
+                });
             _logger.WriteStatus("Finished creating user accounts for each simluated account record");
         }
     }
