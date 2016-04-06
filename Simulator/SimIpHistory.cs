@@ -49,6 +49,7 @@ namespace Simulator
             return new double[]
             {
                 SuccessfulLogins.GetValue(halfLife, whenUtc),
+                AccountFailuresInfrequentPassword.GetValue(halfLife, whenUtc),
                 AccountFailuresFrequentPassword.GetValue(halfLife, whenUtc),
                 RepeatAccountFailuresInfrequentPassword.GetValue(halfLife, whenUtc),
                 RepeatAccountFailuresFrequentPassword.GetValue(halfLife, whenUtc),

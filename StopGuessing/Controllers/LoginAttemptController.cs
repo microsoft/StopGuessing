@@ -1,6 +1,4 @@
-﻿//#define Simulation
-// FIXME above
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -29,9 +27,7 @@ namespace StopGuessing.Controllers
 
     [Route("api/[controller]")]
     public class LoginAttemptController :
-#if !Simulation
         Controller, 
-#endif
         ILoginAttemptController
     {
         private readonly BlockingAlgorithmOptions _options;
@@ -88,18 +84,10 @@ namespace StopGuessing.Controllers
             string passwordProvidedByClient = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-#if Simulation
-            await DetermineLoginAttemptOutcomeAsync(
-                loginAttempt,
-                passwordProvidedByClient,
-                cancellationToken: cancellationToken);
-            return loginAttempt;
-#else
             return await DetermineLoginAttemptOutcomeAsync(
                 loginAttempt,
                 passwordProvidedByClient,
                 cancellationToken: cancellationToken);
-#endif
         }
 
         /// <summary>
@@ -164,17 +152,11 @@ namespace StopGuessing.Controllers
             ECDiffieHellmanCng ecPrivateAccountLogKey = null;
             try
             {
-#if Simulation
-                foreach (SimulationConditionIpHistoryState cond in clientsIpHistory.SimulationConditions)
-                    cond.AdjustScoreForPastTyposTreatedAsFullFailures(ref ecPrivateAccountLogKey, account,
-                        whenUtc, correctPassword, phase1HashOfCorrectPassword);
-#endif
                 foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
                 {
                     if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
                         continue;
 
-#if !Simulation
                     if (ecPrivateAccountLogKey == null)
                     {
                         // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
@@ -190,17 +172,12 @@ namespace StopGuessing.Controllers
                             return;
                         }
                     }
-#endif
                     // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
                     try
                     {
-#if Simulation
-                        string incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword;
-#else
                         // Attempt to decrypt the password.
                         string incorrectPasswordFromPreviousAttempt =
                             potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
-#endif
 
                         // Use an edit distance calculation to determine if it was a likely typo
                         bool likelyTypo =
@@ -280,76 +257,6 @@ namespace StopGuessing.Controllers
             }
         }
 
-#if Simulation
-
-        protected void SimUpdateBlockScores(IEnumerable<SimulationConditionIpHistoryState> conditions, LoginAttempt loginAttempt, UserAccount account,
-            ILadder ladder, IUpdatableFrequency frequency,
-            ref bool accountChanged)
-        {
-            foreach (SimulationConditionIpHistoryState condition in conditions)
-            {
-                SimUpdateBlockScore(condition,loginAttempt,account, ladder, frequency, ref accountChanged);
-            }
-        }
-        protected void SimUpdateBlockScore(SimulationConditionIpHistoryState cond, LoginAttempt loginAttempt, UserAccount account,
-            ILadder ladder, IUpdatableFrequency frequency, ref bool accountChanged)
-        {
-            switch (loginAttempt.Outcome)
-            {
-                case AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount:
-                case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
-                {
-                    if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount &&
-                        cond.Condition.IgnoresRepeats)
-                        return;
-                    double penalty = cond.Condition.UsesAlphaForAccountFailures
-                        ? _options.PenaltyForInvalidAccount_Alpha
-                        : _options.PenaltyForInvalidPassword_Beta;
-                    if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= _options.PopularityBasedPenaltyMultiplier_phi(ladder, frequency);
-                    cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
-                    return;
-                }
-                case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
-                case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
-                {
-                    if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword &&
-                        cond.Condition.IgnoresRepeats)
-                        return;
-                    double penalty = _options.PenaltyForInvalidPassword_Beta;
-                    if (cond.Condition.PunishesPopularGuesses)
-                        penalty *= _options.PopularityBasedPenaltyMultiplier_phi(ladder, frequency);
-                    cond.Score.Add(penalty, loginAttempt.TimeOfAttemptUtc);
-                    if (account != null && cond.RecentPotentialTypos != null)
-                    {
-                        cond.RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
-                        {
-                            EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
-                            Penalty = new DoubleThatDecaysWithTime(
-                                cond.Score.HalfLife,
-                                penalty,
-                                loginAttempt.TimeOfAttemptUtc),
-                            UsernameOrAccountId = loginAttempt.UsernameOrAccountId
-                        });
-                    }
-                    return;
-                }
-                case AuthenticationOutcome.CredentialsValid:                    
-                    if (cond.Score > 0)
-                    {
-                        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma, cond.Score.GetValue(loginAttempt.TimeOfAttemptUtc));
-                        double credit = account.TryGetCreditForSimulation(cond.Condition.Index, desiredCredit, loginAttempt.TimeOfAttemptUtc);
-                        if (credit > 0)
-                            accountChanged = true;
-                        cond.Score.Add(-credit, loginAttempt.TimeOfAttemptUtc);
-                    }
-                    return;
-                default:
-                    return;
-            }
-        }
-#endif
-
 
         /// <returns></returns>
         /// <summary>
@@ -363,11 +270,7 @@ namespace StopGuessing.Controllers
         /// <returns>If the password is correct and the IP not blocked, returns AuthenticationOutcome.CredentialsValid.
         /// Otherwise, it returns a different AuthenticationOutcome.
         /// The client should not be made aware of any information beyond whether the login was allowed or not.</returns>
-#if Simulation
-        public async Task<double[]> DetermineLoginAttemptOutcomeAsync(
-#else
         public async Task<LoginAttempt> DetermineLoginAttemptOutcomeAsync(
-#endif
             LoginAttempt loginAttempt,
             string passwordProvidedByClient,
             TimeSpan? timeout = null,
@@ -485,11 +388,7 @@ namespace StopGuessing.Controllers
                     //  correct password, so you can't get to the plaintext of the incorrect password if you
                     //  don't already know the correct password.)
                     loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
-#if Simulation
-                    loginAttempt.EncryptedIncorrectPassword = passwordProvidedByClient;
-#else
                     loginAttempt.EncryptedIncorrectPassword.Write(passwordProvidedByClient, account.EcPublicAccountLogKey);
-#endif
                     // Next, if it's possible to declare more about this outcome than simply that the 
                     // user provided the incorrect password, let's do so.
                     // Since users who are unsure of their passwords may enter the same username/password twice, but attackers
@@ -524,12 +423,7 @@ namespace StopGuessing.Controllers
             loginAttempt.PasswordsPopularityAmongFailedGuesses = trackedPopularity;
 
             IpHistory ip = await ipHistoryGetTask;
-#if Simulation
-            double[] conditionScores = ip.SimulationConditions.Select( cond =>
-                    cond.GetThresholdAdjustedScore(loginAttempt.PasswordsPopularityAmongFailedGuesses,
-                        loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount,
-                        passwordLadder, passwordFrequency, loginAttempt.TimeOfAttemptUtc)).ToArray();
-#endif
+
 
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsValid)
             {
@@ -554,9 +448,6 @@ namespace StopGuessing.Controllers
             
             UpdateBlockScore(ip.CurrentBlockScore, ip.RecentPotentialTypos, loginAttempt, account, passwordsHeightOnBinomialLadder,
                 _options.HeightOfBinomialLadder_H, passwordFrequency,  ref accountChanged);
-#if Simulation
-            SimUpdateBlockScores(ip.SimulationConditions, loginAttempt, account, passwordLadder, passwordFrequency, ref accountChanged);
-#endif
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
                 loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
             {
@@ -579,11 +470,7 @@ namespace StopGuessing.Controllers
                 Task backgroundTask = userAccountContext.SaveChangesAsync(account.UsernameOrAccountId, account, new CancellationToken());
             }
 
-#if Simulation
-            return conditionScores;
-#else
             return loginAttempt;
-#endif
         }
 
 

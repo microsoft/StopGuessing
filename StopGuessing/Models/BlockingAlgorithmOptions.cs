@@ -1,9 +1,6 @@
-﻿#define Simulation
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.NetworkInformation;
-using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 
@@ -89,12 +86,6 @@ namespace StopGuessing.Models
         {
             return frequency.Proportion.Numerator > 0 ? 1 : 100;
         };
-
-
-
-#if Simulation
-        public SimulationCondition[] Conditions;
-#endif
-
+       
     }
 }

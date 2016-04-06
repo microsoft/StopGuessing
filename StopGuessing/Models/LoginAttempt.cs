@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Runtime.Serialization;
-using System.Security.Cryptography;
 using Microsoft.Framework.WebEncoders;
 using System.Text;
 using Newtonsoft.Json;
