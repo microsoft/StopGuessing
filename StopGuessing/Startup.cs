@@ -76,6 +76,8 @@ namespace StopGuessing
             {
                 DistributedBinomialLadderClient dblClient = new DistributedBinomialLadderClient(
                     options.NumberOfVirtualNodesForDistributedBinomialLadder,
+                    options.HeightOfBinomialLadder_H,
+                    options.MinimumBinomialLadderSketchCacheFreshness,
                     hosts,
                     options.PrivateConfigurationKey);
                 // If running as a distributed system

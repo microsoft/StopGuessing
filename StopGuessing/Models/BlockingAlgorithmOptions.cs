@@ -35,6 +35,8 @@ namespace StopGuessing.Models
         public int NumberOfElementsInBinomialLadderSketch_N = 1 << 29;
         public int NumberOfVirtualNodesForDistributedBinomialLadder = 1 << 10;
 
+        public TimeSpan MinimumBinomialLadderSketchCacheFreshness = new TimeSpan(0,5,0); // Five minutes
+
         public string PrivateConfigurationKey = "ChangeThisToSomethingUniqueForYourEnvironment";
 
         public int NumberOfElementsPerNodeInBinomialLadderSketch

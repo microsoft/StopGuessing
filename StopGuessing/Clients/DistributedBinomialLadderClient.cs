@@ -12,60 +12,111 @@ namespace StopGuessing.Clients
 
     public class DistributedBinomialLadderClient : IBinomialLadderSketch
     {
-        public readonly int NumberOfVirtualNodes;
-        protected UniversalHashFunction VirtualNodeHash;
-        public IDistributedResponsibilitySet<RemoteHost> VirtualNodeToHostMapping;
+        public const string ControllerPath = "/api/DBLS/";
+        public const string SketchElementsPath = ControllerPath + "Elements/";
+        public const string KeyPath = ControllerPath + "Keys/";
 
-        public DistributedBinomialLadderClient(int numberOfVirtualNodes, IDistributedResponsibilitySet<RemoteHost> virtualNodeToHostMapping,  string configurationKey)
+        public readonly int NumberOfShards;
+        public readonly int DefaultHeightOfLadder;
+        public readonly TimeSpan MinimumCacheFreshnessRequired;
+        protected UniversalHashFunction ShardHashFunction;
+        public IDistributedResponsibilitySet<RemoteHost> ShardToHostMapping;
+
+        public FixedSizeLruCache<string, DateTime> CacheOfKeysAtTopOfLadder; 
+
+        public DistributedBinomialLadderClient(int numberOfShards, int defaultHeightOfLadder, TimeSpan mininmumCacheFreshnessRequired, IDistributedResponsibilitySet<RemoteHost> shardToHostMapping, string configurationKey)
         {
-            NumberOfVirtualNodes = numberOfVirtualNodes;
-            VirtualNodeHash = new UniversalHashFunction(configurationKey);
-            VirtualNodeToHostMapping = virtualNodeToHostMapping;
+            NumberOfShards = numberOfShards;
+            DefaultHeightOfLadder = defaultHeightOfLadder;
+            MinimumCacheFreshnessRequired = mininmumCacheFreshnessRequired;
+            CacheOfKeysAtTopOfLadder = new FixedSizeLruCache<string, DateTime>(2*NumberOfShards);
+            ShardHashFunction = new UniversalHashFunction(configurationKey);
+            ShardToHostMapping = shardToHostMapping;
         }
-        public int GetRandomVirtualNode()
+        public int GetRandomShard()
         {
-            return (int)StrongRandomNumberGenerator.Get32Bits(NumberOfVirtualNodes);
+            return (int)StrongRandomNumberGenerator.Get32Bits(NumberOfShards);
         }
 
-        public void ClearRandomElement(int? virtualNode = null)
+        public void AssignRandomElementToValue(int valueToAssign, int? shardNumber = null)
         {
-            int virtualNodeForClear = virtualNode ?? GetRandomVirtualNode();
-            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNodeForClear.ToString());
-            RestClientHelper.PostBackground(host.Uri, "/api/DistributedBinomialLadderSketch/ClearRandomElement/" + virtualNodeForClear);
-        }
-
-        public void SetRandomElement(int? virtualNode = null)
-        {
-            int virtualNodeForSet = virtualNode ?? GetRandomVirtualNode();
-            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNodeForSet.ToString());
-            RestClientHelper.PostBackground(host.Uri, "/api/DistributedBinomialLadderSketch/SetRandomElement/" + virtualNodeForSet);
+            int shard = shardNumber ?? GetRandomShard();
+            RemoteHost host = ShardToHostMapping.FindMemberResponsible(shard.ToString());
+            RestClientHelper.PostBackground(host.Uri, SketchElementsPath + shard + '/' + valueToAssign);
         }
 
         public async Task<int> StepAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null, CancellationToken cancellationToken = new CancellationToken())
         {
-            int virtualNode = GetVirtualNodeForKey(key);
-            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNode.ToString());
-            return await RestClientHelper.PostAsync<int>(host.Uri, "/api/DistributedBinomialLadderSketch/Key/" + Uri.EscapeUriString(key), 
+            DateTime whenAddedUtc;
+            int topOfLadder = heightOfLadderInRungs ?? DefaultHeightOfLadder;
+
+            bool cacheIndicatesTopOfLadder = CacheOfKeysAtTopOfLadder.TryGetValue(key, out whenAddedUtc);
+            if (cacheIndicatesTopOfLadder && DateTime.UtcNow - whenAddedUtc < MinimumCacheFreshnessRequired)
+            {
+                // The cache is fresh and indicates that the key is already at the top of the ladder
+                return topOfLadder;
+            }
+
+            int shard = GetShard(key);
+            RemoteHost host = ShardToHostMapping.FindMemberResponsible(shard.ToString());
+            int heightBeforeStep = await RestClientHelper.PostAsync<int>(host.Uri, KeyPath + Uri.EscapeUriString(key), 
                 timeout: timeout, cancellationToken: cancellationToken, 
                 parameters: (!heightOfLadderInRungs.HasValue) ? null : new object[]
                         {
                             new KeyValuePair<string, int>("heightOfLadderInRungs", heightOfLadderInRungs.Value)
                         } );
+
+            if (heightBeforeStep < topOfLadder && cacheIndicatesTopOfLadder)
+            {
+                // The cache is no longer accurate as the key is no longer at the top of the ladder
+                CacheOfKeysAtTopOfLadder.Remove(key);
+            }
+            else if (heightBeforeStep == topOfLadder)
+            {
+                // Store the current key in the cache indicating with the time of the last fetch.
+                CacheOfKeysAtTopOfLadder[key] = DateTime.UtcNow;
+            }
+
+            return heightBeforeStep;
         }
-        public int GetVirtualNodeForKey(string key)
-            => (int) (VirtualNodeHash.Hash(key)%(uint) NumberOfVirtualNodes);
+
+
+        public int GetShard(string key)
+            => (int) (ShardHashFunction.Hash(key)%(uint) NumberOfShards);
 
 
         public async Task<int> GetHeightAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null, CancellationToken cancellationToken = new CancellationToken())
         {
-            int virtualNode = GetVirtualNodeForKey(key);
-            RemoteHost host = VirtualNodeToHostMapping.FindMemberResponsible(virtualNode.ToString());
-            Task<int> heightTask = RestClientHelper.GetAsync<int>(host.Uri, "/api/DistributedBinomialLadderSketch/Key/" + Uri.EscapeUriString(key), cancellationToken: cancellationToken,
-                uriParameters: (!heightOfLadderInRungs.HasValue) ? null :  new KeyValuePair<string,string>[]
+            DateTime whenAddedUtc;
+            int topOfLadder = heightOfLadderInRungs ?? DefaultHeightOfLadder;
+
+            bool cacheIndicatesTopOfLadder = CacheOfKeysAtTopOfLadder.TryGetValue(key, out whenAddedUtc);
+            if (cacheIndicatesTopOfLadder && DateTime.UtcNow - whenAddedUtc < MinimumCacheFreshnessRequired)
+            {
+                // The cache is fresh and indicates that the key is already at the top of the ladder
+                return topOfLadder;
+            }
+
+            int shard = GetShard(key);
+            RemoteHost host = ShardToHostMapping.FindMemberResponsible(shard.ToString());
+            int height = await RestClientHelper.GetAsync<int>(host.Uri, KeyPath + Uri.EscapeUriString(key), cancellationToken: cancellationToken,
+                uriParameters: (!heightOfLadderInRungs.HasValue) ? null : new KeyValuePair<string, string>[]
                         {
                             new KeyValuePair<string, string>("heightOfLadderInRungs", heightOfLadderInRungs.Value.ToString())
-                        } );
-            return await heightTask;
+                        });
+
+            if (height < topOfLadder && cacheIndicatesTopOfLadder)
+            {
+                // The cache is no longer accurate as the key is no longer at the top of the ladder
+                CacheOfKeysAtTopOfLadder.Remove(key);
+            }
+            else if (height == topOfLadder)
+            {
+                // Store the current key in the cache indicating with the time of the last fetch.
+                CacheOfKeysAtTopOfLadder[key] = DateTime.UtcNow;
+            }
+
+            return height;
         }
 
     }

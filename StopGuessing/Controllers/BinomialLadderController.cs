@@ -9,86 +9,80 @@ using StopGuessing.Models;
 
 namespace StopGuessing.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/DBLS")]
     public class DistributedBinomialLadderSketchController
     {
         protected DistributedBinomialLadderClient Client;
-        protected Dictionary<int,BinomialLadderSketch> VirtualNodeToSketch;
+        protected Dictionary<int,BinomialLadderSketch> ShardsByIndex;
         protected int LadderHeight;
-        protected int NumberOfElementsPerVirtualNode;
+        protected int NumberOfElementsPerShard;
 
         public DistributedBinomialLadderSketchController(DistributedBinomialLadderClient distributedBinomialLadderClient,
-            int ladderHeight, int numberOfElementsPerVirtualNode)
+            int ladderHeight, int numberOfElementsPerShard)
         {
             Client = distributedBinomialLadderClient;
             LadderHeight = ladderHeight;
-            NumberOfElementsPerVirtualNode = numberOfElementsPerVirtualNode;
+            NumberOfElementsPerShard = numberOfElementsPerShard;
         }
 
-        protected BinomialLadderSketch GetSketchForVirutalNode(int virtualNode)
+        protected BinomialLadderSketch GetShard(int shardNumber)
         {
-            if (!VirtualNodeToSketch.ContainsKey(virtualNode))
+            if (!ShardsByIndex.ContainsKey(shardNumber))
             {
-                VirtualNodeToSketch[virtualNode] = new BinomialLadderSketch(NumberOfElementsPerVirtualNode, LadderHeight);
+                ShardsByIndex[shardNumber] = new BinomialLadderSketch(NumberOfElementsPerShard, LadderHeight);
             }
-            return VirtualNodeToSketch[virtualNode];
+            return ShardsByIndex[shardNumber];
         }
 
-        protected BinomialLadderSketch GetSketchForKey(string key)
-            => GetSketchForVirutalNode(Client.GetVirtualNodeForKey(key));
+        protected BinomialLadderSketch GetShard(string key)
+            => GetShard(Client.GetShard(key));
 
-        [HttpGet("/key/{key}")]
+        [HttpGet("/Keys/{key}")]
         public int GetHeight([FromRoute] string key, [FromQuery] int? heightOfLadderInRungs)
         {
-            return GetSketchForKey(key).GetHeight(key, heightOfLadderInRungs);
+            return GetShard(key).GetHeight(key, heightOfLadderInRungs);
         }
 
-        [HttpPost("/key/{key}")]
+        [HttpPost("/Keys/{key}")]
         public int DistributedStepAsync([FromRoute]string key, [FromQuery] int? heightOfLadderInRungs)
         {
-            BinomialLadderSketch sketch = GetSketchForKey(key);
+            BinomialLadderSketch shard = GetShard(key);
             // Get the set of rungs
-            List<int> rungs = sketch.Elements.GetElementIndexesForKey(key, heightOfLadderInRungs).ToList();
+            List<int> rungs = shard.Elements.GetElementIndexesForKey(key, heightOfLadderInRungs).ToList();
             // Select the subset of rungs that have value zero (that are above the key in the ladder)
-            List<int> rungsAbove = rungs.Where(rung => !sketch.Elements[rung]).ToList();
+            List<int> rungsAbove = rungs.Where(rung => !shard.Elements[rung]).ToList();
 
             // Identify an element of the array to set
             if (rungsAbove.Count > 0)
             {
                 // If there are rungs with value value zero/false (rungs above the key), pick one at random
-                sketch.Elements.SetElement(
+                shard.Elements.SetElement(
                     rungsAbove[(int) (StrongRandomNumberGenerator.Get32Bits((uint) rungsAbove.Count))]);
             }
             else
             {
                 // Set an average of one element by picking two random elements, each of which should have p=0.5
                 // of being zero/false, and setting them to 1/true regardless of their previous value.
-                Client.SetRandomElement();
-                Client.SetRandomElement();
+                Client.AssignRandomElementToValue(1);
+                Client.AssignRandomElementToValue(1);
             }
 
             // Clear an average of one element by picking two random elements, each of which should have p=0.5
             // of being one/true, and setting them to 0/false regardless of their previous value.
-            Client.ClearRandomElement();
-            Client.ClearRandomElement();
+            Client.AssignRandomElementToValue(0);
+            Client.AssignRandomElementToValue(0);
 
             // Return the height of the ladder before the step
             return rungs.Count - rungsAbove.Count;
         }
 
-        [HttpPost("/SetRandomElement/{virtualNode}")]
-        public void DistributedSetRandomElement([FromRoute] int virtualNode)
+        [HttpPost("/Elements/{shardNumber}/{value}")]
+        public void AssignRandomElement([FromRoute] int shardNumber, [FromRoute] int value)
         {
-            BinomialLadderSketch sketch = GetSketchForVirutalNode(virtualNode);
-            sketch.SetRandomElement();
+            BinomialLadderSketch shard = GetShard(shardNumber);
+            shard.AssignRandomElement(value);
         }
 
-        [HttpPost("/ClearRandomElement/{virtualNode}")]
-        public void DistributedClearRandomElement([FromRoute] int virtualNode)
-        {
-            BinomialLadderSketch sketch = GetSketchForVirutalNode(virtualNode);
-            sketch.ClearRandomElement();
-        }
     }
 
 }

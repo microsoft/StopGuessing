@@ -138,6 +138,13 @@ namespace StopGuessing.DataStructures
             Elements.SetElement((int)StrongRandomNumberGenerator.Get32Bits((uint)Elements.Length));
         }
 
+        public void AssignRandomElement(int value)
+        {
+            Elements.Assign((int)StrongRandomNumberGenerator.Get32Bits((uint)Elements.Length), value != 0);
+        }
+
+
+
 
 
         public static int HeightRequiredForToAchieveConfidenceOfPriorObservations(int heightOfLadderInRungs, double confidenceLevelCommonlyCalledPValue)
