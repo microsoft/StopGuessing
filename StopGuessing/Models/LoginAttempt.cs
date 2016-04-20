@@ -102,8 +102,10 @@ namespace StopGuessing.Models
         /// by the system.  
         /// This will be set by the analysis and need not be set by the creator of the LoginAttempt record.
         /// </summary>
+        //[DataMember]
+        //public double PasswordsPopularityAmongFailedGuesses { get; set; }
         [DataMember]
-        public double PasswordsPopularityAmongFailedGuesses { get; set; }
+        public int PasswordsHeightOnBinomialLadder { get; set; }
 
         /// <summary>
         /// A setter used to provide a client-specific cookie.  This cookie should be random value

@@ -25,13 +25,14 @@ namespace StopGuessing.Models
 
     }
 
-    public delegate double PasswordPopularityFunction(int keyHeight, int ladderHeight, IUpdatableFrequency frequency);
+    public delegate double PasswordPopularityFunction(LoginAttempt attempt);
 
     public class BlockingAlgorithmOptions
     {
         public int NumberOfRedundantHostsToCacheIPs = 1;
         public int NumberOfRedundantHostsToCachePasswordPopularity = 1;
         public int HeightOfBinomialLadder_H = 48;
+        public int BinomialLadderFrequencyThreshdold_T = 44;
         public int NumberOfElementsInBinomialLadderSketch_N = 1 << 29;
         public int NumberOfVirtualNodesForDistributedBinomialLadder = 1 << 10;
 
@@ -78,16 +79,16 @@ namespace StopGuessing.Models
         public double PopularityConfidenceLevel { get; set; } = 0.001d; // 1 in 100,000
 
         public double PhiIfFrequent = 5;
-        public PasswordPopularityFunction PopularityBasedPenaltyMultiplier_phi = (keyHeight, ladderHeight, frequency) =>
+        public double PopularityBasedPenaltyMultiplier_phi(LoginAttempt loginAttempt)
         {
-            return frequency.Proportion.Numerator > 0 ? 5 : 1;
-        };
+            return loginAttempt.PasswordsHeightOnBinomialLadder >= BinomialLadderFrequencyThreshdold_T ? 5 : 1;
+        }
 
 
-        public PasswordPopularityFunction PopularityBasedThresholdMultiplier_T_multiplier = (keyHeight, ladderHeight, frequency) =>
+        public double PopularityBasedThresholdMultiplier_T_multiplier(LoginAttempt loginAttempt)
         {
-            return frequency.Proportion.Numerator > 0 ? 1 : 100;
-        };
+            return loginAttempt.PasswordsHeightOnBinomialLadder >= BinomialLadderFrequencyThreshdold_T ? 1 : 100;
+        }
        
     }
 }

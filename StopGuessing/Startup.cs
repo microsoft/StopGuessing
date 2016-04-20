@@ -9,6 +9,8 @@ using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
+using Microsoft.Data.Entity;
+using Microsoft.Extensions.PlatformAbstractions;
 
 namespace StopGuessing
 {
@@ -24,10 +26,10 @@ namespace StopGuessing
             if (env.IsEnvironment("Development"))
             {
                 // This will push telemetry data through Application Insights pipeline faster, allowing you to view results immediately.
-                builder.AddApplicationInsightsSettings(developerMode: true);
+                //builder.AddApplicationInsightsSettings(developerMode: true);
             }
 
-            builder.AddEnvironmentVariables();
+            //builder.AddEnvironmentVariables();
             Configuration = builder.Build();
         }
 
@@ -38,9 +40,15 @@ namespace StopGuessing
         public void ConfigureServices(IServiceCollection services)
         {
             // Add Application Insights data collection services to the services container.
-            services.AddApplicationInsightsTelemetry(Configuration);
+            //services.AddApplicationInsightsTelemetry(Configuration);
 
-            services.AddMvc();
+            var connection = @"Server=(localdb)\mssqllocaldb;Database=EFGetStarted.AspNet5.NewDb;Trusted_Connection=True;";
+
+            //services.AddEntityFramework()
+            //    .AddSqlServer()
+            //    .AddDbContext<DbUserAccountContext>(options => options.UseSqlServer(connection));
+
+            // services.AddMvc();
             // Uncomment the following line to add Web API services which makes it easier to port Web API 2 controllers.
             // You will also need to add the Microsoft.AspNet.Mvc.WebApiCompatShim package to the 'dependencies' section of project.json.
             // services.AddWebApiConventions();
@@ -113,11 +121,11 @@ namespace StopGuessing
             // Add the platform handler to the request pipeline.
             app.UseIISPlatformHandler();
 
-            // Add Application Insights to the request pipeline to track HTTP request telemetry data.
-            app.UseApplicationInsightsRequestTelemetry();
+            //// Add Application Insights to the request pipeline to track HTTP request telemetry data.
+            //app.UseApplicationInsightsRequestTelemetry();
 
-            // Track data about exceptions from the application. Should be configured after all error handling middleware in the request pipeline.
-            app.UseApplicationInsightsExceptionTelemetry();
+            //// Track data about exceptions from the application. Should be configured after all error handling middleware in the request pipeline.
+            //app.UseApplicationInsightsExceptionTelemetry();
 
             // Configure the HTTP request pipeline.
             app.UseDefaultFiles();

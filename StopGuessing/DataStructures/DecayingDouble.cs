@@ -108,29 +108,61 @@ namespace StopGuessing.DataStructures
             }
         }
 
-        public void AddInPlace(TimeSpan halfLife, DecayingDouble amountToAdd)
+        public void AddInPlace(TimeSpan halfLife, double amountToAdd, DateTime? whenToAddIt)
         {
             if (!LastUpdatedUtc.HasValue)
             {
-                ValueAtTimeOfLastUpdate += amountToAdd.ValueAtTimeOfLastUpdate;
-                LastUpdatedUtc = amountToAdd.LastUpdatedUtc;
+                ValueAtTimeOfLastUpdate += amountToAdd;
+                LastUpdatedUtc = whenToAddIt;
             }
-            else if (!amountToAdd.LastUpdatedUtc.HasValue)
+            else if (!whenToAddIt.HasValue)
             {
-                ValueAtTimeOfLastUpdate += amountToAdd.ValueAtTimeOfLastUpdate;
-            } else if (LastUpdatedUtc.Value > amountToAdd.LastUpdatedUtc.Value)
+                ValueAtTimeOfLastUpdate += amountToAdd;
+            }
+            else if (LastUpdatedUtc.Value > whenToAddIt.Value)
             {
-                ValueAtTimeOfLastUpdate += amountToAdd.GetValue(halfLife, LastUpdatedUtc.Value);
+                ValueAtTimeOfLastUpdate += Decay(amountToAdd, halfLife, whenToAddIt, LastUpdatedUtc);
             }
             else
             {
-                ValueAtTimeOfLastUpdate = GetValue(halfLife, amountToAdd.LastUpdatedUtc.Value) +
-                                          amountToAdd.ValueAtTimeOfLastUpdate;
-                LastUpdatedUtc = amountToAdd.LastUpdatedUtc.Value;
+                ValueAtTimeOfLastUpdate = GetValue(halfLife, whenToAddIt) +
+                                          amountToAdd;
+                LastUpdatedUtc = whenToAddIt;
             }
         }
 
-        public  DecayingDouble Subtract(TimeSpan halfLife, DecayingDouble amountToRemove)
+        public void SubtractInPlace(TimeSpan halfLife, double amountToSubtract, DateTime? whenToSubtractIt)
+        {
+            if (!LastUpdatedUtc.HasValue)
+            {
+                ValueAtTimeOfLastUpdate -= amountToSubtract;
+                LastUpdatedUtc = whenToSubtractIt;
+            }
+            else if (!whenToSubtractIt.HasValue)
+            {
+                ValueAtTimeOfLastUpdate -= amountToSubtract;
+            }
+            else if (LastUpdatedUtc.Value > whenToSubtractIt.Value)
+            {
+                ValueAtTimeOfLastUpdate -= Decay(amountToSubtract, halfLife, whenToSubtractIt, LastUpdatedUtc);
+            }
+            else
+            {
+                ValueAtTimeOfLastUpdate = GetValue(halfLife, whenToSubtractIt) -
+                                          amountToSubtract;
+                LastUpdatedUtc = whenToSubtractIt;
+            }
+        }
+
+
+        public void AddInPlace(TimeSpan halfLife, DecayingDouble amountToAdd)
+            => AddInPlace(halfLife, amountToAdd.ValueAtTimeOfLastUpdate, amountToAdd.LastUpdatedUtc);
+
+        public void SubtractInPlace(TimeSpan halfLife, DecayingDouble amountToSubtract)
+            => SubtractInPlace(halfLife, amountToSubtract.ValueAtTimeOfLastUpdate, amountToSubtract.LastUpdatedUtc);
+
+
+        public DecayingDouble Subtract(TimeSpan halfLife, DecayingDouble amountToRemove)
         {
             if (!LastUpdatedUtc.HasValue)
             {
@@ -149,29 +181,6 @@ namespace StopGuessing.DataStructures
             else
             {
                 return new DecayingDouble(amountToRemove.ValueAtTimeOfLastUpdate - GetValue(halfLife, amountToRemove.LastUpdatedUtc.Value), amountToRemove.LastUpdatedUtc.Value);
-            }
-        }
-
-        public void SubtractInPlace(TimeSpan halfLife, DecayingDouble amountToAdd)
-        {
-            if (!LastUpdatedUtc.HasValue)
-            {
-                ValueAtTimeOfLastUpdate -= -amountToAdd.ValueAtTimeOfLastUpdate;
-                LastUpdatedUtc = amountToAdd.LastUpdatedUtc;
-            }
-            else if (!amountToAdd.LastUpdatedUtc.HasValue)
-            {
-                ValueAtTimeOfLastUpdate -= amountToAdd.ValueAtTimeOfLastUpdate;
-            }
-            else if (LastUpdatedUtc.Value > amountToAdd.LastUpdatedUtc.Value)
-            {
-                ValueAtTimeOfLastUpdate -= amountToAdd.GetValue(halfLife, LastUpdatedUtc.Value);
-            }
-            else
-            {
-                ValueAtTimeOfLastUpdate = GetValue(halfLife, amountToAdd.LastUpdatedUtc.Value) -
-                                          amountToAdd.ValueAtTimeOfLastUpdate;
-                LastUpdatedUtc = amountToAdd.LastUpdatedUtc.Value;
             }
         }
 

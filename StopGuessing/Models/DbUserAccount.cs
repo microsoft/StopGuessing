@@ -3,9 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using StopGuessing.DataStructures;
+using Microsoft.Data.Entity;
 
 namespace StopGuessing.Models
 {
+    public class DbUserAccountContext : DbContext
+    {
+        public DbSet<DbUserAccount> DbUserAccounts { get; set; }
+        public DbSet<SuccessfulLoginCookie> SuccessfulLoginCookies { get; set; }
+        public DbSet<IncorrectPhaseTwoHash> IncorrectPhaseTwoHashes { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            // Make Blog.Url required
+            modelBuilder.Entity<DbUserAccount>()
+                .Property(b => b.UsernameOrAccountId)
+                .IsRequired();
+        }
+    }
+
+
     public class SuccessfulLoginCookie
     {
         public string DbUserAccountId { get; set; }
