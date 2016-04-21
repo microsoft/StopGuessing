@@ -3,7 +3,7 @@ using Microsoft.AspNet.Builder;
 using Microsoft.AspNet.Hosting;
 using Microsoft.Dnx.Runtime;
 using Microsoft.Framework.Configuration;
-using Microsoft.Framework.DependencyInjection;
+//using Microsoft.Framework.DependencyInjection;
 using Microsoft.Framework.Logging;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
@@ -11,6 +11,7 @@ using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using Microsoft.Data.Entity;
 using Microsoft.Extensions.PlatformAbstractions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace StopGuessing
 {
@@ -43,12 +44,13 @@ namespace StopGuessing
             //services.AddApplicationInsightsTelemetry(Configuration);
 
             var connection = @"Server=(localdb)\mssqllocaldb;Database=EFGetStarted.AspNet5.NewDb;Trusted_Connection=True;";
+           
+            services.AddEntityFramework()
+                .AddSqlServer()
+                .AddDbContext<DbUserAccountContext>(opt => opt.UseSqlServer(connection));
 
-            //services.AddEntityFramework()
-            //    .AddSqlServer()
-            //    .AddDbContext<DbUserAccountContext>(options => options.UseSqlServer(connection));
+            services.AddMvc();
 
-            // services.AddMvc();
             // Uncomment the following line to add Web API services which makes it easier to port Web API 2 controllers.
             // You will also need to add the Microsoft.AspNet.Mvc.WebApiCompatShim package to the 'dependencies' section of project.json.
             // services.AddWebApiConventions();

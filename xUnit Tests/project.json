@@ -9,7 +9,7 @@
   "dependencies": {
     "Microsoft.Framework.OptionsModel": "1.0.0-*",
     "StopGuessing": "1.0.0-*",
-    "xunit": "2.1.0-rc2-build3176",
+    "xunit": "2.2.0-beta1-build3239",
     "xunit.runner.dnx": "2.1.0-rc1-build204"
   },
   "commands": {
