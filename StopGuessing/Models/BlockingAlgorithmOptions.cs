@@ -58,9 +58,12 @@ namespace StopGuessing.Models
 
         public TimeSpan BlockScoreHalfLife = new TimeSpan(12,0,0); // 12 hours
 
+        public uint AgingMembershipSketchTables = 16;
+        public uint AgingMembershipSketchTableSize = 128*1024;
+
 
         // For tracking popular passwords with a set of frequency trackers
-        public  uint LengthOfShortestPopularityMeasurementPeriod = 10 * 1000;
+        public uint LengthOfShortestPopularityMeasurementPeriod = 10 * 1000;
         public  uint FactorOfGrowthBetweenPopularityMeasurementPeriods = 10;
         public  int NumberOfPopularityMeasurementPeriods = 4;
 

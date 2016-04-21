@@ -121,7 +121,7 @@ namespace Simulator
             {
                 // To cause this client to be out of date, we'll change the password here.
                 string newPassword = _simPasswords.GetPasswordFromWeightedDistribution();
-                account.Account.SetPassword(newPassword, account.Password);
+                UserAccountController.SetPassword(account.Account, newPassword, account.Password);
                 account.Password = newPassword;
                 mistake += "StalePassword";
 

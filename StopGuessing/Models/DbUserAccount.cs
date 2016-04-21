@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using StopGuessing.DataStructures;
 using Microsoft.Data.Entity;
@@ -22,7 +23,6 @@ namespace StopGuessing.Models
         }
     }
 
-
     public class SuccessfulLoginCookie
     {
         public string DbUserAccountId { get; set; }
@@ -38,25 +38,73 @@ namespace StopGuessing.Models
     }
 
 
-    public class DbUserAccount : UserAccount
+
+    public class DbUserAccount : IUserAccount
     {
         protected string DbUserAccountId { get; set; }
-        
+
         [JsonIgnore]
-        public new string UsernameOrAccountId {
+        public string UsernameOrAccountId
+        {
             get { return DbUserAccountId; }
-            protected set { DbUserAccountId = value; } }
+        }
+
+        /// <summary>
+        /// The salt is a random unique sequence of bytes that is included when the password is hashed (phase 1 of hashing)
+        /// to ensure that attackers who might obtain the set of account hashes cannot hash a password once and then compare
+        /// the hash against every account.
+        /// </summary>
+        public byte[] SaltUniqueToThisAccount { get; set; }
+
+        /// <summary>
+        /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
+        /// </summary>
+        public string PasswordHashPhase1FunctionName { get; set; }
+
+        /// <summary>
+        /// The number of iterations to use for the phase 1 hash to make it more expensive.
+        /// </summary>
+        public int NumberOfIterationsToUseForPhase1Hash { get; set; }
+
+        /// <summary>
+        /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
+        /// enters her correct password, the expensive (phase1) hash of which is used to symmetrically encrypt the matching EC private symmetricKey.
+        /// </summary>
+        public byte[] EcPublicAccountLogKey { get; set; }
+
+        /// <summary>
+        /// The EC private symmetricKey encrypted with phase 1 (expensive) hash of the password
+        /// </summary>        
+        public byte[] EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 { get; set; }
+
+        /// <summary>
+        /// The Phase2 password hash is the result of hasing the password (and salt) first with the expensive hash function to create a Phase1 hash,
+        /// then hasing that Phase1 hash (this time without the salt) using SHA256 so as to make it unnecessary to store the
+        /// phase1 hash in this record.  Doing so allows the Phase1 hash to be used as a symmetric encryption symmetricKey for the log. 
+        /// </summary>
+        public string PasswordHashPhase2 { get; set; }
+
+        /// <summary>
+        /// The account's credit limit for offsetting penalties for IP addresses from which
+        /// the account has logged in successfully.
+        /// </summary>
+        public double CreditLimit { get; set; }
+
+        /// <summary>
+        /// The half life with which used credits are removed from the system freeing up new credit
+        /// </summary>
+        public TimeSpan CreditHalfLife { get; set; }
 
         /// <summary>
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
         /// that have successfully logged into this account.
         /// </summary>
-        protected List<SuccessfulLoginCookie> SuccessfulLoginCookies { get; set; }
+        //protected List<SuccessfulLoginCookie> SuccessfulLoginCookies { get; set; }
 
         ///// <summary>
         ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 
         ///// </summary>
-        protected List<IncorrectPhaseTwoHash> RecentIncorrectPhase2Hashes { get; set; }
+        //protected List<IncorrectPhaseTwoHash> RecentIncorrectPhase2Hashes { get; set; }
 
         /// <summary>
         /// A decaying double with the amount of credits consumed against the credit limit
@@ -66,12 +114,12 @@ namespace StopGuessing.Models
         protected DateTime ConsumedCreditsLastUpdatedUtc { get; set; }
 
 
-        public override bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashOfCookie)
+        public bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(string hashOfCookie)
         {
             return SuccessfulLoginCookies.Count( x => x.HashedValue == hashOfCookie ) > 0;
         }
 
-        public override void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null)
+        public void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null)
         {
             SuccessfulLoginCookie cookie = SuccessfulLoginCookies.FirstOrDefault(x => x.HashedValue == hashOfCookie);
             if (cookie != null)
@@ -86,7 +134,7 @@ namespace StopGuessing.Models
             }
         }
 
-        public override bool AddIncorrectPhase2Hash(string phase2Hash, DateTime? whenSeenUtc = null)
+        public bool AddIncorrectPhase2Hash(string phase2Hash, DateTime? whenSeenUtc = null)
         {
             IncorrectPhaseTwoHash incorrectHashRecord = RecentIncorrectPhase2Hashes.FirstOrDefault(x => x.HashValue == phase2Hash);
             if (incorrectHashRecord != null)
@@ -100,9 +148,9 @@ namespace StopGuessing.Models
             return false;
         }
 
-        public override double GetCreditsConsumed(DateTime asOfTimeUtc) => DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, asOfTimeUtc);
+        public double GetCreditsConsumed(DateTime asOfTimeUtc) => DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, asOfTimeUtc);
 
-        public override void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc)
+        public void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc)
         {
             ConsumedCreditsLastValue = DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, ConsumedCreditsLastUpdatedUtc, timeOfConsumptionUtc);
             ConsumedCreditsLastUpdatedUtc = timeOfConsumptionUtc;
@@ -131,22 +179,28 @@ namespace StopGuessing.Models
         public void Initialize(
             string usernameOrAccountId,
             string password = null,
-            double creditLimit = DefaultCreditLimit,
+            double creditLimit = UserAccountController.DefaultCreditLimit,
             TimeSpan? creditHalfLife = null,
             string phase1HashFunctionName = null,
             int numberOfIterationsToUseForPhase1Hash = 0,
             byte[] saltUniqueToThisAccount = null,
             DateTime? currentDateTimeUtc = null,
-            int maxNumberOfCookiesToTrack = DefaultMaxNumberOfCookiesToTrack,
-            int maxFailedPhase2HashesToTrack = DefaultMaxFailedPhase2HashesToTrack,
-            int saltLength = DefaultSaltLength)
+            int maxNumberOfCookiesToTrack = UserAccountController.DefaultMaxNumberOfCookiesToTrack,
+            int maxFailedPhase2HashesToTrack = UserAccountController.DefaultMaxFailedPhase2HashesToTrack,
+            int saltLength = UserAccountController.DefaultSaltLength)
         {
-            base.Initialize(usernameOrAccountId, password, creditLimit, creditHalfLife, phase1HashFunctionName,
+            if (usernameOrAccountId != null && usernameOrAccountId != DbUserAccountId)
+                DbUserAccountId = usernameOrAccountId;
+            UserAccountController.Initialize(this, password, creditLimit, creditHalfLife, phase1HashFunctionName,
                 numberOfIterationsToUseForPhase1Hash, saltUniqueToThisAccount, currentDateTimeUtc, saltLength);
             ConsumedCreditsLastValue = 0;
             ConsumedCreditsLastUpdatedUtc = currentDateTimeUtc ?? DateTime.UtcNow;
         }
 
 
+        public void Dispose()
+        {
+            // Write back to database.
+        }
     }
 }
