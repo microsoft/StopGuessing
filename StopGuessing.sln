@@ -18,8 +18,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "Simulator", "Simulator\Simulator.xproj", "{13E79588-59C0-47F5-B757-DCD8766EDBA0}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "PostSimulationAnalysis", "PostSimulationAnalysis\PostSimulationAnalysis.xproj", "{4CD3A6E1-2E18-4BE8-9027-E5A2FDDDE02D}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PostSimulationAnalysisOldRuntime", "PostSimulationAnalysisOldRuntime\PostSimulationAnalysisOldRuntime.csproj", "{0E1898E6-417D-463D-A0C7-7D4A53452538}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Binomial Ladder Sketch Parameter Calculator", "Binomial Ladder Sketch Parameter Calculator\Binomial Ladder Sketch Parameter Calculator.csproj", "{A5CE9C56-5AD2-486C-87DD-782D6178A799}"
@@ -45,10 +43,6 @@ Global
 		{13E79588-59C0-47F5-B757-DCD8766EDBA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{13E79588-59C0-47F5-B757-DCD8766EDBA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{13E79588-59C0-47F5-B757-DCD8766EDBA0}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4CD3A6E1-2E18-4BE8-9027-E5A2FDDDE02D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4CD3A6E1-2E18-4BE8-9027-E5A2FDDDE02D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4CD3A6E1-2E18-4BE8-9027-E5A2FDDDE02D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4CD3A6E1-2E18-4BE8-9027-E5A2FDDDE02D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0E1898E6-417D-463D-A0C7-7D4A53452538}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0E1898E6-417D-463D-A0C7-7D4A53452538}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0E1898E6-417D-463D-A0C7-7D4A53452538}.Release|Any CPU.ActiveCfg = Release|Any CPU

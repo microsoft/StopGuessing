@@ -2,9 +2,9 @@
 using Microsoft.AspNet.Builder;
 using Microsoft.AspNet.Hosting;
 using Microsoft.Dnx.Runtime;
-using Microsoft.Framework.Configuration;
+//using Microsoft.Framework.Configuration;
 //using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+//using Microsoft.Framework.Logging;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
@@ -12,6 +12,8 @@ using StopGuessing.Models;
 using Microsoft.Data.Entity;
 using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace StopGuessing
 {
@@ -30,7 +32,7 @@ namespace StopGuessing
                 //builder.AddApplicationInsightsSettings(developerMode: true);
             }
 
-            //builder.AddEnvironmentVariables();
+            builder.AddEnvironmentVariables();
             Configuration = builder.Build();
         }
 
@@ -117,8 +119,8 @@ namespace StopGuessing
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
             loggerFactory.MinimumLevel = LogLevel.Information;
-            loggerFactory.AddConsole();
-            loggerFactory.AddDebug();
+            //loggerFactory. .AddConsole();
+            //loggerFactory.AddDebug();
 
             // Add the platform handler to the request pipeline.
             app.UseIISPlatformHandler();
