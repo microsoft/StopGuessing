@@ -16,6 +16,13 @@ namespace StopGuessing.EncryptionPrimitives
             LocalRandomNumberGenerator.GetBytes(bytes);
         }
 
+        public static byte[] GetBytes(int count)
+        {
+            byte[] bytes = new byte[count];
+            LocalRandomNumberGenerator.GetBytes(bytes);
+            return bytes;
+        }
+
         public static ulong Get64Bits(ulong? mod = null)
         {
             byte[] randBytes = new byte[8];

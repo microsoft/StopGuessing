@@ -158,7 +158,7 @@ namespace StopGuessing.DataStructures
 //            {
 //                T item = itemQueue.Dequeue();
 //                ulong myTaskIndex = taskIndex++;
-//                currentWave[i] = Task.Run(async () => await actionToRunAsync(item, myTaskIndex, cancellationToken), cancellationToken);
+//                currentWave[i] = Task.RunInBackground(async () => await actionToRunAsync(item, myTaskIndex, cancellationToken), cancellationToken);
 //            }
 
 //            while (currentWave != null)
@@ -175,7 +175,7 @@ namespace StopGuessing.DataStructures
 //                    {
 //                        T item = itemQueue.Dequeue();
 //                        ulong myTaskIndex = taskIndex++;
-//                        nextWave[i] = Task.Run(async () => await actionToRunAsync(item, myTaskIndex, cancellationToken), cancellationToken);
+//                        nextWave[i] = Task.RunInBackground(async () => await actionToRunAsync(item, myTaskIndex, cancellationToken), cancellationToken);
 //                    }
 //                }
 //                else
@@ -192,7 +192,7 @@ namespace StopGuessing.DataStructures
 //                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
 //                    {
 //#pragma warning disable 4014
-//                        Task.Run(async () => await callOnException(exceptionTask.Exception, cancellationToken),
+//                        Task.RunInBackground(async () => await callOnException(exceptionTask.Exception, cancellationToken),
 //                            cancellationToken);
 //#pragma warning restore 4014
 //                    }
@@ -222,7 +222,7 @@ namespace StopGuessing.DataStructures
 //            for (int i = 0; i < firstWaveSize; i++)
 //            {
 //                T item = itemQueue.Dequeue();
-//                currentWave[i] = Task.Run(async () => await actionToRunAsync(item, cancellationToken), cancellationToken);
+//                currentWave[i] = Task.RunInBackground(async () => await actionToRunAsync(item, cancellationToken), cancellationToken);
 //            }
 
 //            while (currentWave != null)
@@ -238,7 +238,7 @@ namespace StopGuessing.DataStructures
 //                    for (int i = 0; i < nextWave.Length; i++)
 //                    {
 //                        T item = itemQueue.Dequeue();
-//                        nextWave[i] = Task.Run(async () => await actionToRunAsync(item, cancellationToken), cancellationToken);
+//                        nextWave[i] = Task.RunInBackground(async () => await actionToRunAsync(item, cancellationToken), cancellationToken);
 //                    }
 //                }
 //                else
@@ -255,7 +255,7 @@ namespace StopGuessing.DataStructures
 //                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
 //                    {
 //#pragma warning disable 4014
-//                        Task.Run(async () => await callOnException(exceptionTask.Exception, cancellationToken), cancellationToken);
+//                        Task.RunInBackground(async () => await callOnException(exceptionTask.Exception, cancellationToken), cancellationToken);
 //#pragma warning restore 4014
 //                    }
 //                }
@@ -284,7 +284,7 @@ namespace StopGuessing.DataStructures
 //            for (int i = 0; i < firstWaveSize; i++)
 //            {
 //                ulong myTaskIndex = taskIndex++;
-//                currentWave[i] = Task.Run(() => actionToRun(myTaskIndex), cancellationToken);
+//                currentWave[i] = Task.RunInBackground(() => actionToRun(myTaskIndex), cancellationToken);
 //            }
 
 //            while (currentWave != null)
@@ -300,7 +300,7 @@ namespace StopGuessing.DataStructures
 //                    for (int i = 0; i < nextWave.Length; i++)
 //                    {
 //                        ulong myTaskIndex = taskIndex++;
-//                        nextWave[i] = Task.Run(() => actionToRun(myTaskIndex), cancellationToken);
+//                        nextWave[i] = Task.RunInBackground(() => actionToRun(myTaskIndex), cancellationToken);
 //                    }
 //                }
 //                else
@@ -315,7 +315,7 @@ namespace StopGuessing.DataStructures
 //                if (callOnException != null)
 //                    foreach (Task exceptionTask in currentWave.Where(t => t.IsFaulted))
 //#pragma warning disable 4014
-//                        Task.Run(() => callOnException(exceptionTask.Exception), default(CancellationToken));
+//                        Task.RunInBackground(() => callOnException(exceptionTask.Exception), default(CancellationToken));
 //#pragma warning restore 4014
 
 //                // The current wave becomes the next wave...
@@ -343,7 +343,7 @@ namespace StopGuessing.DataStructures
 //            while (tasksStarted < (ulong)activeTasks.Length && tasksStarted < numberOfTimesToRepeat)
 //            {
 //                ulong taskId = tasksStarted;
-//                Task startedTask = Task.Run(async () => await actionToRun(taskId), cancellationToken);
+//                Task startedTask = Task.RunInBackground(async () => await actionToRun(taskId), cancellationToken);
 //                activeTasks[tasksStarted] = startedTask;
 //                taskToIndex[startedTask] = (int)tasksStarted;
 //                tasksStarted++;
@@ -375,9 +375,9 @@ namespace StopGuessing.DataStructures
 //                }
 //                Task replacementTask;
 //                if (callExceptionHandler)
-//                    replacementTask = Task.Run(async () => await callOnException(completedTask.Exception), default(CancellationToken));
+//                    replacementTask = Task.RunInBackground(async () => await callOnException(completedTask.Exception), default(CancellationToken));
 //                else
-//                    replacementTask = Task.Run(async () => await actionToRun(taskId), cancellationToken);
+//                    replacementTask = Task.RunInBackground(async () => await actionToRun(taskId), cancellationToken);
 //                // Track exception handling tasks so that we can make sure we don't call the exception handler
 //                // on a failed exception handler.
 //                if (callExceptionHandler)
@@ -395,7 +395,7 @@ namespace StopGuessing.DataStructures
 //            {
 //                foreach (Task exceptionTask in activeTasks.Where(t => t.IsFaulted))
 //#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-//                    Task.Run(() => callOnException(exceptionTask.Exception), default(CancellationToken));
+//                    Task.RunInBackground(() => callOnException(exceptionTask.Exception), default(CancellationToken));
 //            }
 //        }
 

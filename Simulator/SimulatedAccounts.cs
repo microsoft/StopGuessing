@@ -123,16 +123,16 @@ namespace Simulator
                 {
                     //if (loopState. % 10000 == 0)
                     //    _logger.WriteStatus("Created account {0:N0}", index);
-                    simAccount.Account = new MemoryUserAccount();
-                    simAccount.Account.Initialize(simAccount.UniqueId,
-                        simAccount.Password,
-                        //                        experimentalConfiguration.BlockingOptions.Conditions.Length,
-                        experimentalConfiguration.BlockingOptions.AccountCreditLimit,
-                        experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
-                        "PBKDF2_SHA256",
-                        experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations);
+                    simAccount.Account = new MemoryUserAccount(simAccount.UniqueId, simAccount.Password)
+                    {
+                        CreditHalfLife = experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
+                        CreditLimit = experimentalConfiguration.BlockingOptions.AccountCreditLimit,
+                        PasswordHashPhase1FunctionName = "PBKDF2_SHA256",
+                        NumberOfIterationsToUseForPhase1Hash =
+                            experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations
+                    };
                     foreach (string cookie in simAccount.Cookies)
-                        simAccount.Account.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(LoginAttempt.HashCookie(cookie));
+                        simAccount.Account.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(LoginAttempt.HashCookie(cookie));
                    // await accountContextFactory.Get().WriteNewAsync(simAccount.Account.UsernameOrAccountId, simAccount.Account, cancelToken);
                 });
             _logger.WriteStatus("Finished creating user accounts for each simluated account record");

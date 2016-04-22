@@ -14,6 +14,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using StopGuessing.Azure;
 
 namespace StopGuessing
 {

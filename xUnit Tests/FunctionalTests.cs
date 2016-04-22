@@ -67,13 +67,12 @@ namespace xUnit_Tests
         public static IUserAccount CreateTestAccount(TestConfiguration configuration, string usernameOrAccountId, string password,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            MemoryUserAccount account = new MemoryUserAccount();
-            account.Initialize(usernameOrAccountId,
-              password,
-              //              configuration.MyBlockingAlgorithmOptions.Conditions.Length,
-              configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
-              configuration.MyBlockingAlgorithmOptions.BlockScoreHalfLife,
-              numberOfIterationsToUseForPhase1Hash: 1);
+            MemoryUserAccount account = new MemoryUserAccount(usernameOrAccountId, password)
+            {
+                CreditLimit = configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
+                CreditHalfLife = configuration.MyBlockingAlgorithmOptions.AccountCreditLimitHalfLife,
+                NumberOfIterationsToUseForPhase1Hash = 1
+            };
             configuration.MyAccountFactory.Add(account);
             return account;
         }

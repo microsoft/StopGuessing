@@ -324,8 +324,8 @@ namespace StopGuessing.Controllers
                     // Determine whether the client provided a cookie to indicate that it has previously logged
                     // into this account successfully---a very strong indicator that it is a client used by the
                     // legitimate user and not an unknown client performing a guessing attack.
-                    loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount =
-                        account.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(
+                    loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount = await
+                        account.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
                             loginAttempt.HashOfCookieProvidedByBrowser);
 
                     // Test to see if the password is correct by calculating the Phase2Hash and comparing it with the Phase2 hash
@@ -401,7 +401,7 @@ namespace StopGuessing.Controllers
                         if (accountChanged)
                         {
                             // Save changes to the user account record in the background (so that we don't hold up returning the result)
-                            //BackgroundTask.Run(userAccountContext.SaveChangesAsync(account.UsernameOrAccountId, account, new CancellationToken()));
+                            //TaskHelper.RunInBackground(userAccountContext.SaveChangesAsync(account.UsernameOrAccountId, account, new CancellationToken()));
                         }
 
                     }
@@ -426,7 +426,7 @@ namespace StopGuessing.Controllers
                         // We actually have two data structures for catching this: A large sketch of clientsIpHistory/account/password triples and a
                         // tiny LRU cache of recent failed passwords for this account.  We'll check both.
 
-                        if (account.AddIncorrectPhase2Hash(phase2HashOfProvidedPassword))
+                        if (await account.AddIncorrectPhase2HashAsync(phase2HashOfProvidedPassword))
                         {
                             // The same incorrect password was recently used for this account, do not penalize the IP
                             // (as attackers don't gain anything from guessing the wrong password again).
@@ -502,7 +502,7 @@ namespace StopGuessing.Controllers
             {
                 // Record the invalid password into the binomial ladder sketch that tracks freqeunt-incorrect passwords
                 // Since we don't need to know the result, we'll run it in the background (so that we don't hold up returning the result)
-                BackgroundTask.Run(_binomialLadderSketch.StepAsync(passwordProvidedByClient, cancellationToken: cancellationToken));
+                TaskHelper.RunInBackground(_binomialLadderSketch.StepAsync(passwordProvidedByClient, cancellationToken: cancellationToken));
             }
 
             return loginAttempt;

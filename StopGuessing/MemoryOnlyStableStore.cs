@@ -14,14 +14,14 @@ namespace StopGuessing
 
     //    public async Task<bool> IsIpAddressAlwaysPermittedAsync(System.Net.IPAddress clientIpAddress, CancellationToken cancelToken = default(CancellationToken))
     //    {
-    //        return await Task.Run( () => false, cancelToken);
+    //        return await Task.RunInBackground( () => false, cancelToken);
     //    }
 
     //    public async Task<UserAccount> ReadAccountAsync(string usernameOrAccountId, CancellationToken cancelToken)
     //    {
     //        if (Accounts == null)
     //            return null;
-    //        return await Task.Run( () =>
+    //        return await Task.RunInBackground( () =>
     //        {
     //            UserAccount account;
     //            Accounts.TryGetValue(usernameOrAccountId, out account);
@@ -33,7 +33,7 @@ namespace StopGuessing
     //    {
     //        if (LoginAttempts == null)
     //            return null;
-    //        return await Task.Run(() =>
+    //        return await Task.RunInBackground(() =>
     //        {
     //            LoginAttempt attempt;
     //            LoginAttempts.TryGetValue(key, out attempt);
@@ -45,14 +45,14 @@ namespace StopGuessing
     //        bool includeSuccesses = true, bool includeFailures = true, CancellationToken cancelToken = default(CancellationToken))
     //    {
     //        // fail on purpose
-    //        return await Task.Run(() => new List<LoginAttempt>(), cancelToken);
+    //        return await Task.RunInBackground(() => new List<LoginAttempt>(), cancelToken);
     //    }
 
     //    public async Task<IEnumerable<LoginAttempt>> ReadMostRecentLoginAttemptsAsync(string usernameOrAccountId, int numberToRead, 
     //        bool includeSuccesses = true, bool includeFailures = true, CancellationToken cancelToken = default(CancellationToken))
     //    {
     //        // fail on purpose
-    //        return await Task.Run(() => new List<LoginAttempt>(), cancelToken);
+    //        return await Task.RunInBackground(() => new List<LoginAttempt>(), cancelToken);
     //    }
 
     //    public async Task WriteAccountAsync(UserAccount account, CancellationToken cancelToken)
@@ -61,14 +61,14 @@ namespace StopGuessing
     //            return;
 
     //        // REMOVE FOR PRODUCTION
-    //        // For testing the mipact of Task.Run() on performance
+    //        // For testing the mipact of Task.RunInBackground() on performance
     //        //if (true)
     //        //{
     //        //    Accounts[account.UsernameOrAccountId] = account;
     //        //    return;
     //        //}
 
-    //        await Task.Run(() =>
+    //        await Task.RunInBackground(() =>
     //        {
     //            Accounts[account.UsernameOrAccountId] = account;
     //        }, cancelToken);
@@ -78,7 +78,7 @@ namespace StopGuessing
     //    {
     //        if (LoginAttempts == null)
     //            return;
-    //        await Task.Run(() =>
+    //        await Task.RunInBackground(() =>
     //        {
     //            LoginAttempts[attempt.UniqueKey] = attempt;
     //        }, cancelToken);

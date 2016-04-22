@@ -170,7 +170,7 @@ namespace Simulator
         /// <returns></returns>
         public async Task Run(CancellationToken cancellationToken = default(CancellationToken))
         {
-            _logger.WriteStatus("In Run");
+            _logger.WriteStatus("In RunInBackground");
 
             _logger.WriteStatus("Priming password-tracking with known common passwords");
             _simPasswords.PrimeWithKnownPasswordsAsync(_binomialLadderSketch, 40);
