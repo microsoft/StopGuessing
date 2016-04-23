@@ -23,47 +23,38 @@ namespace StopGuessing
         IStableStoreContext<TId, TValue> Get();
     }
 
-    public interface IUserAccountContextFactory : IStableStoreFactory<string, UserAccount>
-    { }
+    //public interface IUserAccountContextFactory : IStableStoreFactory<string, UserAccount>
+    //{ }
 
-    public class MemoryOnlyAccountStore : IStableStoreContext<string, UserAccount>
+    public class MemoryOnlyUserAccountFactory : IUserAccountFactory // IStableStoreContext<string, UserAccount>
     {
-        private readonly ConcurrentDictionary<string, UserAccount> _store = new ConcurrentDictionary<string, UserAccount>();
+        private readonly ConcurrentDictionary<string, IUserAccount> _store = new ConcurrentDictionary<string,  IUserAccount>();
 
 #pragma warning disable 1998
-        public async Task<UserAccount> ReadAsync(string usernameOrAccountId, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<IUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken? cancellationToken)
 #pragma warning restore 1998
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            UserAccount account = null;
+            cancellationToken?.ThrowIfCancellationRequested();
+            IUserAccount account = null;
             _store.TryGetValue(usernameOrAccountId, out account);
             return account;
         }
 
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-        public async Task WriteNewAsync(string id, UserAccount account, CancellationToken cancellationToken = new CancellationToken())
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+        public void Add(IUserAccount account)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            _store[id] = account;
+            _store[account.UsernameOrAccountId] = account;
         }
-        
-#pragma warning disable 1998
-        public async Task SaveChangesAsync(string id, UserAccount account, CancellationToken cancellationToken = new CancellationToken())
-#pragma warning restore 1998
-        {
-            // FUTURE -- remove async and return Task.CompletedTask when this .NET 4.6 property is availble
-        }
+
     }
 
-    public class MemoryOnlyAccountContextFactory : IUserAccountContextFactory
-    {
-        private readonly MemoryOnlyAccountStore _memoryOnlyAccountStore = new MemoryOnlyAccountStore();
-        public IStableStoreContext<string, UserAccount> Get()
-        {
-            return _memoryOnlyAccountStore;
-        }
-    }
+    //public class MemoryOnlyAccountContextFactory : IUserAccountContextFactory
+    //{
+    //    private readonly MemoryOnlyAccountStore _memoryOnlyAccountStore = new MemoryOnlyAccountStore();
+    //    public IStableStoreContext<string, UserAccount> Get()
+    //    {
+    //        return _memoryOnlyAccountStore;
+    //    }
+    //}
 
 
 }

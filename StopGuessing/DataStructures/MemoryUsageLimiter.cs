@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StopGuessing.DataStructures
 {
-    public class MemoryUsageLimiter
+    public class MemoryUsageLimiter : IDisposable
     {
+        private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
 
         public class ReduceMemoryUsageEventParameters : EventArgs
         {
@@ -28,11 +30,11 @@ namespace StopGuessing.DataStructures
             _fractionToRemoveOnCleanup = fractionToRemoveOnCleanup;
             if (hardMemoryLimit == 0)
             {
-                Task.Run(() => GenerationalReductionLoop());
+                Task.Run(() => GenerationalReductionLoop(cancellationTokenSource.Token), cancellationTokenSource.Token);
             }
             else
             {
-                Task.Run(() => ThresholdReductionLoop(hardMemoryLimit));
+                Task.Run(() => ThresholdReductionLoop(hardMemoryLimit, cancellationTokenSource.Token), cancellationTokenSource.Token);
             }
         }
         
@@ -58,34 +60,36 @@ namespace StopGuessing.DataStructures
         }
 
 
-        public void GenerationalReductionLoop()
+        public void GenerationalReductionLoop(CancellationToken cancellationToken)
         {
             GC.RegisterForFullGCNotification(10,10);
 
             while (true)
             {
                 int collectionCount = GC.CollectionCount(2);
-                GC.WaitForFullGCApproach(-1);
+                while (GC.WaitForFullGCApproach(100) == GCNotificationStatus.Timeout)
+                    cancellationToken.ThrowIfCancellationRequested();
                 
                 ReduceMemoryUsage();
 
                 if (collectionCount == GC.CollectionCount(2))
                     GC.Collect();
 
-                GC.WaitForFullGCComplete();
+                while (GC.WaitForFullGCComplete(100) == GCNotificationStatus.Timeout)
+                    cancellationToken.ThrowIfCancellationRequested();
             }
             // ReSharper disable once FunctionNeverReturns
         }
 
 
-        public void ThresholdReductionLoop(long hardMemoryLimit)
+        public void ThresholdReductionLoop(long hardMemoryLimit, CancellationToken cancellationToken)
         {
             while (true)
             {
                 try
                 {
                     System.Threading.Thread.Sleep(250);
-
+                    cancellationToken.ThrowIfCancellationRequested();
                     long currentMemoryConsumptionInBytes = GC.GetTotalMemory(true);
                     if (currentMemoryConsumptionInBytes > hardMemoryLimit)
                     {
@@ -100,6 +104,11 @@ namespace StopGuessing.DataStructures
                 }
             }
             // ReSharper disable once FunctionNeverReturns
+        }
+
+        public void Dispose()
+        {
+            cancellationTokenSource.Cancel();
         }
     }
 }

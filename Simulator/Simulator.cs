@@ -27,6 +27,7 @@ namespace Simulator
         public AgingMembershipSketch _recentIncorrectPasswords;
         public SelfLoadingCache<IPAddress, SimIpHistory> _ipHistoryCache;
         public readonly ExperimentalConfiguration _experimentalConfiguration;
+        public readonly MemoryUsageLimiter _memoryUsageLimiter;
 
         private readonly TextWriter _AttackAttemptsWithValidPasswords;
         private readonly TextWriter _LegitiamteAttemptsWithValidPasswords;
@@ -113,6 +114,7 @@ namespace Simulator
                     }
                     errorWriter.Flush();
                 }
+                
             }
         }
 
@@ -138,8 +140,8 @@ namespace Simulator
                 new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
             _ipHistoryCache = new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
 
-            MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
-            memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
+            _memoryUsageLimiter = new MemoryUsageLimiter();
+            _memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
 
             _recentIncorrectPasswords = new AgingMembershipSketch(16, 128 * 1024);
 
@@ -168,7 +170,7 @@ namespace Simulator
         /// <returns></returns>
         public async Task Run(CancellationToken cancellationToken = default(CancellationToken))
         {
-            _logger.WriteStatus("In Run");
+            _logger.WriteStatus("In RunInBackground");
 
             _logger.WriteStatus("Priming password-tracking with known common passwords");
             _simPasswords.PrimeWithKnownPasswordsAsync(_binomialLadderSketch, 40);
@@ -274,7 +276,7 @@ namespace Simulator
             //(e) => {
             //},
             cancellationToken: cancellationToken);
-            
+            _memoryUsageLimiter.Dispose();
         }
     }
 }

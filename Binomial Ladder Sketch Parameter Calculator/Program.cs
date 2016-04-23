@@ -95,23 +95,17 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
             using (StreamWriter detectDataWriter = new StreamWriter(path + "_" + H + "_" + threshold + ".csv"))
             {
                 detectDataWriter.WriteLine("Total Steps,P(detection)");
-                double[] fp_rise = heights.Select(h => f + (1-f) * (r[h]) * (1 - d[h])).ToArray();
-                double[] fp_fall = heights.Select(h => (1-f) * (1 - r[h]) * d[h]).ToArray();
+                double[] fp_rise = heights.Select(h => f + ( (1-f) * (r[h]) * (1 - d[h]) ) ).ToArray();
+                double[] fp_fall = heights.Select(h => (1-f) * (1 - r[h]) * d[h] ).ToArray();
                 double[] fp_stay = heights.Select(h => 1 - (fp_rise[h] + fp_fall[h])).ToArray();
 
                 // Initialize to the binomial distribution
-                uint stuck_at_k = H + 1;
-                double[] p = heights.Select(h => binomChoose(H, h) * Math.Pow(0.5d, H))
-                    .Concat(new double[] { 0 }) // For the stuck at H (H+1) element
-                    .ToArray();
+                double[] p = heights.Select(h => binomChoose(H, h) * Math.Pow(0.5d, H)).ToArray();
                 double[] pNext = new double[p.Length];
-                ulong f_inverse = (ulong)(1 / f);
                 double detected = 0;
 
                 for (ulong i = 0; i <= (100ul * 1000ul * 1000ul * 1000ul); i++)
                 {
-                    pNext[stuck_at_k] = p[stuck_at_k];
-
                     for (int h = 0; h <= H; h++)
                     {
                         pNext[h] = ((h > 0) ? (fp_rise[h - 1] * p[h - 1]) : 0) +
@@ -125,16 +119,16 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
                     }
                     for (uint h = threshold; h <= H; h++)
                     {
-                        detected += p[h];
+                        detected += pNext[h];
                         if (stickyMode)
                         {
-                            p[h] = 0;
+                            pNext[h] = 0;
                         }
                     }
 
                     if (i%1000000 == 0)
                     {
-                        detectDataWriter.WriteLine("{0},{1}", i, detected.ToString("E9"));
+                        detectDataWriter.WriteLine("{0},{1}", i, detected.ToString("E12"));
                         detectDataWriter.Flush();
                     }
 
@@ -199,7 +193,7 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
                         {
                             pNext[H] += p[H];
                         }
-                        detectDataWriter.WriteLine("{0},{1},{2}", observations, i, detected.ToString("E9"));
+                        detectDataWriter.WriteLine("{0},{1},{2}", observations, i, detected.ToString("E12"));
                         detectDataWriter.Flush();
                     }
 

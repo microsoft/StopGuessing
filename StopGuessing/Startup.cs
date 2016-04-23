@@ -2,15 +2,19 @@
 using Microsoft.AspNet.Builder;
 using Microsoft.AspNet.Hosting;
 using Microsoft.Dnx.Runtime;
-using Microsoft.Framework.Configuration;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+//using Microsoft.Framework.Configuration;
+//using Microsoft.Framework.DependencyInjection;
+//using Microsoft.Framework.Logging;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using Microsoft.Data.Entity;
 using Microsoft.Extensions.PlatformAbstractions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using StopGuessing.Azure;
 
 namespace StopGuessing
 {
@@ -29,7 +33,7 @@ namespace StopGuessing
                 //builder.AddApplicationInsightsSettings(developerMode: true);
             }
 
-            //builder.AddEnvironmentVariables();
+            builder.AddEnvironmentVariables();
             Configuration = builder.Build();
         }
 
@@ -43,12 +47,13 @@ namespace StopGuessing
             //services.AddApplicationInsightsTelemetry(Configuration);
 
             var connection = @"Server=(localdb)\mssqllocaldb;Database=EFGetStarted.AspNet5.NewDb;Trusted_Connection=True;";
+           
+            services.AddEntityFramework()
+                .AddSqlServer()
+                .AddDbContext<DbUserAccountContext>(opt => opt.UseSqlServer(connection));
 
-            //services.AddEntityFramework()
-            //    .AddSqlServer()
-            //    .AddDbContext<DbUserAccountContext>(options => options.UseSqlServer(connection));
+            services.AddMvc();
 
-            // services.AddMvc();
             // Uncomment the following line to add Web API services which makes it easier to port Web API 2 controllers.
             // You will also need to add the Microsoft.AspNet.Mvc.WebApiCompatShim package to the 'dependencies' section of project.json.
             // services.AddWebApiConventions();
@@ -72,7 +77,7 @@ namespace StopGuessing
                     options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
 
 
-            services.AddSingleton<IStableStoreFactory<string, UserAccount>, MemoryOnlyAccountContextFactory>();
+            services.AddSingleton<IUserAccountFactory, MemoryOnlyUserAccountFactory>();
 
             // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
             //services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
@@ -115,8 +120,8 @@ namespace StopGuessing
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
             loggerFactory.MinimumLevel = LogLevel.Information;
-            loggerFactory.AddConsole();
-            loggerFactory.AddDebug();
+            //loggerFactory. .AddConsole();
+            //loggerFactory.AddDebug();
 
             // Add the platform handler to the request pipeline.
             app.UseIISPlatformHandler();
