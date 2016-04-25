@@ -112,9 +112,15 @@ namespace StopGuessing.Models
 
         public double GetCreditsConsumed(DateTime asOfTimeUtc) => ConsumedCredits.GetValue(CreditHalfLife, asOfTimeUtc);
 
-        public void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc)
+
+#pragma warning disable 1998
+        public async Task<double> TryGetCreditAsync(IUserAccount userAccount, double amountRequested, DateTime timeOfRequestUtc, CancellationToken? cancellationToken)
+#pragma warning restore 1998
         {
-            ConsumedCredits.AddInPlace(CreditHalfLife, amountConsumed, timeOfConsumptionUtc);
+            double amountAvailable = Math.Min(0, userAccount.CreditLimit - userAccount.ConsumedCredits.GetValue(userAccount.CreditHalfLife, timeOfRequestUtc));
+            double amountConsumed = Math.Min(amountRequested, amountAvailable);
+            userAccount.ConsumedCredits.SubtractInPlace(userAccount.CreditHalfLife, amountConsumed, timeOfRequestUtc);
+            return amountConsumed;
         }
 
         public void Dispose()

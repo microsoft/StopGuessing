@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StopGuessing.DataStructures;
@@ -67,6 +65,7 @@ namespace StopGuessing.Models
 
         Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null, CancellationToken? cancellationToken = null);
 
-        void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc);
+        Task<double> TryGetCreditAsync(IUserAccount userAccount, double amountRequested, DateTime timeOfRequestUtc,
+            CancellationToken? cancellationToken = null);
     }
 }

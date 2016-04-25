@@ -205,13 +205,23 @@ namespace StopGuessing.Azure
             return false;
         }
 
-        //public double GetCreditsConsumed(DateTime asOfTimeUtc) => DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, asOfTimeUtc);
-
-        public void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc)
+#pragma warning disable 1998
+        public async Task<double> TryGetCreditAsync(IUserAccount userAccount, double amountRequested, DateTime timeOfRequestUtc, CancellationToken? cancellationToken)
+#pragma warning restore 1998
         {
-            ConsumedCreditsLastValue = DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, ConsumedCreditsLastUpdatedUtc, timeOfConsumptionUtc);
-            ConsumedCreditsLastUpdatedUtc = timeOfConsumptionUtc;
+            if (double.IsNaN(amountRequested) ||  amountRequested <= 0)
+            {
+                // You can't request a negative amount and requesting nothing is free
+                return 0;
+            }
+            double amountAvailable = Math.Min(0, userAccount.CreditLimit - userAccount.ConsumedCredits.GetValue(userAccount.CreditHalfLife, timeOfRequestUtc));
+            double amountConsumed = Math.Min(amountRequested, amountAvailable);
+            DecayingDouble amountRemaining = userAccount.ConsumedCredits.Subtract(userAccount.CreditHalfLife, new DecayingDouble(amountConsumed, timeOfRequestUtc));
+            ConsumedCreditsLastUpdatedUtc = amountRemaining.LastUpdatedUtc;
+            ConsumedCreditsLastValue = amountRemaining.ValueAtTimeOfLastUpdate;
+            return amountConsumed;
         }
+
 
         public DbUserAccount()
         {

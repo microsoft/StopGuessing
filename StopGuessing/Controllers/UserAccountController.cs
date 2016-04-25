@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
@@ -120,14 +121,6 @@ namespace StopGuessing.Controllers
             {
                 userAccount.EcPublicAccountLogKey = publicKey.ToByteArray();
             }
-        }
-
-        public static double TryGetCredit(IUserAccount userAccount, double amountRequested, DateTime timeOfRequestUtc)
-        {
-            double amountAvailable = userAccount.CreditLimit - userAccount.ConsumedCredits.GetValue(userAccount.CreditHalfLife, timeOfRequestUtc);
-            double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            userAccount.ConsumeCredit(amountConsumed, timeOfRequestUtc);
-            return amountConsumed;
         }
 
         public const int DefaultIterationsForPasswordHash = 1000;

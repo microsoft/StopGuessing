@@ -197,6 +197,23 @@ namespace StopGuessing.Controllers
             }
         }
 
+        //public async Task TryGetCredit(IpHistory ip, LoginAttempt loginAttempt, IUserAccount account, CancellationToken? cancellationToken = null)
+        //{
+        //    // Use this login attempt to offset harm caused by prior login failures
+        //    if (
+        //        ip.CurrentBlockScore.GetValue(_options.AccountCreditLimitHalfLife,
+        //            loginAttempt.TimeOfAttemptUtc) > 0)
+        //    {
+        //        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma,
+        //            ip.CurrentBlockScore.GetValue(_options.AccountCreditLimitHalfLife,
+        //                loginAttempt.TimeOfAttemptUtc));
+        //        double credit = UserAccountController.TryGetCredit(account, desiredCredit,
+        //            loginAttempt.TimeOfAttemptUtc);
+        //        ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
+        //            loginAttempt.TimeOfAttemptUtc);
+        //    }
+        //}
+
 
         /// <returns></returns>
         /// <summary>
@@ -324,20 +341,21 @@ namespace StopGuessing.Controllers
                             account.RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(
                                 loginAttempt.HashOfCookieProvidedByBrowser);
 
-                            // FIXME -- move to background?  better sync for credits?
-
                             // Use this login attempt to offset harm caused by prior login failures
                             if (
                                 ip.CurrentBlockScore.GetValue(_options.AccountCreditLimitHalfLife,
                                     loginAttempt.TimeOfAttemptUtc) > 0)
                             {
-                                double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma,
-                                    ip.CurrentBlockScore.GetValue(_options.AccountCreditLimitHalfLife,
-                                        loginAttempt.TimeOfAttemptUtc));
-                                double credit = UserAccountController.TryGetCredit(account, desiredCredit,
-                                    loginAttempt.TimeOfAttemptUtc);
-                                ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
-                                    loginAttempt.TimeOfAttemptUtc);
+                                // There is a non-zero blocking score that might be counteracted by a credit
+                                TaskHelper.RunInBackground(Task.Run( async () =>
+                                {
+                                    double credit = await account.TryGetCreditAsync(
+                                        account,
+                                        _options.RewardForCorrectPasswordPerAccount_Sigma,
+                                        loginAttempt.TimeOfAttemptUtc);
+                                    ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
+                                        loginAttempt.TimeOfAttemptUtc);
+                                }, cancellationToken));
                             }
                         }
 
