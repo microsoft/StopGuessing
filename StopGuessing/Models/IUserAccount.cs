@@ -57,15 +57,18 @@ namespace StopGuessing.Models
         /// The half life with which used credits are removed from the system freeing up new credit
         /// </summary>
         TimeSpan CreditHalfLife { get; set; }
+        
+        Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
+            string hashOfCookie,
+            CancellationToken cancellationToken = default(CancellationToken));
 
-        DecayingDouble ConsumedCredits { get; set; }
+        void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie,
+            DateTime? whenSeenUtc = null);
 
-        Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(string hashOfCookie, CancellationToken? cancellationToken = null);
-        void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null);
+        Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null,
+            CancellationToken cancellationToken = default(CancellationToken));
 
-        Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null, CancellationToken? cancellationToken = null);
-
-        Task<double> TryGetCreditAsync(IUserAccount userAccount, double amountRequested, DateTime timeOfRequestUtc,
-            CancellationToken? cancellationToken = null);
+        Task<double> TryGetCreditAsync(double amountRequested, DateTime timeOfRequestUtc,
+            CancellationToken cancellationToken = default(CancellationToken));
     }
 }

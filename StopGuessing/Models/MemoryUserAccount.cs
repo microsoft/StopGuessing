@@ -73,11 +73,22 @@ namespace StopGuessing.Models
         public MemoryUserAccount(
             string usernameOrAccountId, 
             string password = null, 
+            int numberOfIterationsToUseForHash = 0,
+            string passwordHashFunctionName = null,
             int? maxNumberOfCookiesToTrack = null,
             int? maxFailedPhase2HashesToTrack = null, 
             DateTime? currentDateTimeUtc = null)
         {
             UsernameOrAccountId = usernameOrAccountId;
+            if (numberOfIterationsToUseForHash > 0)
+            {
+                NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForHash;
+            }
+            if (passwordHashFunctionName != null)
+            {
+                PasswordHashPhase1FunctionName = passwordHashFunctionName;
+            }
+
             if (password != null)
             {
                 UserAccountController.SetPassword(this, password);
@@ -99,10 +110,12 @@ namespace StopGuessing.Models
         ///// </summary>
         protected SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
 
-        public Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null, CancellationToken? cancellationToken = null) => 
+        public Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null,
+            CancellationToken cancellationToken = default(CancellationToken)) => 
             TaskHelper.PretendToBeAsync(RecentIncorrectPhase2Hashes.Add(phase2Hash));
 
-        public Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(string hashOfCookie, CancellationToken? cancellationToken = null) =>
+        public Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(string hashOfCookie,
+            CancellationToken cancellationToken = default(CancellationToken)) =>
             TaskHelper.PretendToBeAsync(HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie));
 
         public void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null)
@@ -114,12 +127,13 @@ namespace StopGuessing.Models
 
 
 #pragma warning disable 1998
-        public async Task<double> TryGetCreditAsync(IUserAccount userAccount, double amountRequested, DateTime timeOfRequestUtc, CancellationToken? cancellationToken)
+        public async Task<double> TryGetCreditAsync(double amountRequested, DateTime timeOfRequestUtc,
+            CancellationToken cancellationToken = default(CancellationToken))
 #pragma warning restore 1998
         {
-            double amountAvailable = Math.Min(0, userAccount.CreditLimit - userAccount.ConsumedCredits.GetValue(userAccount.CreditHalfLife, timeOfRequestUtc));
+            double amountAvailable = Math.Min(0, CreditLimit - ConsumedCredits.GetValue(CreditHalfLife, timeOfRequestUtc));
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            userAccount.ConsumedCredits.SubtractInPlace(userAccount.CreditHalfLife, amountConsumed, timeOfRequestUtc);
+            ConsumedCredits.SubtractInPlace(CreditHalfLife, amountConsumed, timeOfRequestUtc);
             return amountConsumed;
         }
 

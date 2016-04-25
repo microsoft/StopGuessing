@@ -44,7 +44,7 @@ namespace StopGuessing.Models
         /// of the correct password--which would indicate it was likely a (benign) typo and not a random guess. 
         /// </summary>
         [DataMember]
-        public EncryptedStringField EncryptedIncorrectPassword;
+        public EncryptedStringField EncryptedIncorrectPassword = new EncryptedStringField();
 
         /// <summary>
         /// The phase2 hash of the incorrect password, which is available for future analysis.  We can use

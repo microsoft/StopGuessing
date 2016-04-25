@@ -67,11 +67,10 @@ namespace xUnit_Tests
         public static IUserAccount CreateTestAccount(TestConfiguration configuration, string usernameOrAccountId, string password,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            MemoryUserAccount account = new MemoryUserAccount(usernameOrAccountId, password)
+            MemoryUserAccount account = new MemoryUserAccount(usernameOrAccountId, password, 1)
             {
                 CreditLimit = configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
                 CreditHalfLife = configuration.MyBlockingAlgorithmOptions.AccountCreditLimitHalfLife,
-                NumberOfIterationsToUseForPhase1Hash = 1
             };
             configuration.MyAccountFactory.Add(account);
             return account;
@@ -288,9 +287,9 @@ namespace xUnit_Tests
             BlockingAlgorithmOptions options = new BlockingAlgorithmOptions
             {
                 PenaltyForInvalidPassword_Beta = 1,
-                BlockThresholdPopularPassword_T_base = 1,
+                BlockThresholdPopularPassword_T_base = 0.0099,
                 //BlockThresholdMultiplierForUnpopularPasswords = 1,
-                PenaltyMulitiplierForTypo = .25d
+                PenaltyMulitiplierForTypo = .1d
             };
 
             //

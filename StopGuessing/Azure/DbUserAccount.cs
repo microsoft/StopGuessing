@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure;
@@ -46,10 +46,23 @@ namespace StopGuessing.Azure
     }
 
 
+    public class DbUserAccountCreditBalance
+    {
+        public string DbUserAccountId { get; set; }
+
+        /// <summary>
+        /// A decaying double with the amount of credits consumed against the credit limit
+        /// used to offset IP blocking penalties.
+        /// </summary>
+        public double ConsumedCreditsLastValue { get; set; }
+
+        public DateTime? ConsumedCreditsLastUpdatedUtc { get; set; }
+    }
+
 
     public class DbUserAccount : IUserAccount
     {
-        protected string DbUserAccountId { get; set; }
+        public string DbUserAccountId { get; set; }
 
         [NotMapped]
         public string UsernameOrAccountId => DbUserAccountId;
@@ -105,32 +118,10 @@ namespace StopGuessing.Azure
         public TimeSpan CreditHalfLife { get; set; } =
             new TimeSpan(TimeSpan.TicksPerHour * UserAccountController.DefaultCreditHalfLifeInHours);
 
-        /// <summary>
-        /// A decaying double with the amount of credits consumed against the credit limit
-        /// used to offset IP blocking penalties.
-        /// </summary>
-        public double ConsumedCreditsLastValue { get; set; }
-
-        public DateTime? ConsumedCreditsLastUpdatedUtc { get; set; }
-
-        /// <summary>
-        /// A decaying double with the amount of credits consumed against the credit limit
-        /// used to offset IP blocking penalties.
-        /// </summary>
-        [NotMapped]
-        public DecayingDouble ConsumedCredits
-        {
-            get { return new DecayingDouble(ConsumedCreditsLastValue, ConsumedCreditsLastUpdatedUtc); }
-            set
-            {
-                ConsumedCreditsLastValue = value.ValueAtTimeOfLastUpdate;
-                ConsumedCreditsLastUpdatedUtc = value.LastUpdatedUtc;
-            }
-        }
-
 
         private static readonly HashSet<string> TablesKnownToExist = new HashSet<string>();
-        private static async Task<CloudTable> GetTableAsync(string tableName, CancellationToken? cancellationToken = null)
+        private static async Task<CloudTable> GetTableAsync(string tableName,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
 
             CloudStorageAccount storageAccount = CloudStorageAccount.Parse(
@@ -145,7 +136,7 @@ namespace StopGuessing.Azure
             // Create the table if it doesn't exist. // remove to optimize
             if (!TablesKnownToExist.Contains(tableName))
             {
-                await table.CreateIfNotExistsAsync(cancellationToken ?? default(CancellationToken));
+                await table.CreateIfNotExistsAsync(cancellationToken);
                 TablesKnownToExist.Add(tableName);
             }
 
@@ -154,7 +145,8 @@ namespace StopGuessing.Azure
 
 
         private const string TableName_SuccessfulLoginCookie = "StopGuessingSuccessfulLoginCookie";
-        public async Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(string hashOfCookie, CancellationToken? cancellationToken = null)
+        public async Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(string hashOfCookie,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             // Retrieve a reference to the table.
             CloudTable table = await GetTableAsync(TableName_SuccessfulLoginCookie, cancellationToken);
@@ -164,7 +156,7 @@ namespace StopGuessing.Azure
                     TableOperators.And,
                     TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.Equal, TableKeyEncoding.Encode(UsernameOrAccountId))));
 
-            return (await query.CountAsync()) > 0;
+            return (await query.CountAsync(cancellationToken: cancellationToken)) > 0;
         }
 
         public void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null)
@@ -179,7 +171,8 @@ namespace StopGuessing.Azure
         }
 
         private const string TableName_RecentIncorrectPhase2Hashes = "StopGuessingIncorrectPhase2Hashes";
-        public async Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null, CancellationToken? cancellationToken = null)
+        public async Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             // Retrieve a reference to the table.
             CloudTable table = await GetTableAsync(TableName_RecentIncorrectPhase2Hashes, cancellationToken);
@@ -199,27 +192,73 @@ namespace StopGuessing.Azure
             TaskHelper.RunInBackground(
                 table.ExecuteAsync(
                     TableOperation.InsertOrReplace(new IncorrectPhaseTwoHashEntity(UsernameOrAccountId, phase2Hash, whenSeenUtc)),
-                    cancellationToken ?? default(CancellationToken))
+                    cancellationToken)
             );
 
             return false;
         }
 
-#pragma warning disable 1998
-        public async Task<double> TryGetCreditAsync(IUserAccount userAccount, double amountRequested, DateTime timeOfRequestUtc, CancellationToken? cancellationToken)
-#pragma warning restore 1998
+        public async Task<double> TryGetCreditAsync(double amountRequested, DateTime timeOfRequestUtc, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (double.IsNaN(amountRequested) ||  amountRequested <= 0)
             {
                 // You can't request a negative amount and requesting nothing is free
                 return 0;
             }
-            double amountAvailable = Math.Min(0, userAccount.CreditLimit - userAccount.ConsumedCredits.GetValue(userAccount.CreditHalfLife, timeOfRequestUtc));
-            double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            DecayingDouble amountRemaining = userAccount.ConsumedCredits.Subtract(userAccount.CreditHalfLife, new DecayingDouble(amountConsumed, timeOfRequestUtc));
-            ConsumedCreditsLastUpdatedUtc = amountRemaining.LastUpdatedUtc;
-            ConsumedCreditsLastValue = amountRemaining.ValueAtTimeOfLastUpdate;
-            return amountConsumed;
+
+            double creditRetrieved = 0;
+
+            using (var context = new DbUserAccountContext())
+            {
+                using (var dbContextTransaction = await context.Database.BeginTransactionAsync(cancellationToken))
+                {
+                    bool rolledBackDueToConcurrencyException = false;
+                    do
+                    {
+                        try
+                        {
+                            DbUserAccountCreditBalance balance = await
+                                context.DbUserAccountCreditBalances.Where(b => b.DbUserAccountId == DbUserAccountId)
+                                    .FirstOrDefaultAsync(cancellationToken: cancellationToken);
+
+                            if (balance == null)
+                            {
+                                creditRetrieved = Math.Min(amountRequested, CreditLimit);
+                                double amountRemaining = CreditLimit - creditRetrieved;
+                                context.DbUserAccountCreditBalances.Add(
+                                    new DbUserAccountCreditBalance()
+                                    {
+                                        DbUserAccountId = DbUserAccountId,
+                                        ConsumedCreditsLastUpdatedUtc = timeOfRequestUtc,
+                                        ConsumedCreditsLastValue = amountRemaining
+                                    });
+                            }
+                            else
+                            {
+                                double amountAvailable = Math.Min(0, CreditLimit - 
+                                    DecayingDouble.Decay(balance.ConsumedCreditsLastValue, CreditHalfLife, 
+                                    balance.ConsumedCreditsLastUpdatedUtc, timeOfRequestUtc));
+                                if (amountAvailable > 0)
+                                creditRetrieved = Math.Min(amountRequested, amountAvailable);
+                                double amountRemaining = amountAvailable - creditRetrieved;
+                                balance.ConsumedCreditsLastValue = amountRemaining;
+                                balance.ConsumedCreditsLastUpdatedUtc = timeOfRequestUtc;
+                            }
+
+                            await context.SaveChangesAsync(cancellationToken);
+
+                            dbContextTransaction.Commit();
+                        }
+                        catch (DbUpdateConcurrencyException)
+                        {
+                            dbContextTransaction.Rollback();
+                            rolledBackDueToConcurrencyException = true;
+                        }
+                    } while (rolledBackDueToConcurrencyException);
+                }
+            }
+
+            return creditRetrieved;
         }
 
 
@@ -237,7 +276,6 @@ namespace StopGuessing.Azure
             {
                 UserAccountController.SetPassword(this, password);
             }
-            ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc);
         }
         
     }

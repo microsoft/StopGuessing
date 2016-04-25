@@ -46,11 +46,12 @@ namespace StopGuessing
             // Add Application Insights data collection services to the services container.
             //services.AddApplicationInsightsTelemetry(Configuration);
 
-            var connection = @"Server=(localdb)\mssqllocaldb;Database=EFGetStarted.AspNet5.NewDb;Trusted_Connection=True;";
-           
+            //var connection = @"Server=(localdb)\mssqllocaldb;Database=EFGetStarted.AspNet5.NewDb;Trusted_Connection=True;";
+            string sqlConnectionString = Configuration["Data:ConnectionString"];
+
             services.AddEntityFramework()
                 .AddSqlServer()
-                .AddDbContext<DbUserAccountContext>(opt => opt.UseSqlServer(connection));
+                .AddDbContext<DbUserAccountContext>(opt => opt.UseSqlServer(sqlConnectionString));
 
             services.AddMvc();
 

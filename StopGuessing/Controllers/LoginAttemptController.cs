@@ -350,7 +350,6 @@ namespace StopGuessing.Controllers
                                 TaskHelper.RunInBackground(Task.Run( async () =>
                                 {
                                     double credit = await account.TryGetCreditAsync(
-                                        account,
                                         _options.RewardForCorrectPasswordPerAccount_Sigma,
                                         loginAttempt.TimeOfAttemptUtc);
                                     ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
@@ -431,20 +430,16 @@ namespace StopGuessing.Controllers
                             _options.ExpensiveHashingFunctionIterations);
                 }
 
+                // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
+                // as we are most concerned about frequently-guessed passwords.
+                loginAttempt.PasswordsHeightOnBinomialLadder = await passwordsHeightOnBinomialLadderTask;
+
                 // This appears to be an loginAttempt to login to a non-existent account, and so all we need to do is
                 // mark it as such.  However, since it's possible that users will forget their account names and
                 // repeatedly loginAttempt to login to a nonexistent account, we'll want to track whether we've seen
                 // this account/password double before and note in the outcome if it's a repeat so that.
                 // the IP need not be penalized for issuign a query that isn't getting it any information it
                 // didn't already have.
-                loginAttempt.Outcome =
-                    _recentIncorrectPasswords.AddMember(Convert.ToBase64String(phase1HashOfProvidedPassword))
-                        ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
-                        : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
-
-                // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
-                // as we are most concerned about frequently-guessed passwords.
-                loginAttempt.PasswordsHeightOnBinomialLadder = await passwordsHeightOnBinomialLadderTask;
 
                 if (_recentIncorrectPasswords.AddMember(Convert.ToBase64String(phase1HashOfProvidedPassword)))
                 {
