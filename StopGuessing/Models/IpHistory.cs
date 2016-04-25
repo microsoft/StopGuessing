@@ -21,22 +21,13 @@ namespace StopGuessing.Models
         public SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> RecentPotentialTypos; 
 
         public DecayingDouble CurrentBlockScore;
-#if Simulation
-        public SimulationConditionIpHistoryState[] SimulationConditions;
-#endif
 
-
-        public IpHistory(//bool isIpAKnownAggregatorThatWeCannotBlock = false,
+        public IpHistory(
             IPAddress address,
             BlockingAlgorithmOptions options)
         {
             Address = address;
             CurrentBlockScore = new DecayingDouble();
-#if Simulation
-            SimulationConditions = new SimulationConditionIpHistoryState[options.Conditions.Length];
-            for (int i=0; i < SimulationConditions.Length; i++)
-                SimulationConditions[i] = new SimulationConditionIpHistoryState(options.Conditions[i], currentDateTimeUtc);
-#endif
             RecentPotentialTypos =
                 new SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis>(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos);
         }

@@ -7,7 +7,7 @@ using StopGuessing.DataStructures;
 
 namespace StopGuessing.Models
 {
-    public interface IUserAccount : IDisposable
+    public interface IUserAccount
     {
         /// <summary>
         /// A string that uniquely identifies the account.
@@ -67,7 +67,6 @@ namespace StopGuessing.Models
 
         Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null, CancellationToken? cancellationToken = null);
 
-        //double GetCreditsConsumed(DateTime asOfTimeUtc);
         void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc);
     }
 }

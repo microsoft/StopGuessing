@@ -8,9 +8,15 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
-    public interface IUserAccountFactory
+    public interface IUserAccountStore : IDisposable
     {
-        Task<IUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken? cancellationToken);
+        Task<IUserAccount> LoadAsync(CancellationToken? cancellationToken);
+        Task SaveChangesAsync(CancellationToken? cancellationToken);
+    }
+
+    public interface IUserAccountFactory : IDisposable
+    {
+        IUserAccountStore Create(string usernameOrAccountId);        
     }
     
 }

@@ -44,18 +44,18 @@ namespace xUnit_Tests
 
             BinomialLadderSketch localPasswordBinomialLadderSketch =
             new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
-                MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
-                    new MultiperiodFrequencyTracker<string>(
-                        options.NumberOfPopularityMeasurementPeriods,
-                        options.LengthOfShortestPopularityMeasurementPeriod,
-                        options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
+
+            //MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
+            //        new MultiperiodFrequencyTracker<string>(
+            //            options.NumberOfPopularityMeasurementPeriods,
+            //            options.LengthOfShortestPopularityMeasurementPeriod,
+            //            options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
             
             configuration.MyAccountFactory = new MemoryOnlyUserAccountFactory();
 
             LoginAttemptController myLoginAttemptController = new LoginAttemptController(
                 configuration.MyAccountFactory,
                 localPasswordBinomialLadderSketch,
-                localPasswordFrequencyTracker,
                 memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions);
 
             configuration.MyLoginAttemptClient = myLoginAttemptController;

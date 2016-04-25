@@ -8,36 +8,52 @@ using StopGuessing.Models;
 namespace StopGuessing
 {
 
-    public interface IStableStoreContext<in TId, TValue>
-    {
-        Task<TValue> ReadAsync(TId id, CancellationToken cancellationToken = default(CancellationToken));
-
-        Task WriteNewAsync(TId id, TValue value, CancellationToken cancellationToken = default(CancellationToken));
-
-        Task SaveChangesAsync(TId id, TValue value, CancellationToken cancellationToken = default(CancellationToken));
-    }
-
-
-    public interface IStableStoreFactory<in TId, TValue>
-    {
-        IStableStoreContext<TId, TValue> Get();
-    }
 
     //public interface IUserAccountContextFactory : IStableStoreFactory<string, UserAccount>
     //{ }
 
-    public class MemoryOnlyUserAccountFactory : IUserAccountFactory // IStableStoreContext<string, UserAccount>
+    public class MemoryOnlyUserAccountStore : IUserAccountStore // IStableStoreContext<string, UserAccount>
     {
-        private readonly ConcurrentDictionary<string, IUserAccount> _store = new ConcurrentDictionary<string,  IUserAccount>();
+        private readonly IUserAccount _account = null;
+
+        public MemoryOnlyUserAccountStore(IUserAccount account)
+        {
+            _account = account;
+
+        }
 
 #pragma warning disable 1998
-        public async Task<IUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken? cancellationToken)
+        public async Task<IUserAccount> LoadAsync(CancellationToken? cancellationToken)
 #pragma warning restore 1998
         {
             cancellationToken?.ThrowIfCancellationRequested();
-            IUserAccount account = null;
+            return _account;
+        }
+
+#pragma warning disable 1998
+        public async Task SaveChangesAsync(CancellationToken? cancellationToken)
+#pragma warning disable 1998
+        {
+            cancellationToken?.ThrowIfCancellationRequested();
+            return;
+        }
+
+        public void Dispose()
+        {
+            
+        }
+
+    }
+
+    public class MemoryOnlyUserAccountFactory : IUserAccountFactory
+    {
+        private readonly ConcurrentDictionary<string, IUserAccount> _store = new ConcurrentDictionary<string, IUserAccount>();
+
+        public IUserAccountStore Create(string usernameOrAccountId)
+        {
+            IUserAccount account;
             _store.TryGetValue(usernameOrAccountId, out account);
-            return account;
+            return new MemoryOnlyUserAccountStore(account);
         }
 
         public void Add(IUserAccount account)
@@ -45,16 +61,12 @@ namespace StopGuessing
             _store[account.UsernameOrAccountId] = account;
         }
 
+        public void Dispose()
+        {
+        }
+
     }
 
-    //public class MemoryOnlyAccountContextFactory : IUserAccountContextFactory
-    //{
-    //    private readonly MemoryOnlyAccountStore _memoryOnlyAccountStore = new MemoryOnlyAccountStore();
-    //    public IStableStoreContext<string, UserAccount> Get()
-    //    {
-    //        return _memoryOnlyAccountStore;
-    //    }
-    //}
 
 
 }

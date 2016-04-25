@@ -205,7 +205,7 @@ namespace StopGuessing.Azure
             return false;
         }
 
-        public double GetCreditsConsumed(DateTime asOfTimeUtc) => DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, asOfTimeUtc);
+        //public double GetCreditsConsumed(DateTime asOfTimeUtc) => DecayingDouble.Decay(ConsumedCreditsLastValue, CreditHalfLife, asOfTimeUtc);
 
         public void ConsumeCredit(double amountConsumed, DateTime timeOfConsumptionUtc)
         {
@@ -229,11 +229,6 @@ namespace StopGuessing.Azure
             }
             ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc);
         }
-
-
-        public void Dispose()
-        {
-            // FIXME : Write back to changes to database.
-        }
+        
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Runtime.Serialization;
 using Microsoft.Framework.WebEncoders;
 using System.Text;
@@ -102,8 +103,6 @@ namespace StopGuessing.Models
         /// by the system.  
         /// This will be set by the analysis and need not be set by the creator of the LoginAttempt record.
         /// </summary>
-        //[DataMember]
-        //public double PasswordsPopularityAmongFailedGuesses { get; set; }
         [DataMember]
         public int PasswordsHeightOnBinomialLadder { get; set; }
 
@@ -115,6 +114,7 @@ namespace StopGuessing.Models
         /// </summary>
         [IgnoreDataMember]
         [JsonIgnore]
+        [NotMapped]
         public string CookieProvidedByBrowser { set { SetCookieProvidedByBrowser(value); } }
 
         /// <summary>
@@ -122,6 +122,7 @@ namespace StopGuessing.Models
         /// </summary>
         [IgnoreDataMember]
         [JsonIgnore]
+        [NotMapped]
         public string UniqueKey => ToUniqueKey();
 
         public static string HashCookie(string plaintextCookie)

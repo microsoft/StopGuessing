@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -9,7 +8,6 @@ using StopGuessing.Models;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
-using Newtonsoft.Json;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Utilities;
 
@@ -22,7 +20,6 @@ namespace StopGuessing.Controllers
         Task<LoginAttempt> PutAsync(LoginAttempt loginAttempt,
             string passwordProvidedByClient = null,
             CancellationToken cancellationToken = default(CancellationToken));
-
     }
     
 
@@ -33,28 +30,20 @@ namespace StopGuessing.Controllers
     {
         private readonly BlockingAlgorithmOptions _options;
         private readonly IBinomialLadderSketch _binomialLadderSketch;
-        private readonly IFrequenciesProvider<string> _incorrectPasswordFrequenciesProvider;
-        //private readonly IStableStoreFactory<string, UserAccount> _userAccountContextFactory;
         private readonly IUserAccountFactory _userAccountFactory;
         private readonly AgingMembershipSketch _recentIncorrectPasswords;
 
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
 
-        private TimeSpan DefaultTimeout { get; } = new TimeSpan(0, 0, 0, 0, 500); // FUTURE use configuration value
-
         public LoginAttemptController(
             IUserAccountFactory userAccountFactory,
-            //IStableStoreFactory<string, IpHistory> ipHistoryContextFactory,
             IBinomialLadderSketch binomialLadderSketch,
-            IFrequenciesProvider<string> incorrectPasswordFrequenciesProvider,
             MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions blockingOptions
             )
         {
             _options = blockingOptions; //optionsAccessor.Options;
-            //_stableStore = stableStore;
             _binomialLadderSketch = binomialLadderSketch;
-            _incorrectPasswordFrequenciesProvider = incorrectPasswordFrequenciesProvider;
 
             _recentIncorrectPasswords = new AgingMembershipSketch(blockingOptions.AgingMembershipSketchTables, blockingOptions.AgingMembershipSketchTableSize);
             _userAccountFactory = userAccountFactory;
@@ -103,16 +92,9 @@ namespace StopGuessing.Controllers
             int numberOfTimesToPrime,
             CancellationToken cancellationToken = default(CancellationToken))
         {            
-            string easyHashOfPassword =
-                Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordToTreatAsFrequent)));
-            IUpdatableFrequency frequencies = await _incorrectPasswordFrequenciesProvider.GetFrequencyAsync(
-                easyHashOfPassword,
-                cancellationToken: cancellationToken);
-
             for (int i = 0; i < numberOfTimesToPrime; i++)
             {
                 await _binomialLadderSketch.StepAsync(passwordToTreatAsFrequent, cancellationToken: cancellationToken);
-                await frequencies.RecordObservationAsync(cancellationToken: cancellationToken);
             }
         }
         
@@ -186,15 +168,12 @@ namespace StopGuessing.Controllers
                             EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
                             _options.MaxEditDistanceConsideredATypo;
 
-                        // Update the outcome based on this information.
-                        AuthenticationOutcome newOutocme = likelyTypo
-                            ? AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoLikely
-                            : AuthenticationOutcome.CredentialsInvalidIncorrectPasswordTypoUnlikely;
-
                         // Add this to the list of changed attempts
-                        credit += potentialTypo.Penalty.GetValue(_options.AccountCreditLimitHalfLife, whenUtc)*(1d - _options.PenaltyMulitiplierForTypo);
-
-                        // FUTURE -- find and update the login attempt in the background
+                        if (likelyTypo)
+                        {
+                            credit += potentialTypo.Penalty.GetValue(_options.AccountCreditLimitHalfLife, whenUtc)*
+                                      (1d - _options.PenaltyMulitiplierForTypo);
+                        }
 
                     }
                     catch (Exception)
@@ -203,61 +182,20 @@ namespace StopGuessing.Controllers
                         // Since we simply can't do anything with a record we can't Decrypt, we carry on
                         // as if nothing ever happened.  No.  Really.  Nothing to see here.
                     }
+
+                    // Now that we know whether this past event was a typo or not, we no longer need to keep track
+                    // of it (and we should remove it so we don't double credit it).
                     clientsIpHistory.RecentPotentialTypos.Remove(potentialTypo);
                 }
-                clientsIpHistory.CurrentBlockScore.Add(-credit, _options.AccountCreditLimitHalfLife, whenUtc);
+
+                // Remove the amount to be credited from the block score due to the discovery of typos
+                clientsIpHistory.CurrentBlockScore.SubtractInPlace(account.CreditHalfLife, credit, whenUtc);
             }
             finally
             {
                 ecPrivateAccountLogKey?.Dispose();
             }
         }
-
-
-        //protected void UpdateBlockScore(DecayingDouble currentBlockScore,
-        //    SmallCapacityConstrainedSet<LoginAttemptSummaryForTypoAnalysis> recentPotentialTypos,
-        //    LoginAttempt loginAttempt, UserAccount account, int keyHeight, int ladderHeight, ref bool accountChanged)
-        //{
-        //    switch (loginAttempt.Outcome)
-        //    {
-        //        case AuthenticationOutcome.CredentialsInvalidNoSuchAccount:
-        //            double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
-        //                             _options.PopularityBasedPenaltyMultiplier_phi(loginAttempt);
-        //            currentBlockScore.Add(invalidAccontPenalty, _options.BlockScoreHalfLife, loginAttempt.TimeOfAttemptUtc);
-        //            return;
-        //        case AuthenticationOutcome.CredentialsInvalidIncorrectPassword:
-        //            double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta *
-        //                            _options.PopularityBasedPenaltyMultiplier_phi(loginAttempt);
-        //            currentBlockScore.Add(invalidPasswordPenalty, _options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc);
-        //            if (account != null)
-        //            {
-        //                recentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
-        //                {
-        //                    EncryptedIncorrectPassword = loginAttempt.EncryptedIncorrectPassword,
-        //                    Penalty = new DecayingDouble(invalidPasswordPenalty, loginAttempt.TimeOfAttemptUtc),
-        //                    UsernameOrAccountId = loginAttempt.UsernameOrAccountId
-        //                });
-        //            }
-        //            return;
-        //        case AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword:
-        //            // We ignore repeats of incorrect passwords we've already accounted for
-        //            // No penalty
-        //            return;
-        //        case AuthenticationOutcome.CredentialsValid:
-        //            if (currentBlockScore.GetValue(_options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc) > 0)
-        //            {
-        //                double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma, currentBlockScore.GetValue(_options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc));
-        //                double credit = account.TryGetCredit(desiredCredit, loginAttempt.TimeOfAttemptUtc);
-        //                if (credit > 0)
-        //                    accountChanged = true;
-        //                currentBlockScore.Add(-credit, _options.AccountCreditLimitHalfLife, loginAttempt.TimeOfAttemptUtc);
-        //            }
-        //            break;
-        //        case AuthenticationOutcome.CredentialsValidButBlocked:
-        //        default:
-        //            return;
-        //    }
-        //}
 
 
         /// <returns></returns>
@@ -267,6 +205,8 @@ namespace StopGuessing.Controllers
         /// </summary>
         /// <param name="loginAttempt">The login loginAttempt record to be stored.</param>
         /// <param name="passwordProvidedByClient">The plaintext password provided by the client.</param>
+        /// <param name="phase1HashOfProvidedPassword">If the caller has already computed the phase 1 (expensive) hash of the submitted password,
+        /// it can supply it via this optional parameter to avoid incurring the cost of having incurring the expense of this calculationg a second time.</param>
         /// <param name="timeout"></param>
         /// <param name="cancellationToken">To allow this async method to be cancelled.</param>
         /// <returns>If the password is correct and the IP not blocked, returns AuthenticationOutcome.CredentialsValid.
@@ -275,11 +215,12 @@ namespace StopGuessing.Controllers
         public async Task<LoginAttempt> DetermineLoginAttemptOutcomeAsync(
             LoginAttempt loginAttempt,
             string passwordProvidedByClient,
+            byte[] phase1HashOfProvidedPassword = null,
             TimeSpan? timeout = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             //
-            // In parallel fetch information we'll need to determine the outcome
+            // In parallel, fetch information we'll need to determine the outcome
             //
 
             // Get information about the client's IP
@@ -288,16 +229,13 @@ namespace StopGuessing.Controllers
 
             // Get information about the account the client is trying to login to
             //IStableStoreContext<string, UserAccount> userAccountContext = _userAccountContextFactory.Get();
-            Task<IUserAccount> userAccountRequestTask = _userAccountFactory.LoadAsync(
-                loginAttempt.UsernameOrAccountId,
-                cancellationToken);
+            IUserAccountStore userAccountStore = _userAccountFactory.Create(loginAttempt.UsernameOrAccountId);
+            Task<IUserAccount> userAccountRequestTask = userAccountStore.LoadAsync(cancellationToken);
 
             // Get a binomial ladder to estimate if the password is common
-            Task<int> passwordsHeightOnBinomialLadderTask = _binomialLadderSketch.GetHeightAsync(passwordProvidedByClient, cancellationToken: cancellationToken);
+            Task<int> passwordsHeightOnBinomialLadderTask =
+                _binomialLadderSketch.GetHeightAsync(passwordProvidedByClient, cancellationToken: cancellationToken);
 
-            // Get a more-accurate count of the passwords' frequency if it is already known to be common
-            string easyHashOfPassword =
-                Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(passwordProvidedByClient)));
 
             //
             // Start processing information as it comes in
@@ -314,9 +252,8 @@ namespace StopGuessing.Controllers
             IUserAccount account = await userAccountRequestTask;
             if (account != null)
             {
-                using (account)
+                try
                 {
-                    bool accountChanged = false;
                     //
                     // This is an login attempt for a valid (existent) account.
                     //
@@ -331,8 +268,11 @@ namespace StopGuessing.Controllers
                     // Test to see if the password is correct by calculating the Phase2Hash and comparing it with the Phase2 hash
                     // in this record.  The expensive (phase1) hash which is used to encrypt the EC public key for this account
                     // (which we use to store the encryptions of incorrect passwords)
-                    byte[] phase1HashOfProvidedPassword = UserAccountController.ComputePhase1Hash(account,
-                        passwordProvidedByClient);
+                    if (phase1HashOfProvidedPassword == null)
+                    {
+                        phase1HashOfProvidedPassword =
+                            UserAccountController.ComputePhase1Hash(account, passwordProvidedByClient);
+                    }
 
                     // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
                     // hash of the phase1 hash, which we call the phase 2 hash, and use that to compare the provided password
@@ -360,7 +300,8 @@ namespace StopGuessing.Controllers
 
                         // We'll get the blocking threshold, blocking condition, and block if the condition exceeds the threshold.
                         double blockingThreshold = _options.BlockThresholdPopularPassword_T_base*
-                                                   _options.PopularityBasedThresholdMultiplier_T_multiplier(loginAttempt);
+                                                   _options.PopularityBasedThresholdMultiplier_T_multiplier(
+                                                       loginAttempt);
                         double blockScore = ip.CurrentBlockScore.GetValue(_options.BlockScoreHalfLife,
                             loginAttempt.TimeOfAttemptUtc);
 
@@ -370,16 +311,20 @@ namespace StopGuessing.Controllers
 
                         if (blockScore > blockingThreshold)
                         {
-                            // Block this login attempt if the blocking score exceeds the threshold
+                            // While this login attempt had valid credentials, the circumstances
+                            // are so suspicious that we should block the login and pretend the 
+                            // credentials were invalid
                             loginAttempt.Outcome = AuthenticationOutcome.CredentialsValidButBlocked;
                         }
                         else
                         {
-                            // This login attempt has valid credentials and should not be blocked
+                            // This login attempt has valid credentials and no reason to block, so the
+                            // client will be authenticated.
                             loginAttempt.Outcome = AuthenticationOutcome.CredentialsValid;
                             account.RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(
                                 loginAttempt.HashOfCookieProvidedByBrowser);
-                            accountChanged = true;
+
+                            // FIXME -- move to background?  better sync for credits?
 
                             // Use this login attempt to offset harm caused by prior login failures
                             if (
@@ -391,57 +336,51 @@ namespace StopGuessing.Controllers
                                         loginAttempt.TimeOfAttemptUtc));
                                 double credit = UserAccountController.TryGetCredit(account, desiredCredit,
                                     loginAttempt.TimeOfAttemptUtc);
-                                if (credit > 0)
-                                    accountChanged = true;
                                 ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
                                     loginAttempt.TimeOfAttemptUtc);
                             }
-                        }
-
-                        if (accountChanged)
-                        {
-                            // Save changes to the user account record in the background (so that we don't hold up returning the result)
-                            //TaskHelper.RunInBackground(userAccountContext.SaveChangesAsync(account.UsernameOrAccountId, account, new CancellationToken()));
                         }
 
                     }
                     else
                     {
                         //
-                        // The password was invalid.  There's lots of work to do to facilitate future analysis
-                        // about why this LoginAttempt failed.
+                        // The password was invalid.  Do bookkeeping of information about this failure so that we can
+                        // block the origin IP if it appears to be engaged in guessing and so that we can track
+                        // frequently guessed passwords.
 
-                        // So that we can analyze this failed loginAttempt in the future, we'll store the (phase 2) hash of the 
-                        // incorrect password along with the password itself, encrypted with the EcPublicAccountLogKey.
+                        // We'll not only store the (phase 2) hash of the incorrect password, but we'll also store
+                        // the incorrect passwords itself, encrypted with the EcPublicAccountLogKey.
                         // (The decryption key to get the incorrect password plaintext back is encrypted with the
                         //  correct password, so you can't get to the plaintext of the incorrect password if you
                         //  don't already know the correct password.)
                         loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
                         loginAttempt.EncryptedIncorrectPassword.Write(passwordProvidedByClient,
                             account.EcPublicAccountLogKey);
+
                         // Next, if it's possible to declare more about this outcome than simply that the 
                         // user provided the incorrect password, let's do so.
                         // Since users who are unsure of their passwords may enter the same username/password twice, but attackers
                         // don't learn anything from doing so, we'll want to account for these repeats differently (and penalize them less).
                         // We actually have two data structures for catching this: A large sketch of clientsIpHistory/account/password triples and a
                         // tiny LRU cache of recent failed passwords for this account.  We'll check both.
-
                         if (await account.AddIncorrectPhase2HashAsync(phase2HashOfProvidedPassword))
                         {
-                            // The same incorrect password was recently used for this account, do not penalize the IP
-                            // (as attackers don't gain anything from guessing the wrong password again).
+                            // The same incorrect password was recently used for this account, indicate this so that we
+                            // do not penalize the IP further (as attackers don't gain anything from guessing the wrong password again).
                             loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidRepeatedIncorrectPassword;
                         }
                         else
                         {
                             // This is the first time we've (at least recently) seen this incorrect password attempted for the account,
                             loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidIncorrectPassword;
-                            accountChanged = true;
 
                             // Penalize the IP for the invalid password
                             double invalidPasswordPenalty = _options.PenaltyForInvalidPassword_Beta*
-                                                            _options.PopularityBasedPenaltyMultiplier_phi(loginAttempt);
-                            ip.CurrentBlockScore.AddInPlace(_options.AccountCreditLimitHalfLife, invalidPasswordPenalty,
+                                                            _options.PopularityBasedPenaltyMultiplier_phi(
+                                                                loginAttempt);
+                            ip.CurrentBlockScore.AddInPlace(_options.AccountCreditLimitHalfLife,
+                                invalidPasswordPenalty,
                                 loginAttempt.TimeOfAttemptUtc);
                             // Record the penalty so that it can be reduced if this incorrect password is later discovered to be a typo.
                             ip.RecentPotentialTypos.Add(new LoginAttemptSummaryForTypoAnalysis()
@@ -453,7 +392,11 @@ namespace StopGuessing.Controllers
                         }
 
                     }
-
+                }
+                finally
+                {
+                    // Save changes to the user account record in the background (so that we don't hold up returning the result)
+                    TaskHelper.RunInBackground(userAccountStore.SaveChangesAsync(cancellationToken));
                 }
             }
             else
@@ -461,11 +404,14 @@ namespace StopGuessing.Controllers
                 // account == null
                 // This is an login attempt for an INvalid (NONexistent) account.
                 //
-                byte[] phase1HashOfProvidedPassword = 
-                    ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
-                                                     passwordProvidedByClient,
-                                                     ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
-                                                     _options.ExpensiveHashingFunctionIterations);
+                if (phase1HashOfProvidedPassword == null)
+                {
+                    phase1HashOfProvidedPassword =
+                        ExpensiveHashFunctionFactory.Get(_options.DefaultExpensiveHashingFunction)(
+                            passwordProvidedByClient,
+                            ManagedSHA256.Hash(Encoding.UTF8.GetBytes(loginAttempt.UsernameOrAccountId)),
+                            _options.ExpensiveHashingFunctionIterations);
+                }
 
                 // This appears to be an loginAttempt to login to a non-existent account, and so all we need to do is
                 // mark it as such.  However, since it's possible that users will forget their account names and
@@ -473,9 +419,10 @@ namespace StopGuessing.Controllers
                 // this account/password double before and note in the outcome if it's a repeat so that.
                 // the IP need not be penalized for issuign a query that isn't getting it any information it
                 // didn't already have.
-                loginAttempt.Outcome = _recentIncorrectPasswords.AddMember(Convert.ToBase64String(phase1HashOfProvidedPassword))
-                    ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
-                    : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
+                loginAttempt.Outcome =
+                    _recentIncorrectPasswords.AddMember(Convert.ToBase64String(phase1HashOfProvidedPassword))
+                        ? AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount
+                        : AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
 
                 // Get the popularity of the password provided by the client among incorrect passwords submitted in the past,
                 // as we are most concerned about frequently-guessed passwords.
@@ -486,17 +433,19 @@ namespace StopGuessing.Controllers
                     // Don't penalize the incorrect <invalid account/password> pair if we've seen the same
                     // pair recently
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidRepeatedNoSuchAccount;
-                } else
+                }
+                else
                 {
                     // Penalize the IP for a login attempt with an invalid account
                     loginAttempt.Outcome = AuthenticationOutcome.CredentialsInvalidNoSuchAccount;
-                    double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha *
+                    double invalidAccontPenalty = _options.PenaltyForInvalidAccount_Alpha*
                                                   _options.PopularityBasedPenaltyMultiplier_phi(loginAttempt);
-                    ip.CurrentBlockScore.AddInPlace(_options.BlockScoreHalfLife, invalidAccontPenalty, loginAttempt.TimeOfAttemptUtc);
+                    ip.CurrentBlockScore.AddInPlace(_options.BlockScoreHalfLife, invalidAccontPenalty,
+                        loginAttempt.TimeOfAttemptUtc);
                 }
             }
 
-            
+
             if (loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidNoSuchAccount ||
                 loginAttempt.Outcome == AuthenticationOutcome.CredentialsInvalidIncorrectPassword)
             {
