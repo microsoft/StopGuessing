@@ -4,19 +4,25 @@ using System;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Entity.Query.Internal;
 using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
-    public interface IUserAccountStore : IDisposable
+    public interface IRepository<TKey,T> : IDisposable
     {
-        Task<IUserAccount> LoadAsync(CancellationToken? cancellationToken);
+        Task<T> LoadAsync(TKey key, CancellationToken? cancellationToken);
         Task SaveChangesAsync(CancellationToken? cancellationToken);
+        
     }
 
-    public interface IUserAccountFactory : IDisposable
-    {
-        IUserAccountStore Create(string usernameOrAccountId);        
-    }
+
+
+    
+
+    //public interface IUserAccountFactory : IDisposable
+    //{
+    //    IRepository<string, IUserAccount> Create();        
+    //}
     
 }

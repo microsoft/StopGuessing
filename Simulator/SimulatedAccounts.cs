@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using StopGuessing;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
+using StopGuessing.Memory;
 
 namespace Simulator
 {
@@ -60,6 +61,7 @@ namespace Simulator
             CancellationToken cancellationToken = default(CancellationToken))
         {
             _logger.WriteStatus("Creating {0:N0} benign accounts", experimentalConfiguration.NumberOfBenignAccounts);        
+            MemoryUserAccountController userAccountController = new MemoryUserAccountController();;
             ConcurrentBag<SimulatedAccount> benignSimulatedAccountBag = new ConcurrentBag<SimulatedAccount>();
             //
             // Create benign accounts in parallel
@@ -125,17 +127,17 @@ namespace Simulator
                 {
                     //if (loopState. % 10000 == 0)
                     //    _logger.WriteStatus("Created account {0:N0}", index);
-                    simAccount.Account = new MemoryUserAccount(simAccount.UniqueId, simAccount.Password)
-                    {
-                        CreditHalfLife = experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife,
-                        CreditLimit = experimentalConfiguration.BlockingOptions.AccountCreditLimit,
-                        PasswordHashPhase1FunctionName = "PBKDF2_SHA256",
-                        NumberOfIterationsToUseForPhase1Hash =
-                            experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations
-                    };
+                    simAccount.Account = 
+                        userAccountController.Create(simAccount.UniqueId, simAccount.Password,
+                        experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations,
+                        "PBKDF2_SHA256");
+                    simAccount.Account.CreditHalfLife = experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife;
+                    simAccount.Account.CreditLimit = experimentalConfiguration.BlockingOptions.AccountCreditLimit;
+
                     foreach (string cookie in simAccount.Cookies)
-                        simAccount.Account.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(LoginAttempt.HashCookie(cookie));
-                   // await accountContextFactory.Get().WriteNewAsync(simAccount.Account.UsernameOrAccountId, simAccount.Account, cancelToken);
+                        userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
+                            simAccount.Account,
+                            LoginAttempt.HashCookie(cookie), cancellationToken);
                 });
             _logger.WriteStatus("Finished creating user accounts for each simluated account record");
         }

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Data.Entity.Infrastructure;
 
 namespace StopGuessing.Azure
 {
@@ -10,8 +11,14 @@ namespace StopGuessing.Azure
     {
         public DbSet<DbUserAccount> DbUserAccounts { get; set; }
         public DbSet<DbUserAccountCreditBalance> DbUserAccountCreditBalances { get; set; }
-        //public DbSet<SuccessfulLoginCookieEntity> SuccessfulLoginCookies { get; set; }
-        //public DbSet<IncorrectPhaseTwoHashEntity> IncorrectPhaseTwoHashes { get; set; }
+
+        public DbUserAccountContext() : base()
+        {
+        }
+
+        public DbUserAccountContext(DbContextOptions options) : base(options)
+        {
+        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

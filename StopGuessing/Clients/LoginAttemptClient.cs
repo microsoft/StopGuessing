@@ -9,14 +9,20 @@ using StopGuessing.Models;
 
 namespace StopGuessing.Clients
 {
+    public interface ILoginAttemptClient : ILoginAttemptController
+    {
+        
+
+    }
+
     /// <summary>
     /// A client class for accessing LoginAttempt records locally or remotely.
     /// </summary>
-    public class LoginAttemptClient : ILoginAttemptController
+    public class LoginAttemptClient<TUserAccount> : ILoginAttemptClient where TUserAccount : IUserAccount
     {
         int NumberOfRedundentHostsToCacheEachLoginAttempt => Math.Min(3, _responsibleHosts.Count); // FUTURE -- use configuration file value
 
-        private LoginAttemptController _localLoginAttemptController;
+        private LoginAttemptController<TUserAccount> _localLoginAttemptController;
         private readonly IDistributedResponsibilitySet<RemoteHost> _responsibleHosts;
         private RemoteHost _localHost;
 
@@ -26,7 +32,7 @@ namespace StopGuessing.Clients
             _responsibleHosts = responsibleHosts;
         }
 
-        public void SetLocalLoginAttemptController(LoginAttemptController loginAttemptController)
+        public void SetLocalLoginAttemptController(LoginAttemptController<TUserAccount> loginAttemptController)
         {
             _localLoginAttemptController = loginAttemptController;
         }

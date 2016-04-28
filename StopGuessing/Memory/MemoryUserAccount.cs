@@ -6,8 +6,9 @@ using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Utilities;
 using System.Threading;
+using StopGuessing.Models;
 
-namespace StopGuessing.Models
+namespace StopGuessing.Memory
 {
     public class MemoryUserAccount : IUserAccount
     {
@@ -19,7 +20,7 @@ namespace StopGuessing.Models
         /// the hash against every account.
         /// </summary>
         public byte[] SaltUniqueToThisAccount { get; set; } =
-            StrongRandomNumberGenerator.GetBytes(UserAccountController.DefaultSaltLength);
+            StrongRandomNumberGenerator.GetBytes(UserAccountController<MemoryUserAccount>.DefaultSaltLength);
 
         /// <summary>
         /// The name of the (hopefully) expensive hash function used for the first phase of password hashing.
@@ -31,7 +32,7 @@ namespace StopGuessing.Models
         /// The number of iterations to use for the phase 1 hash to make it more expensive.
         /// </summary>
         public int NumberOfIterationsToUseForPhase1Hash { get; set; } =
-            UserAccountController.DefaultIterationsForPasswordHash;
+            UserAccountController<MemoryUserAccount>.DefaultIterationsForPasswordHash;
         
         /// <summary>
         /// An EC public encryption symmetricKey used to store log about password failures, which can can only be decrypted when the user 
@@ -56,13 +57,13 @@ namespace StopGuessing.Models
         /// the account has logged in successfully.
         /// </summary>
         public double CreditLimit { get; set; } = 
-            UserAccountController.DefaultCreditLimit;
+            UserAccountController<MemoryUserAccount>.DefaultCreditLimit;
 
         /// <summary>
         /// The half life with which used credits are removed from the system freeing up new credit
         /// </summary>
         public TimeSpan CreditHalfLife { get; set; } =
-            new TimeSpan( TimeSpan.TicksPerHour * UserAccountController.DefaultCreditHalfLifeInHours);
+            new TimeSpan( TimeSpan.TicksPerHour * UserAccountController<MemoryUserAccount>.DefaultCreditHalfLifeInHours);
 
         /// <summary>
         /// A decaying double with the amount of credits consumed against the credit limit
@@ -70,72 +71,18 @@ namespace StopGuessing.Models
         /// </summary>
         public DecayingDouble ConsumedCredits { get; set; }
 
-        public MemoryUserAccount(
-            string usernameOrAccountId, 
-            string password = null, 
-            int numberOfIterationsToUseForHash = 0,
-            string passwordHashFunctionName = null,
-            int? maxNumberOfCookiesToTrack = null,
-            int? maxFailedPhase2HashesToTrack = null, 
-            DateTime? currentDateTimeUtc = null)
-        {
-            UsernameOrAccountId = usernameOrAccountId;
-            if (numberOfIterationsToUseForHash > 0)
-            {
-                NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForHash;
-            }
-            if (passwordHashFunctionName != null)
-            {
-                PasswordHashPhase1FunctionName = passwordHashFunctionName;
-            }
-
-            if (password != null)
-            {
-                UserAccountController.SetPassword(this, password);
-            }
-            HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack ?? UserAccountController.DefaultMaxNumberOfCookiesToTrack);
-            RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack ?? UserAccountController.DefaultMaxFailedPhase2HashesToTrack);
-            ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc);
-        }
-
         /// <summary>
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
         /// that have successfully logged into this account.
         /// </summary>
-        protected SmallCapacityConstrainedSet<string> HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
+        public SmallCapacityConstrainedSet<string> HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
 
         ///// <summary>
         ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 
         ///// </summary>
-        protected SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
-
-        public Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null,
-            CancellationToken cancellationToken = default(CancellationToken)) => 
-            TaskHelper.PretendToBeAsync(RecentIncorrectPhase2Hashes.Add(phase2Hash));
-
-        public Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(string hashOfCookie,
-            CancellationToken cancellationToken = default(CancellationToken)) =>
-            TaskHelper.PretendToBeAsync(HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie));
-
-        public void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie, DateTime? whenSeenUtc = null)
-        {
-            HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
-        }
-
-        public double GetCreditsConsumed(DateTime asOfTimeUtc) => ConsumedCredits.GetValue(CreditHalfLife, asOfTimeUtc);
+        public SmallCapacityConstrainedSet<string> RecentIncorrectPhase2Hashes { get; set; }
 
 
-#pragma warning disable 1998
-        public async Task<double> TryGetCreditAsync(double amountRequested, DateTime timeOfRequestUtc,
-            CancellationToken cancellationToken = default(CancellationToken))
-#pragma warning restore 1998
-        {
-            double amountAvailable = Math.Min(0, CreditLimit - ConsumedCredits.GetValue(CreditHalfLife, timeOfRequestUtc));
-            double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            ConsumedCredits.SubtractInPlace(CreditHalfLife, amountConsumed, timeOfRequestUtc);
-            return amountConsumed;
-        }
 
         public void Dispose()
         {

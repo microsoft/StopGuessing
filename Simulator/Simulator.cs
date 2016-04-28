@@ -15,6 +15,7 @@ using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
+using StopGuessing.Memory;
 using StopGuessing.Models;
 
 namespace Simulator
@@ -28,6 +29,7 @@ namespace Simulator
         public SelfLoadingCache<IPAddress, SimIpHistory> _ipHistoryCache;
         public readonly ExperimentalConfiguration _experimentalConfiguration;
         public readonly MemoryUsageLimiter _memoryUsageLimiter;
+        public readonly MemoryUserAccountController _userAccountController;
 
         private readonly TextWriter _AttackAttemptsWithValidPasswords;
         private readonly TextWriter _LegitiamteAttemptsWithValidPasswords;
@@ -139,6 +141,7 @@ namespace Simulator
             _binomialLadderSketch =
                 new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
             _ipHistoryCache = new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
+            _userAccountController = new MemoryUserAccountController();
 
             _memoryUsageLimiter = new MemoryUsageLimiter();
             _memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;

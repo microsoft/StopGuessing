@@ -24,19 +24,21 @@ namespace StopGuessing.Controllers
     
 
     [Route("api/[controller]")]
-    public class LoginAttemptController :
+    public class LoginAttemptController<TUserAccount> :
         Controller, 
-        ILoginAttemptController
+        ILoginAttemptController where TUserAccount : IUserAccount
     {
         private readonly BlockingAlgorithmOptions _options;
         private readonly IBinomialLadderSketch _binomialLadderSketch;
-        private readonly IUserAccountFactory _userAccountFactory;
+        private readonly IFactory<IRepository<string,TUserAccount>> _userAccountRepositoryFactory;
+        private readonly IFactory<IUserAccountController<TUserAccount>> _userAccountControllerFactory;
         private readonly AgingMembershipSketch _recentIncorrectPasswords;
 
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
 
         public LoginAttemptController(
-            IUserAccountFactory userAccountFactory,
+            IFactory<IUserAccountController<TUserAccount>> userAccountControllerFactory,
+            IFactory<IRepository<string, TUserAccount>> userAccountRepositoryFactory,
             IBinomialLadderSketch binomialLadderSketch,
             MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions blockingOptions
@@ -46,7 +48,8 @@ namespace StopGuessing.Controllers
             _binomialLadderSketch = binomialLadderSketch;
 
             _recentIncorrectPasswords = new AgingMembershipSketch(blockingOptions.AgingMembershipSketchTables, blockingOptions.AgingMembershipSketchTableSize);
-            _userAccountFactory = userAccountFactory;
+            _userAccountRepositoryFactory = userAccountRepositoryFactory;
+            _userAccountControllerFactory = userAccountControllerFactory;
             _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(address => new IpHistory(address, _options));
 
             memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
@@ -122,7 +125,7 @@ namespace StopGuessing.Controllers
         /// <returns></returns>
         protected void AdjustBlockingScoreForPastTyposTreatedAsFullFailures(
             IpHistory clientsIpHistory,
-            IUserAccount account,
+            TUserAccount account,
             DateTime whenUtc,
             string correctPassword,
             byte[] phase1HashOfCorrectPassword)
@@ -196,25 +199,7 @@ namespace StopGuessing.Controllers
                 ecPrivateAccountLogKey?.Dispose();
             }
         }
-
-        //public async Task TryGetCredit(IpHistory ip, LoginAttempt loginAttempt, IUserAccount account, CancellationToken? cancellationToken = null)
-        //{
-        //    // Use this login attempt to offset harm caused by prior login failures
-        //    if (
-        //        ip.CurrentBlockScore.GetValue(_options.AccountCreditLimitHalfLife,
-        //            loginAttempt.TimeOfAttemptUtc) > 0)
-        //    {
-        //        double desiredCredit = Math.Min(_options.RewardForCorrectPasswordPerAccount_Sigma,
-        //            ip.CurrentBlockScore.GetValue(_options.AccountCreditLimitHalfLife,
-        //                loginAttempt.TimeOfAttemptUtc));
-        //        double credit = UserAccountController.TryGetCredit(account, desiredCredit,
-        //            loginAttempt.TimeOfAttemptUtc);
-        //        ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
-        //            loginAttempt.TimeOfAttemptUtc);
-        //    }
-        //}
-
-
+        
         /// <returns></returns>
         /// <summary>
         /// Add a LoginAttempt, along the way determining whether that loginAttempt should be allowed
@@ -246,8 +231,8 @@ namespace StopGuessing.Controllers
 
             // Get information about the account the client is trying to login to
             //IStableStoreContext<string, UserAccount> userAccountContext = _userAccountContextFactory.Get();
-            IUserAccountStore userAccountStore = _userAccountFactory.Create(loginAttempt.UsernameOrAccountId);
-            Task<IUserAccount> userAccountRequestTask = userAccountStore.LoadAsync(cancellationToken);
+            IRepository<string, TUserAccount> userAccountRepository = _userAccountRepositoryFactory.Create();
+            Task<TUserAccount> userAccountRequestTask = userAccountRepository.LoadAsync(loginAttempt.UsernameOrAccountId, cancellationToken);
 
             // Get a binomial ladder to estimate if the password is common
             Task<int> passwordsHeightOnBinomialLadderTask =
@@ -266,11 +251,12 @@ namespace StopGuessing.Controllers
 
             // We'll need the salt from the account record before we can calculate the expensive hash,
             // so await that task first 
-            IUserAccount account = await userAccountRequestTask;
+            TUserAccount account = await userAccountRequestTask;
             if (account != null)
             {
                 try
                 {
+                    IUserAccountController<TUserAccount> userAccountController = _userAccountControllerFactory.Create();
                     //
                     // This is an login attempt for a valid (existent) account.
                     //
@@ -279,8 +265,10 @@ namespace StopGuessing.Controllers
                     // into this account successfully---a very strong indicator that it is a client used by the
                     // legitimate user and not an unknown client performing a guessing attack.
                     loginAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount = await
-                        account.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-                            loginAttempt.HashOfCookieProvidedByBrowser);
+                        userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
+                            account,
+                            loginAttempt.HashOfCookieProvidedByBrowser,
+                            cancellationToken);
 
                     // Test to see if the password is correct by calculating the Phase2Hash and comparing it with the Phase2 hash
                     // in this record.  The expensive (phase1) hash which is used to encrypt the EC public key for this account
@@ -288,14 +276,14 @@ namespace StopGuessing.Controllers
                     if (phase1HashOfProvidedPassword == null)
                     {
                         phase1HashOfProvidedPassword =
-                            UserAccountController.ComputePhase1Hash(account, passwordProvidedByClient);
+                            userAccountController.ComputePhase1Hash(account, passwordProvidedByClient);
                     }
 
                     // Since we can't store the phase1 hash (it can decrypt that EC key) we instead store a simple (SHA256)
                     // hash of the phase1 hash, which we call the phase 2 hash, and use that to compare the provided password
                     // with the correct password.
                     string phase2HashOfProvidedPassword =
-                        UserAccountController.ComputePhase2HashFromPhase1Hash(phase1HashOfProvidedPassword);
+                            userAccountController.ComputePhase2HashFromPhase1Hash(account, phase1HashOfProvidedPassword);
 
                     // To determine if the password is correct, compare the phase2 has we just generated (phase2HashOfProvidedPassword)
                     // with the one generated from the correct password when the user chose their password (account.PasswordHashPhase2).  
@@ -338,7 +326,8 @@ namespace StopGuessing.Controllers
                             // This login attempt has valid credentials and no reason to block, so the
                             // client will be authenticated.
                             loginAttempt.Outcome = AuthenticationOutcome.CredentialsValid;
-                            account.RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(
+                            userAccountController.RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
+                                account,
                                 loginAttempt.HashOfCookieProvidedByBrowser);
 
                             // Use this login attempt to offset harm caused by prior login failures
@@ -349,7 +338,8 @@ namespace StopGuessing.Controllers
                                 // There is a non-zero blocking score that might be counteracted by a credit
                                 TaskHelper.RunInBackground(Task.Run( async () =>
                                 {
-                                    double credit = await account.TryGetCreditAsync(
+                                    double credit = await userAccountController.TryGetCreditAsync(
+                                        account,
                                         _options.RewardForCorrectPasswordPerAccount_Sigma,
                                         loginAttempt.TimeOfAttemptUtc);
                                     ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
@@ -381,7 +371,7 @@ namespace StopGuessing.Controllers
                         // don't learn anything from doing so, we'll want to account for these repeats differently (and penalize them less).
                         // We actually have two data structures for catching this: A large sketch of clientsIpHistory/account/password triples and a
                         // tiny LRU cache of recent failed passwords for this account.  We'll check both.
-                        if (await account.AddIncorrectPhase2HashAsync(phase2HashOfProvidedPassword))
+                        if (await userAccountController.AddIncorrectPhaseTwoHashAsync(account, phase2HashOfProvidedPassword, cancellationToken: cancellationToken))
                         {
                             // The same incorrect password was recently used for this account, indicate this so that we
                             // do not penalize the IP further (as attackers don't gain anything from guessing the wrong password again).
@@ -413,7 +403,7 @@ namespace StopGuessing.Controllers
                 finally
                 {
                     // Save changes to the user account record in the background (so that we don't hold up returning the result)
-                    TaskHelper.RunInBackground(userAccountStore.SaveChangesAsync(cancellationToken));
+                    TaskHelper.RunInBackground(userAccountRepository.SaveChangesAsync(cancellationToken));
                 }
             }
             else

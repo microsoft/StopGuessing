@@ -12,22 +12,23 @@ namespace StopGuessing
     //public interface IUserAccountContextFactory : IStableStoreFactory<string, UserAccount>
     //{ }
 
-    public class MemoryOnlyUserAccountStore : IUserAccountStore // IStableStoreContext<string, UserAccount>
+    public class MemoryOnlyUserAccountRepository : IRepository<String, IUserAccount> // IStableStoreContext<string, UserAccount>
     {
-        private readonly IUserAccount _account = null;
+        private ConcurrentDictionary<string, IUserAccount> _store;
 
-        public MemoryOnlyUserAccountStore(IUserAccount account)
+        public MemoryOnlyUserAccountRepository(ConcurrentDictionary<string, IUserAccount> store)
         {
-            _account = account;
-
+            _store = store;
         }
 
 #pragma warning disable 1998
-        public async Task<IUserAccount> LoadAsync(CancellationToken? cancellationToken)
+        public async Task<IUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken? cancellationToken)
 #pragma warning restore 1998
         {
             cancellationToken?.ThrowIfCancellationRequested();
-            return _account;
+            IUserAccount result;
+            _store.TryGetValue(usernameOrAccountId, out result);
+            return result;
         }
 
 #pragma warning disable 1998
@@ -45,15 +46,13 @@ namespace StopGuessing
 
     }
 
-    public class MemoryOnlyUserAccountFactory : IUserAccountFactory
+    public class MemoryOnlyUserAccountFactory : IFactory<IRepository<string, IUserAccount>>
     {
         private readonly ConcurrentDictionary<string, IUserAccount> _store = new ConcurrentDictionary<string, IUserAccount>();
 
-        public IUserAccountStore Create(string usernameOrAccountId)
+        public IRepository<string, IUserAccount> Create()
         {
-            IUserAccount account;
-            _store.TryGetValue(usernameOrAccountId, out account);
-            return new MemoryOnlyUserAccountStore(account);
+            return new MemoryOnlyUserAccountRepository(_store);
         }
 
         public void Add(IUserAccount account)

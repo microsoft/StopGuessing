@@ -7,6 +7,7 @@ using StopGuessing;
 using StopGuessing.Controllers;
 using StopGuessing.Models;
 using StopGuessing.EncryptionPrimitives;
+using StopGuessing.Memory;
 
 
 namespace Simulator
@@ -21,6 +22,7 @@ namespace Simulator
         private readonly ExperimentalConfiguration _experimentalConfiguration;
         private readonly IpPool _ipPool;
         private readonly SimulatedPasswords _simPasswords;
+        private readonly MemoryUserAccountController _userAccountController = new MemoryUserAccountController();
 
         public readonly SortedSet<SimulatedLoginAttempt> ScheduledBenignAttempts = new SortedSet<SimulatedLoginAttempt>(
             Comparer<SimulatedLoginAttempt>.Create( (a, b) => 
@@ -122,7 +124,7 @@ namespace Simulator
             {
                 // To cause this client to be out of date, we'll change the password here.
                 string newPassword = _simPasswords.GetPasswordFromWeightedDistribution();
-                UserAccountController.SetPassword(account.Account, newPassword, account.Password);
+                _userAccountController.SetPassword(account.Account, newPassword, account.Password);
                 account.Password = newPassword;
                 mistake += "StalePassword";
 

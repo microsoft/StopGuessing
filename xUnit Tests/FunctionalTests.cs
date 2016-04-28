@@ -9,6 +9,7 @@ using StopGuessing;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
+using StopGuessing.Memory;
 
 namespace xUnit_Tests
 {
@@ -54,6 +55,7 @@ namespace xUnit_Tests
             configuration.MyAccountFactory = new MemoryOnlyUserAccountFactory();
 
             LoginAttemptController myLoginAttemptController = new LoginAttemptController(
+                new MemoryUserAccountControllerFactory(),
                 configuration.MyAccountFactory,
                 localPasswordBinomialLadderSketch,
                 memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions);

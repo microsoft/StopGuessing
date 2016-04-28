@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
+using StopGuessing.Memory;
 
 namespace Simulator
 {
@@ -9,6 +10,6 @@ namespace Simulator
         public string Password;
         public ConcurrentBag<string> Cookies = new ConcurrentBag<string>();
         public ConcurrentBag<IPAddress> ClientAddresses = new ConcurrentBag<IPAddress>();
-        public StopGuessing.Models.MemoryUserAccount Account;
+        public MemoryUserAccount Account;
     }
 }

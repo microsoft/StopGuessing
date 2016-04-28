@@ -1,6 +1,11 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Runtime.Serialization;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using StopGuessing.Azure;
 using StopGuessing.DataStructures;
 
 namespace StopGuessing.Models
@@ -57,18 +62,7 @@ namespace StopGuessing.Models
         /// The half life with which used credits are removed from the system freeing up new credit
         /// </summary>
         TimeSpan CreditHalfLife { get; set; }
-        
-        Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-            string hashOfCookie,
-            CancellationToken cancellationToken = default(CancellationToken));
-
-        void RecordHashOfDeviceCookieUsedDuringSuccessfulLogin(string hashOfCookie,
-            DateTime? whenSeenUtc = null);
-
-        Task<bool> AddIncorrectPhase2HashAsync(string phase2Hash, DateTime? whenSeenUtc = null,
-            CancellationToken cancellationToken = default(CancellationToken));
-
-        Task<double> TryGetCreditAsync(double amountRequested, DateTime timeOfRequestUtc,
-            CancellationToken cancellationToken = default(CancellationToken));
     }
+
+
 }

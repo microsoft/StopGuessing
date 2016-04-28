@@ -4,20 +4,51 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using StopGuessing.Azure;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
+using StopGuessing.Utilities;
 
 namespace StopGuessing.Controllers
 {
-    public static class UserAccountController
+    public abstract class UserAccountController<TAccount> : IUserAccountController<TAccount> where TAccount : IUserAccount
     {
-        public static byte[] ComputePhase1Hash(IUserAccount userAccount, string password)
+        public const int DefaultIterationsForPasswordHash = 1000;
+        public const int DefaultSaltLength = 8;
+        public const int DefaultMaxFailedPhase2HashesToTrack = 8;
+        public const int DefaultMaxNumberOfCookiesToTrack = 24;
+        public const int DefaultCreditHalfLifeInHours = 12;
+        public const double DefaultCreditLimit = 50;
+
+
+        public void Initialize(TAccount account,
+            string password = null,
+            int numberOfIterationsToUseForHash = 0,
+            string passwordHashFunctionName = null)
+        {
+            if (numberOfIterationsToUseForHash > 0)
+            {
+                account.NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForHash;
+            }
+            if (passwordHashFunctionName != null)
+            {
+                account.PasswordHashPhase1FunctionName = passwordHashFunctionName;
+            }
+
+            if (password != null)
+            {
+                SetPassword(account, password);
+            }
+        }
+
+
+        public virtual byte[] ComputePhase1Hash(TAccount userAccount, string password)
         {
             return ExpensiveHashFunctionFactory.Get(userAccount.PasswordHashPhase1FunctionName)(
                 password, userAccount.SaltUniqueToThisAccount, userAccount.NumberOfIterationsToUseForPhase1Hash);
         }
 
-        public static string ComputePhase2HashFromPhase1Hash(byte[] phase1Hash)
+        public virtual string ComputePhase2HashFromPhase1Hash(TAccount account, byte[] phase1Hash)
         {
             return Convert.ToBase64String(ManagedSHA256.Hash(phase1Hash));
         }
@@ -27,12 +58,16 @@ namespace StopGuessing.Controllers
         /// <b>Important</b>: this does not authenticate the user but assumes the user has already been authenticated.
         /// The <paramref name="oldPassword"/> field is used only to optionally recover the EC symmetricKey, not to authenticate the user.
         /// </summary>
+        /// <param name="userAccount"></param>
         /// <param name="newPassword">The new password to set.</param>
         /// <param name="oldPassword">If this optional field is provided and correct, the old password will allow us to re-use the old log decryption symmetricKey.
         /// <b>Providing this parameter will not cause this function to authenticate the user first.  The caller must do so beforehand.</b></param>
         /// <param name="nameOfExpensiveHashFunctionToUse">The name of the phase 1 (expenseive) hash to use.</param>
         /// <param name="numberOfIterationsToUseForPhase1Hash">The number of iterations that the hash should be performed.</param>
-        public static void SetPassword(IUserAccount userAccount, string newPassword, string oldPassword = null,
+        public virtual void SetPassword(
+            TAccount userAccount,
+            string newPassword,
+            string oldPassword = null,
             string nameOfExpensiveHashFunctionToUse = null,
             int? numberOfIterationsToUseForPhase1Hash = null)
         {
@@ -58,13 +93,13 @@ namespace StopGuessing.Controllers
             // Calculate the Phase2 hash by hasing the phase 1 hash with SHA256.
             // We can store this without revealing the phase 1 hash used to encrypt the EC account log symmetricKey.
             // We can use it to verify whether a provided password is correct
-            userAccount.PasswordHashPhase2 = ComputePhase2HashFromPhase1Hash(newPasswordHashPhase1);
+            userAccount.PasswordHashPhase2 = ComputePhase2HashFromPhase1Hash(userAccount, newPasswordHashPhase1);
 
             // Store the ecAccountLogKey encrypted encrypted using symmetric encryption with the phase 1 password hash as its key.
 
             // First try using the ecAccountLogKey from the prior password
             if (oldPassword != null &&
-                ComputePhase2HashFromPhase1Hash(oldPasswordHashPhase1) == userAccount.PasswordHashPhase2)
+                ComputePhase2HashFromPhase1Hash(userAccount, oldPasswordHashPhase1) == userAccount.PasswordHashPhase2)
             {
                 // If we have a valid old password, Decrypt the private log decryption symmetricKey so we can re-encrypt it
                 // with the new password and continue to use it on future logins. 
@@ -97,23 +132,16 @@ namespace StopGuessing.Controllers
 
 
         /// <summary>
-        /// Derive the EC private account log key from the phase 1 hash of the correct password.
-        /// </summary>
-        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
-        /// <returns></returns>
-        public static ECDiffieHellmanCng DecryptPrivateAccountLogKey(IUserAccount userAccount, byte[] phase1HashOfCorrectPassword)
-        {
-            return Encryption.DecryptAesCbcEncryptedEcPrivateKey(userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
-        }
-
-        /// <summary>
         /// Set the EC account log key
         /// </summary>
         /// <param name="userAccount"></param>
         /// <param name="ecAccountLogKey"></param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
         /// <returns></returns>
-        public static void SetAccountLogKey(IUserAccount userAccount, ECDiffieHellmanCng ecAccountLogKey, byte[] phase1HashOfCorrectPassword)
+        public virtual void SetAccountLogKey(
+            TAccount userAccount,
+            ECDiffieHellmanCng ecAccountLogKey,
+            byte[] phase1HashOfCorrectPassword)
         {
             userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = Encryption.EncryptEcPrivateKeyWithAesCbc(ecAccountLogKey,
                 phase1HashOfCorrectPassword);
@@ -123,12 +151,48 @@ namespace StopGuessing.Controllers
             }
         }
 
-        public const int DefaultIterationsForPasswordHash = 1000;
-        public const int DefaultSaltLength = 8;
-        public const int DefaultMaxFailedPhase2HashesToTrack = 8;
-        public const int DefaultMaxNumberOfCookiesToTrack = 24;
-        public const int DefaultCreditHalfLifeInHours = 12;
-        public const double DefaultCreditLimit = 50;
+        /// <summary>
+        /// Derive the EC private account log key from the phase 1 hash of the correct password.
+        /// </summary>
+        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
+        /// <returns></returns>
+        public virtual ECDiffieHellmanCng DecryptPrivateAccountLogKey(
+            TAccount userAccount,
+            byte[] phase1HashOfCorrectPassword)
+        {
+            return Encryption.DecryptAesCbcEncryptedEcPrivateKey(userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
+        }
+
+        public virtual void RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
+            TAccount account,
+            string hashOfCookie,
+            DateTime? whenSeenUtc = null)
+        {
+            TaskHelper.RunInBackground(
+                RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(account, hashOfCookie, whenSeenUtc));
+        }
+        public abstract Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
+            TAccount account,
+            string hashOfCookie,
+            CancellationToken cancellationToken = new CancellationToken());
+
+        public abstract Task RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(
+            TAccount userAccount,
+            string hashOfCookie,
+            DateTime? whenSeenUtc = null, CancellationToken cancellationToken = new CancellationToken());
+
+        public abstract Task<bool> AddIncorrectPhaseTwoHashAsync(
+            TAccount account,
+            string phase2Hash,
+            DateTime? whenSeenUtc = null,
+            CancellationToken cancellationToken = new CancellationToken());
+
+        public abstract Task<double> TryGetCreditAsync(
+            TAccount account,
+            double amountRequested,
+            DateTime timeOfRequestUtc,
+            CancellationToken cancellationToken = new CancellationToken());
+
 
     }
 }

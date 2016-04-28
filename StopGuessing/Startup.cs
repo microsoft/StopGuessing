@@ -1,20 +1,20 @@
 ﻿using System;
+using System.Linq;
 using Microsoft.AspNet.Builder;
 using Microsoft.AspNet.Hosting;
-using Microsoft.Dnx.Runtime;
-//using Microsoft.Framework.Configuration;
-//using Microsoft.Framework.DependencyInjection;
-//using Microsoft.Framework.Logging;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using Microsoft.Data.Entity;
+using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.WindowsAzure.Storage;
 using StopGuessing.Azure;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace StopGuessing
 {
@@ -66,23 +66,15 @@ namespace StopGuessing
             RemoteHost localHost = new RemoteHost {Uri = new Uri("http://localhost:35358")};
             services.AddSingleton<RemoteHost>(x => localHost);
 
-            MaxWeightHashing<RemoteHost> hosts = new MaxWeightHashing<RemoteHost>("FIXME-uniquekeyfromconfig");
+            MaxWeightHashing<RemoteHost> hosts = new MaxWeightHashing<RemoteHost>(Configuration["Data:UniqueConfigurationSecretPhrase"]);
             hosts.Add("localhost", localHost);
             services.AddSingleton<IDistributedResponsibilitySet<RemoteHost>>(x => hosts);
 
+            string cloudStorageConnectionString = Configuration["Data:StorageConnectionString"];
+            CloudStorageAccount cloudStorageAccount = CloudStorageAccount.Parse(cloudStorageConnectionString);
+            services.AddSingleton<CloudStorageAccount>( a => cloudStorageAccount);
 
-            MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
-                new MultiperiodFrequencyTracker<string>(
-                    options.NumberOfPopularityMeasurementPeriods,
-                    options.LengthOfShortestPopularityMeasurementPeriod,
-                    options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
-
-
-            services.AddSingleton<IUserAccountFactory, MemoryOnlyUserAccountFactory>();
-
-            // Use memory only stable store if none other is available.  FUTURE -- use azure SQL or tables
-            //services.AddSingleton<IStableStore, MemoryOnlyStableStore>();
-
+            services.AddSingleton<IFactory<IRepository<string, IUserAccount>>, DbUserAccountRepositoryFactory>();
 
             services.AddSingleton<MemoryUsageLimiter, MemoryUsageLimiter>();
 
@@ -108,13 +100,13 @@ namespace StopGuessing
                 BinomialLadderSketch localPasswordBinomialLadderSketch =
                     new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
                 services.AddSingleton<IBinomialLadderSketch>(x => localPasswordBinomialLadderSketch);
-                services.AddSingleton<IFrequenciesProvider<string>>(x => localPasswordFrequencyTracker);
             }
 
-
-
-            services.AddSingleton<LoginAttemptClient>();
-            services.AddSingleton<LoginAttemptController>();
+            LoginAttemptClient<DbUserAccount> loginAttemptClient = new LoginAttemptClient<DbUserAccount>(hosts, localHost);
+            LoginAttemptController<DbUserAccount> loginAttemptController = new LoginAttemptController<DbUserAccount>( 
+                 new DbUserAccountControllerFactory(cloudStorageAccount), new DbUserAccountRepositoryFactory(),    );
+            services.AddSingleton<ILoginAttemptClient, LoginAttemptClient<DbUserAccount>>();
+            services.AddSingleton<ILoginAttemptController, LoginAttemptController<DbUserAccount>>();
         }
 
         // Configure is called after ConfigureServices is called.
