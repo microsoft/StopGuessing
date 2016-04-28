@@ -19,9 +19,9 @@ namespace Simulator
     /// </summary>
     public class SimulatedAccounts
     {
-        public List<SimulatedAccount> BenignAccounts = new List<SimulatedAccount>();
-        public List<SimulatedAccount> AttackerAccounts = new List<SimulatedAccount>();
-        public WeightedSelector<SimulatedAccount> BenignAccountSelector = new WeightedSelector<SimulatedAccount>();
+        public List<SimulatedUserAccount> BenignAccounts = new List<SimulatedUserAccount>();
+        public List<SimulatedUserAccount> AttackerAccounts = new List<SimulatedUserAccount>();
+        public WeightedSelector<SimulatedUserAccount> BenignAccountSelector = new WeightedSelector<SimulatedUserAccount>();
         private readonly IpPool _ipPool;
         private readonly DebugLogger _logger;
         private readonly SimulatedPasswords _simPasswords;
@@ -34,17 +34,20 @@ namespace Simulator
         }
 
 
-        public SimulatedAccount GetBenignAccountWeightedByLoginFrequency()
+        public SimulatedUserAccount GetBenignAccountWeightedByLoginFrequency()
         {
-            return BenignAccountSelector.GetItemByWeightedRandom();
+            lock (BenignAccountSelector)
+            {
+                return BenignAccountSelector.GetItemByWeightedRandom();
+            }
         }
 
-        public SimulatedAccount GetBenignAccountAtRandomUniform()
+        public SimulatedUserAccount GetBenignAccountAtRandomUniform()
         {
             return BenignAccounts[(int) StrongRandomNumberGenerator.Get32Bits(BenignAccounts.Count)];
         }
 
-        public SimulatedAccount GetMaliciousAccountAtRandomUniform()
+        public SimulatedUserAccount GetMaliciousAccountAtRandomUniform()
         {
             return AttackerAccounts[(int) StrongRandomNumberGenerator.Get32Bits(AttackerAccounts.Count)];
         }
@@ -62,22 +65,22 @@ namespace Simulator
         {
             _logger.WriteStatus("Creating {0:N0} benign accounts", experimentalConfiguration.NumberOfBenignAccounts);        
             MemoryUserAccountController userAccountController = new MemoryUserAccountController();;
-            ConcurrentBag<SimulatedAccount> benignSimulatedAccountBag = new ConcurrentBag<SimulatedAccount>();
+            ConcurrentBag<SimulatedUserAccount> benignSimulatedAccountBag = new ConcurrentBag<SimulatedUserAccount>();
             //
             // Create benign accounts in parallel
             Parallel.For(0, (int) experimentalConfiguration.NumberOfBenignAccounts, (index) =>
             {
                 if (index > 0 && index % 10000 == 0)
                     _logger.WriteStatus("Created {0:N0} benign accounts", index);
-                SimulatedAccount account = new SimulatedAccount()
+                SimulatedUserAccount userAccount = new SimulatedUserAccount()
                 {
-                    UniqueId = "user_" + index.ToString(),
+                    UsernameOrAccountId = "user_" + index.ToString(),
                     Password = _simPasswords.GetPasswordFromWeightedDistribution()
                 };
-                account.ClientAddresses.Add(_ipPool.GetNewRandomBenignIp());
-                account.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
+                userAccount.ClientAddresses.Add(_ipPool.GetNewRandomBenignIp());
+                userAccount.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
 
-                benignSimulatedAccountBag.Add(account);
+                benignSimulatedAccountBag.Add(userAccount);
 
                 double inverseFrequency = Distributions.GetLogNormal(0, 1);
                 if (inverseFrequency < 0.01d)
@@ -87,7 +90,7 @@ namespace Simulator
                 double frequency = 1 / inverseFrequency;
                 lock (BenignAccountSelector)
                 {
-                    BenignAccountSelector.AddItem(account, frequency);
+                    BenignAccountSelector.AddItem(userAccount, frequency);
                 }
             });
             BenignAccounts = benignSimulatedAccountBag.ToList();
@@ -102,19 +105,19 @@ namespace Simulator
 
             _logger.WriteStatus("Creating {0:N0} attacker accounts",
                 experimentalConfiguration.NumberOfAttackerControlledAccounts);
-            ConcurrentBag<SimulatedAccount> maliciousSimulatedAccountBag = new ConcurrentBag<SimulatedAccount>();
+            ConcurrentBag<SimulatedUserAccount> maliciousSimulatedAccountBag = new ConcurrentBag<SimulatedUserAccount>();
             
             //
             // Create accounts in parallel
             Parallel.For(0, (int) experimentalConfiguration.NumberOfAttackerControlledAccounts, (index) =>
             {
-                SimulatedAccount account = new SimulatedAccount()
+                SimulatedUserAccount userAccount = new SimulatedUserAccount()
                 {
-                    UniqueId = "attacker_" + index.ToString(),
+                    UsernameOrAccountId = "attacker_" + index.ToString(),
                     Password = _simPasswords.GetPasswordFromWeightedDistribution(),
                 };
-                account.ClientAddresses.Add(_ipPool.GetRandomMaliciousIp());
-                maliciousSimulatedAccountBag.Add(account);
+                userAccount.ClientAddresses.Add(_ipPool.GetRandomMaliciousIp());
+                maliciousSimulatedAccountBag.Add(userAccount);
             });
             AttackerAccounts = maliciousSimulatedAccountBag.ToList();
             _logger.WriteStatus("Finished creating {0:N0} attacker accounts",
@@ -127,17 +130,14 @@ namespace Simulator
                 {
                     //if (loopState. % 10000 == 0)
                     //    _logger.WriteStatus("Created account {0:N0}", index);
-                    simAccount.Account = 
-                        userAccountController.Create(simAccount.UniqueId, simAccount.Password,
-                        experimentalConfiguration.BlockingOptions.ExpensiveHashingFunctionIterations,
-                        "PBKDF2_SHA256");
-                    simAccount.Account.CreditHalfLife = experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife;
-                    simAccount.Account.CreditLimit = experimentalConfiguration.BlockingOptions.AccountCreditLimit;
+                    simAccount.CreditHalfLife = experimentalConfiguration.BlockingOptions.AccountCreditLimitHalfLife;
+                    simAccount.CreditLimit = experimentalConfiguration.BlockingOptions.AccountCreditLimit;
 
                     foreach (string cookie in simAccount.Cookies)
                         userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-                            simAccount.Account,
-                            LoginAttempt.HashCookie(cookie), cancellationToken);
+                            simAccount,
+                            LoginAttempt.HashCookie(cookie),
+                            cancellationToken);
                 });
             _logger.WriteStatus("Finished creating user accounts for each simluated account record");
         }

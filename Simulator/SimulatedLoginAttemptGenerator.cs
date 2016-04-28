@@ -79,7 +79,7 @@ namespace Simulator
 
             string mistake = "";
             //1. Pick a user at random
-            SimulatedAccount account = _simAccounts.BenignAccountSelector.GetItemByWeightedRandom();
+            SimulatedUserAccount account = _simAccounts.BenignAccountSelector.GetItemByWeightedRandom();
 
             //2. Deal with cookies
             string cookie;
@@ -124,8 +124,7 @@ namespace Simulator
             {
                 // To cause this client to be out of date, we'll change the password here.
                 string newPassword = _simPasswords.GetPasswordFromWeightedDistribution();
-                _userAccountController.SetPassword(account.Account, newPassword, account.Password);
-                account.Password = newPassword;
+                _userAccountController.SetPassword(account, newPassword, account.Password);
                 mistake += "StalePassword";
 
                 // Schedule all the future failed attempts a fixed distance aparat
@@ -234,7 +233,7 @@ namespace Simulator
         /// </summary>
         public SimulatedLoginAttempt MaliciousLoginAttemptWeighted(DateTime eventTimeUtc)
         {
-            SimulatedAccount targetBenignAccount =
+            SimulatedUserAccount targetBenignAccount =
                 (StrongRandomNumberGenerator.GetFraction() <  _experimentalConfiguration.ProbabilityThatAttackerChoosesAnInvalidAccount)
                     ? null : _simAccounts.GetBenignAccountAtRandomUniform();
 
@@ -274,7 +273,7 @@ namespace Simulator
             int accountIndex = (int)(breadthFirstAttemptCount % (ulong)_simAccounts.BenignAccounts.Count);
 
             string mistake = invalidAccount ? "BadAccount" : "";
-            SimulatedAccount targetBenignAccount = invalidAccount ? null : _simAccounts.BenignAccounts[accountIndex];
+            SimulatedUserAccount targetBenignAccount = invalidAccount ? null : _simAccounts.BenignAccounts[accountIndex];
             string password = _simPasswords.OrderedListOfMostCommonPasswords[passwordIndex];
 
             //SimulationTest _simulationtest = new SimulationTest();
@@ -311,7 +310,7 @@ namespace Simulator
             int accountIndex = (int)(breadthFirstAttemptCount % (ulong)_simAccounts.BenignAccounts.Count);
 
             string mistake = invalidAccount ? "BadAccount" : "";
-            SimulatedAccount targetBenignAccount = invalidAccount ? null : _simAccounts.BenignAccounts[accountIndex];
+            SimulatedUserAccount targetBenignAccount = invalidAccount ? null : _simAccounts.BenignAccounts[accountIndex];
             string password = _simPasswords.OrderedListOfMostCommonPasswords[passwordIndex];
 
             //SimulationTest _simulationtest = new SimulationTest();
@@ -329,7 +328,7 @@ namespace Simulator
         /// <returns></returns>
         public SimulatedLoginAttempt MaliciousAttemptToSantiizeIpViaAValidLogin(IPAddress ipAddressToSanitizeThroughLogin)
         {
-            SimulatedAccount simAccount = _simAccounts.GetMaliciousAccountAtRandomUniform();
+            SimulatedUserAccount simAccount = _simAccounts.GetMaliciousAccountAtRandomUniform();
 
             return new SimulatedLoginAttempt(simAccount, simAccount.Password,
                 true, false,

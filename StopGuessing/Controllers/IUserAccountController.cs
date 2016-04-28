@@ -6,6 +6,11 @@ using StopGuessing.Models;
 
 namespace StopGuessing.Controllers
 {
+    public interface IUserAccountControllerFactory<TAccount> : IFactory<IUserAccountController<TAccount>>
+        where TAccount : IUserAccount
+    {
+    };
+
     public interface IUserAccountController<TAccount> where TAccount : IUserAccount
     {
         //

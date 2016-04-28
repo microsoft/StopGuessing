@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using StopGuessing.Memory;
 using StopGuessing.Models;
 
 namespace StopGuessing
@@ -12,21 +13,21 @@ namespace StopGuessing
     //public interface IUserAccountContextFactory : IStableStoreFactory<string, UserAccount>
     //{ }
 
-    public class MemoryOnlyUserAccountRepository : IRepository<String, IUserAccount> // IStableStoreContext<string, UserAccount>
+    public class MemoryOnlyUserAccountRepository : IRepository<string, MemoryUserAccount> // IStableStoreContext<string, UserAccount>
     {
-        private ConcurrentDictionary<string, IUserAccount> _store;
+        private ConcurrentDictionary<string, MemoryUserAccount> _store;
 
-        public MemoryOnlyUserAccountRepository(ConcurrentDictionary<string, IUserAccount> store)
+        public MemoryOnlyUserAccountRepository(ConcurrentDictionary<string, MemoryUserAccount> store)
         {
             _store = store;
         }
 
 #pragma warning disable 1998
-        public async Task<IUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken? cancellationToken)
+        public async Task<MemoryUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken? cancellationToken)
 #pragma warning restore 1998
         {
             cancellationToken?.ThrowIfCancellationRequested();
-            IUserAccount result;
+            MemoryUserAccount result;
             _store.TryGetValue(usernameOrAccountId, out result);
             return result;
         }
@@ -46,16 +47,16 @@ namespace StopGuessing
 
     }
 
-    public class MemoryOnlyUserAccountFactory : IFactory<IRepository<string, IUserAccount>>
+    public class MemoryOnlyUserAccountFactory : IUserAccountRepositoryFactory<MemoryUserAccount>
     {
-        private readonly ConcurrentDictionary<string, IUserAccount> _store = new ConcurrentDictionary<string, IUserAccount>();
+        private readonly ConcurrentDictionary<string, MemoryUserAccount> _store = new ConcurrentDictionary<string, MemoryUserAccount>();
 
-        public IRepository<string, IUserAccount> Create()
+        public IRepository<string, MemoryUserAccount> Create()
         {
             return new MemoryOnlyUserAccountRepository(_store);
         }
 
-        public void Add(IUserAccount account)
+        public void Add(MemoryUserAccount account)
         {
             _store[account.UsernameOrAccountId] = account;
         }

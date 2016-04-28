@@ -91,7 +91,7 @@ namespace Simulator
         /// <returns></returns>
         public void AdjustBlockingScoreForPastTyposTreatedAsFullFailures(
             Simulator simulator,
-            SimulatedAccount account,
+            SimulatedUserAccount account,
             DateTime whenUtc,
             string correctPassword)
         {
@@ -99,7 +99,7 @@ namespace Simulator
                 RecentPotentialTypos.MostRecentFirst.ToArray();
             foreach (SimLoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
             {
-                if (account == null || potentialTypo.UsernameOrAccountId != account.UniqueId)
+                if (account == null || potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
                     continue;
 
                 // Use an edit distance calculation to determine if it was a likely typo

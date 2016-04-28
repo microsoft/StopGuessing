@@ -30,15 +30,15 @@ namespace StopGuessing.Controllers
     {
         private readonly BlockingAlgorithmOptions _options;
         private readonly IBinomialLadderSketch _binomialLadderSketch;
-        private readonly IFactory<IRepository<string,TUserAccount>> _userAccountRepositoryFactory;
-        private readonly IFactory<IUserAccountController<TUserAccount>> _userAccountControllerFactory;
+        private readonly IUserAccountRepositoryFactory<TUserAccount> _userAccountRepositoryFactory;
+        private readonly IUserAccountControllerFactory<TUserAccount> _userAccountControllerFactory;
         private readonly AgingMembershipSketch _recentIncorrectPasswords;
 
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
 
         public LoginAttemptController(
-            IFactory<IUserAccountController<TUserAccount>> userAccountControllerFactory,
-            IFactory<IRepository<string, TUserAccount>> userAccountRepositoryFactory,
+            IUserAccountControllerFactory<TUserAccount> userAccountControllerFactory,
+            IUserAccountRepositoryFactory<TUserAccount> userAccountRepositoryFactory,
             IBinomialLadderSketch binomialLadderSketch,
             MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions blockingOptions
@@ -116,6 +116,7 @@ namespace StopGuessing.Controllers
         /// to determine if any failed attempts were due to typos.  
         /// </summary>
         /// <param name="clientsIpHistory">Records of this client's previous attempts to examine.</param>
+        /// <param name="accountController"></param>
         /// <param name="account">The account that the client is currently trying to login to.</param>
         /// <param name="whenUtc"></param>
         /// <param name="correctPassword">The correct password for this account.  (We can only know it because
@@ -125,6 +126,7 @@ namespace StopGuessing.Controllers
         /// <returns></returns>
         protected void AdjustBlockingScoreForPastTyposTreatedAsFullFailures(
             IpHistory clientsIpHistory,
+            IUserAccountController<TUserAccount> accountController,
             TUserAccount account,
             DateTime whenUtc,
             string correctPassword,
@@ -144,28 +146,45 @@ namespace StopGuessing.Controllers
                     if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
                         continue;
 
-                    if (ecPrivateAccountLogKey == null)
+                    string incorrectPasswordFromPreviousAttempt = null;
+
+                    if (account.GetType().Name == "SimulatedUserAccount")
                     {
-                        // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                        incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword.Ciphertext;
+                    }
+                    else
+                    {
+                        if (ecPrivateAccountLogKey == null)
+                        {
+                            // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                            try
+                            {
+                                ecPrivateAccountLogKey = accountController.DecryptPrivateAccountLogKey(account,
+                                    phase1HashOfCorrectPassword);
+                            }
+                            catch (Exception)
+                            {
+                                // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
+                                return;
+                            }
+                        }
+                        // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
                         try
                         {
-                            ecPrivateAccountLogKey = Encryption.DecryptAesCbcEncryptedEcPrivateKey(
-                                account.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
-                                phase1HashOfCorrectPassword);
+                            // Attempt to decrypt the password.
+                            incorrectPasswordFromPreviousAttempt =
+                                potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
                         }
                         catch (Exception)
                         {
-                            // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
-                            return;
+                            // An exception is likely due to an incorrect key (perhaps outdated).
+                            // Since we simply can't do anything with a record we can't Decrypt, we carry on
+                            // as if nothing ever happened.  No.  Really.  Nothing to see here.
                         }
                     }
-                    // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
-                    try
-                    {
-                        // Attempt to decrypt the password.
-                        string incorrectPasswordFromPreviousAttempt =
-                            potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
 
+                    if (incorrectPasswordFromPreviousAttempt != null)
+                    {
                         // Use an edit distance calculation to determine if it was a likely typo
                         bool likelyTypo =
                             EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
@@ -177,13 +196,6 @@ namespace StopGuessing.Controllers
                             credit += potentialTypo.Penalty.GetValue(_options.AccountCreditLimitHalfLife, whenUtc)*
                                       (1d - _options.PenaltyMulitiplierForTypo);
                         }
-
-                    }
-                    catch (Exception)
-                    {
-                        // An exception is likely due to an incorrect key (perhaps outdated).
-                        // Since we simply can't do anything with a record we can't Decrypt, we carry on
-                        // as if nothing ever happened.  No.  Really.  Nothing to see here.
                     }
 
                     // Now that we know whether this past event was a typo or not, we no longer need to keep track
@@ -300,7 +312,7 @@ namespace StopGuessing.Controllers
                         // Determine if any of the outcomes for login attempts from the client IP for this request were the result of typos,
                         // as this might impact our decision about whether or not to block this client IP in response to its past behaviors.
                         AdjustBlockingScoreForPastTyposTreatedAsFullFailures(
-                            ip, account, loginAttempt.TimeOfAttemptUtc, passwordProvidedByClient,
+                            ip, userAccountController, account, loginAttempt.TimeOfAttemptUtc, passwordProvidedByClient,
                             phase1HashOfProvidedPassword);
 
                         // We'll get the blocking threshold, blocking condition, and block if the condition exceeds the threshold.
@@ -362,9 +374,15 @@ namespace StopGuessing.Controllers
                         //  correct password, so you can't get to the plaintext of the incorrect password if you
                         //  don't already know the correct password.)
                         loginAttempt.Phase2HashOfIncorrectPassword = phase2HashOfProvidedPassword;
-                        loginAttempt.EncryptedIncorrectPassword.Write(passwordProvidedByClient,
-                            account.EcPublicAccountLogKey);
-
+                        if (account.GetType().Name == "SimulatedUserAccount")
+                        {
+                            loginAttempt.EncryptedIncorrectPassword.Ciphertext = passwordProvidedByClient;
+                        }
+                        else
+                        {
+                            loginAttempt.EncryptedIncorrectPassword.Write(passwordProvidedByClient,
+                                account.EcPublicAccountLogKey);
+                        }
                         // Next, if it's possible to declare more about this outcome than simply that the 
                         // user provided the incorrect password, let's do so.
                         // Since users who are unsure of their passwords may enter the same username/password twice, but attackers

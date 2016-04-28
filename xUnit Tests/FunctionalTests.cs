@@ -19,6 +19,7 @@ namespace xUnit_Tests
         //public LoginAttemptClient MyLoginAttemptClient;
         public BlockingAlgorithmOptions MyBlockingAlgorithmOptions;
         public LimitPerTimePeriod[] CreditLimits;
+        public MemoryUserAccountController MemUserAccountController;
         //public MemoryOnlyStableStore StableStore;
         public MemoryOnlyUserAccountFactory MyAccountFactory;
         public ILoginAttemptController MyLoginAttemptClient;
@@ -53,8 +54,10 @@ namespace xUnit_Tests
             //            options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
             
             configuration.MyAccountFactory = new MemoryOnlyUserAccountFactory();
+            configuration.MemUserAccountController = new MemoryUserAccountController();
 
-            LoginAttemptController myLoginAttemptController = new LoginAttemptController(
+            LoginAttemptController<MemoryUserAccount> myLoginAttemptController = 
+                new LoginAttemptController<MemoryUserAccount>(
                 new MemoryUserAccountControllerFactory(),
                 configuration.MyAccountFactory,
                 localPasswordBinomialLadderSketch,
@@ -69,11 +72,10 @@ namespace xUnit_Tests
         public static IUserAccount CreateTestAccount(TestConfiguration configuration, string usernameOrAccountId, string password,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            MemoryUserAccount account = new MemoryUserAccount(usernameOrAccountId, password, 1)
-            {
-                CreditLimit = configuration.MyBlockingAlgorithmOptions.AccountCreditLimit,
-                CreditHalfLife = configuration.MyBlockingAlgorithmOptions.AccountCreditLimitHalfLife,
-            };
+            MemoryUserAccount account = configuration.MemUserAccountController.Create(usernameOrAccountId, password, 1);
+            account.CreditLimit = configuration.MyBlockingAlgorithmOptions.AccountCreditLimit;
+            account.CreditHalfLife = configuration.MyBlockingAlgorithmOptions.AccountCreditLimitHalfLife;
+
             configuration.MyAccountFactory.Add(account);
             return account;
         }

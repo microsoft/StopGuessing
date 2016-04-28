@@ -74,8 +74,6 @@ namespace StopGuessing
             CloudStorageAccount cloudStorageAccount = CloudStorageAccount.Parse(cloudStorageConnectionString);
             services.AddSingleton<CloudStorageAccount>( a => cloudStorageAccount);
 
-            services.AddSingleton<IFactory<IRepository<string, IUserAccount>>, DbUserAccountRepositoryFactory>();
-
             services.AddSingleton<MemoryUsageLimiter, MemoryUsageLimiter>();
 
             if (hosts.Count > 0)
@@ -93,8 +91,8 @@ namespace StopGuessing
                     new DistributedBinomialLadderSketchController(dblClient, options.HeightOfBinomialLadder_H, options.NumberOfElementsPerNodeInBinomialLadderSketch);
                 services.AddSingleton<DistributedBinomialLadderSketchController>(x => sketchController);
 
-                services.AddSingleton<IFrequenciesProvider<string>>(x =>
-                    new IncorrectPasswordFrequencyClient(hosts, options.NumberOfRedundantHostsToCachePasswordPopularity));
+                //services.AddSingleton<IFrequenciesProvider<string>>(x =>
+                //    new IncorrectPasswordFrequencyClient(hosts, options.NumberOfRedundantHostsToCachePasswordPopularity));
             }  else
             {
                 BinomialLadderSketch localPasswordBinomialLadderSketch =
@@ -103,9 +101,11 @@ namespace StopGuessing
             }
 
             LoginAttemptClient<DbUserAccount> loginAttemptClient = new LoginAttemptClient<DbUserAccount>(hosts, localHost);
-            LoginAttemptController<DbUserAccount> loginAttemptController = new LoginAttemptController<DbUserAccount>( 
-                 new DbUserAccountControllerFactory(cloudStorageAccount), new DbUserAccountRepositoryFactory(),    );
-            services.AddSingleton<ILoginAttemptClient, LoginAttemptClient<DbUserAccount>>();
+            services.AddSingleton<IUserAccountRepositoryFactory<DbUserAccount>, DbUserAccountRepositoryFactory>();
+            services.AddSingleton<IUserAccountControllerFactory<DbUserAccount>, DbUserAccountControllerFactory>();
+            //LoginAttemptController<DbUserAccount> loginAttemptController = new LoginAttemptController<DbUserAccount>( 
+            //     new DbUserAccountControllerFactory(cloudStorageAccount), new DbUserAccountRepositoryFactory());
+            services.AddSingleton<ILoginAttemptClient, LoginAttemptClient<DbUserAccount>>( i => loginAttemptClient );
             services.AddSingleton<ILoginAttemptController, LoginAttemptController<DbUserAccount>>();
         }
 

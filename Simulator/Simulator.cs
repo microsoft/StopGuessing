@@ -247,7 +247,7 @@ namespace Simulator
                 var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.AddressOfClientInitiatingRequest);
                 string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}", 
                     simAttempt.Password, 
-                    simAttempt.SimAccount?.UniqueId ?? "<null>",
+                    simAttempt.SimAccount?.UsernameOrAccountId ?? "<null>",
                     simAttempt.AddressOfClientInitiatingRequest,
                     simAttempt.IsFrequentlyGuessedPassword ? "Frequent" : "Infrequent",
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",

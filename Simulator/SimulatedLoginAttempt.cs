@@ -20,7 +20,7 @@ namespace Simulator
     /// </summary>
     public class SimulatedLoginAttempt
     {
-        public SimulatedAccount SimAccount;
+        public SimulatedUserAccount SimAccount;
         public string UserNameOrAccountId;
         public IPAddress AddressOfClientInitiatingRequest { get; set; }
         public DateTime TimeOfAttemptUtc { get; set; }
@@ -34,7 +34,7 @@ namespace Simulator
         public bool IsGuess;
         public string MistakeType;
 
-        public SimulatedLoginAttempt(SimulatedAccount account,
+        public SimulatedLoginAttempt(SimulatedUserAccount account,
             string password,
             bool isFromAttacker,
             bool isGuess,
@@ -45,7 +45,7 @@ namespace Simulator
             )
         {
             SimAccount = account;
-            UserNameOrAccountId = account != null ? account.UniqueId : StrongRandomNumberGenerator.Get64Bits().ToString();
+            UserNameOrAccountId = account != null ? account.UsernameOrAccountId : StrongRandomNumberGenerator.Get64Bits().ToString();
             IsPasswordValid = account != null && account.Password == password;
             AddressOfClientInitiatingRequest = clientAddress;
             TimeOfAttemptUtc = eventTimeUtc;
@@ -61,7 +61,7 @@ namespace Simulator
 
             IsRepeatFailure = (SimAccount == null)
                 ? simulator._recentIncorrectPasswords.AddMember(UserNameOrAccountId + "\n" + Password)
-                : simulator._userAccountController.AddIncorrectPhaseTwoHashAsync( SimAccount.Account, Password, TimeOfAttemptUtc).Result;
+                : simulator._userAccountController.AddIncorrectPhaseTwoHashAsync( SimAccount, Password, TimeOfAttemptUtc).Result;
 
             int passwordsHeightOnBinomialLadder = IsPasswordValid
                 ? simulator._binomialLadderSketch.GetHeight(Password)
@@ -75,7 +75,7 @@ namespace Simulator
             {
                 DeviceCookieHadPriorSuccessfulLoginForThisAccount =
                     simulator._userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-                        SimAccount.Account, CookieProvidedByBrowser).Result;
+                        SimAccount, CookieProvidedByBrowser).Result;
             }
 
             if (IsPasswordValid)
@@ -84,9 +84,9 @@ namespace Simulator
                 // as this might impact our decision about whether or not to block this client IP in response to its past behaviors.
                 ipHistory.AdjustBlockingScoreForPastTyposTreatedAsFullFailures(simulator, SimAccount, TimeOfAttemptUtc,
                     Password);
-                if (SimAccount != null && SimAccount.Account != null)
+                if (SimAccount != null)
                     simulator._userAccountController.RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
-                        SimAccount.Account, CookieProvidedByBrowser, TimeOfAttemptUtc);
+                        SimAccount, CookieProvidedByBrowser, TimeOfAttemptUtc);
             }
 
             if (!IsPasswordValid && !IsRepeatFailure && SimAccount != null)

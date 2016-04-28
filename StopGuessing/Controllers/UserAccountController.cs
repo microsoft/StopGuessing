@@ -154,6 +154,7 @@ namespace StopGuessing.Controllers
         /// <summary>
         /// Derive the EC private account log key from the phase 1 hash of the correct password.
         /// </summary>
+        /// <param name="userAccount"></param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
         /// <returns></returns>
         public virtual ECDiffieHellmanCng DecryptPrivateAccountLogKey(

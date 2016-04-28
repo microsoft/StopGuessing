@@ -2,12 +2,16 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Entity;
 //using Microsoft.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.WindowsAzure.Storage;
 using StopGuessing.Azure;
+using StopGuessing.Clients;
 using StopGuessing.Controllers;
+using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
+using StopGuessing.Models;
 
 namespace xUnit_Tests
 {
@@ -16,7 +20,12 @@ namespace xUnit_Tests
 
         public IConfigurationRoot Configuration { get; set; }
         public CloudStorageAccount _CloudStorageAccount;
-        public DbUserAccountController _DbUserAccountController;
+        //public DbUserAccountController userAccountController;
+        //public DbUserAccountControllerFactory userAccountControllerFactory;
+        public IUserAccountController<DbUserAccount> userAccountController;
+        public IUserAccountControllerFactory<DbUserAccount> userAccountControllerFactory;
+        public IUserAccountRepositoryFactory<DbUserAccount> _UserAccountRepositoryFactory;
+        public LoginAttemptController<DbUserAccount> _loginAttemptController;
 
         public void Init()
         {
@@ -29,7 +38,23 @@ namespace xUnit_Tests
             
             string cloudStorageConnectionString = Configuration["Data:StorageConnectionString"];
             _CloudStorageAccount = CloudStorageAccount.Parse(cloudStorageConnectionString);
-            _DbUserAccountController = new DbUserAccountController(_CloudStorageAccount);
+            userAccountControllerFactory = new DbUserAccountControllerFactory(_CloudStorageAccount);
+            userAccountController = userAccountControllerFactory.Create();
+
+            RemoteHost localHost = new RemoteHost { Uri = new Uri("http://localhost:35358") };
+            MaxWeightHashing<RemoteHost> hosts = new MaxWeightHashing<RemoteHost>(Configuration["Data:UniqueConfigurationSecretPhrase"]);
+
+            LoginAttemptClient<DbUserAccount> loginAttemptClient = new LoginAttemptClient<DbUserAccount>(hosts, localHost);
+
+            string sqlConnectionString = Configuration["Data:ConnectionString"];
+            _UserAccountRepositoryFactory = new DbUserAccountRepositoryFactory(opt => opt.UseSqlServer(sqlConnectionString));
+
+            BinomialLadderSketch localPasswordBinomialLadderSketch =
+                    new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
+
+            _loginAttemptController = new LoginAttemptController<DbUserAccount>(
+                userAccountControllerFactory, _UserAccountRepositoryFactory, localPasswordBinomialLadderSketch, null, null);
+
             //services.AddEntityFramework()
             //    .AddSqlServer()
             //    .AddDbContext<DbUserAccountContext>(opt => opt.UseSqlServer(sqlConnectionString));
@@ -46,14 +71,14 @@ namespace xUnit_Tests
         {
             Init();
             string username = "Keyser Söze";
-            DbUserAccount account = _DbUserAccountController.Create(username, "Kobaya$hi");
+            DbUserAccount account = userAccountController.Create(username, "Kobaya$hi");
             string randomCookiesHash = Convert.ToBase64String(StrongRandomNumberGenerator.GetBytes(16));
             bool cookieAlreadyPresentOnFirstTest = await
-                _DbUserAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(account, randomCookiesHash);
+                userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(account, randomCookiesHash);
             Assert.False(cookieAlreadyPresentOnFirstTest);
-            await _DbUserAccountController.RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(account, randomCookiesHash);
+            await userAccountController.RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(account, randomCookiesHash);
             bool cookieAlreadyPresentOnSecondTest = await
-                _DbUserAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(account, randomCookiesHash);
+                userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(account, randomCookiesHash);
             Assert.True(cookieAlreadyPresentOnSecondTest);
         }
 
@@ -62,16 +87,16 @@ namespace xUnit_Tests
         {
             Init();
             string username = "Keyser Söze";
-            DbUserAccount account = _DbUserAccountController.Create(username, "Kobaya$hi");
+            DbUserAccount account = userAccountController.Create(username, "Kobaya$hi");
             string incorrectPasswordHash = Convert.ToBase64String(StrongRandomNumberGenerator.GetBytes(16));
             bool incorrectPasswordAlreadyPresentOnFirstTest = await
-                _DbUserAccountController.AddIncorrectPhaseTwoHashAsync(account, incorrectPasswordHash);
+                userAccountController.AddIncorrectPhaseTwoHashAsync(account, incorrectPasswordHash);
             Assert.False(incorrectPasswordAlreadyPresentOnFirstTest);
             // Since the hash is added via a background task to minimize response latency, we'll want to
             // wait to be sure it's added
             Thread.Sleep(1000);
             bool incorrectPasswordPresentOnSecondTest = await
-                _DbUserAccountController.AddIncorrectPhaseTwoHashAsync(account, incorrectPasswordHash);
+                userAccountController.AddIncorrectPhaseTwoHashAsync(account, incorrectPasswordHash);
             Assert.True(incorrectPasswordPresentOnSecondTest);
         }
 

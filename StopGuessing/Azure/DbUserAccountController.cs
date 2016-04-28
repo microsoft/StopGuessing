@@ -14,7 +14,7 @@ using StopGuessing.Models;
 
 namespace StopGuessing.Controllers
 {
-    public class DbUserAccountControllerFactory : IFactory<DbUserAccountController>
+    public class DbUserAccountControllerFactory : IUserAccountControllerFactory<DbUserAccount>
     {
         protected CloudStorageAccount CloudStorageAccountForTables;
 
@@ -23,7 +23,7 @@ namespace StopGuessing.Controllers
             CloudStorageAccountForTables = cloudStorageAccount;
         }
 
-        public DbUserAccountController Create()
+        public IUserAccountController<DbUserAccount> Create()
         {
             return new DbUserAccountController(CloudStorageAccountForTables);
         }

@@ -4,12 +4,15 @@ using StopGuessing.Memory;
 
 namespace Simulator
 {
-    public class SimulatedAccount
+    public class SimulatedUserAccount : MemoryUserAccount
     {
-        public string UniqueId;
         public string Password;
+
         public ConcurrentBag<string> Cookies = new ConcurrentBag<string>();
         public ConcurrentBag<IPAddress> ClientAddresses = new ConcurrentBag<IPAddress>();
-        public MemoryUserAccount Account;
+        //public MemoryUserAccount Account;
+
+        
+
     }
 }

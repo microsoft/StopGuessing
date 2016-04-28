@@ -15,10 +15,10 @@ using StopGuessing.Utilities;
 
 namespace StopGuessing.Memory
 {
-    public class MemoryUserAccountControllerFactory : IFactory<MemoryUserAccountController>
+    public class MemoryUserAccountControllerFactory : IUserAccountControllerFactory<MemoryUserAccount>
     {
 
-        public MemoryUserAccountController Create()
+        public IUserAccountController<MemoryUserAccount> Create()
         {
             return new MemoryUserAccountController();
         }

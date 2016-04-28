@@ -16,6 +16,9 @@ namespace StopGuessing.Models
         
     }
 
+    public interface IUserAccountRepositoryFactory<TUserAccount> : IFactory<IRepository<String, TUserAccount>> where TUserAccount : IUserAccount
+    {        
+    }
 
 
     
