@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity;
+using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Table;
 using StopGuessing.Azure;
@@ -16,29 +17,45 @@ namespace StopGuessing.Controllers
 {
     public class DbUserAccountControllerFactory : IUserAccountControllerFactory<DbUserAccount>
     {
-        protected CloudStorageAccount CloudStorageAccountForTables;
+        protected readonly CloudStorageAccount CloudStorageAccountForTables;
+        protected readonly DbContextOptions<DbUserAccountContext> DbOptions;
 
-        public DbUserAccountControllerFactory(CloudStorageAccount cloudStorageAccount)
+        public DbUserAccountControllerFactory(CloudStorageAccount cloudStorageAccount, Action<DbContextOptionsBuilder> optionsAction)
         {
             CloudStorageAccountForTables = cloudStorageAccount;
+            DbContextOptionsBuilder<DbUserAccountContext> optionsBuilder = new DbContextOptionsBuilder<DbUserAccountContext>();
+            optionsAction.Invoke(optionsBuilder);
+            DbOptions = optionsBuilder.Options;
+        }
+
+        public DbUserAccountControllerFactory(CloudStorageAccount cloudStorageAccount, DbContextOptions<DbUserAccountContext> dbOptions)
+        {
+            CloudStorageAccountForTables = cloudStorageAccount;
+            DbOptions = dbOptions;
+        }
+
+        public DbUserAccountController CreateDbUserAccountController()
+        {
+            return new DbUserAccountController(CloudStorageAccountForTables, DbOptions);
         }
 
         public IUserAccountController<DbUserAccount> Create()
         {
-            return new DbUserAccountController(CloudStorageAccountForTables);
+            return new DbUserAccountController(CloudStorageAccountForTables, DbOptions);
         }
     }
 
     public class DbUserAccountController : UserAccountController<DbUserAccount>
     {
-        //protected DbUserAccountRepository StorageContext { get; set; }
         protected CloudStorageAccount CloudStorageAccountForTables;
+        protected readonly DbContextOptions<DbUserAccountContext> DbOptions;
 
         private static readonly ConcurrentBag<string> TablesKnownToExist = new ConcurrentBag<string>();
 
-        public DbUserAccountController(CloudStorageAccount cloudStorageAccount)
+        public DbUserAccountController(CloudStorageAccount cloudStorageAccount, DbContextOptions<DbUserAccountContext> dbOptions)
         {
             CloudStorageAccountForTables = cloudStorageAccount;
+            DbOptions = dbOptions;
         }
 
         public async Task<CloudTable> GetTableAsync(string tableName,
@@ -174,7 +191,7 @@ namespace StopGuessing.Controllers
         public override async Task<double> TryGetCreditAsync(
             DbUserAccount userAccount,
             double amountRequested,
-            DateTime timeOfRequestUtc,
+            DateTime? timeOfRequestUtc = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             if (Double.IsNaN(amountRequested) || amountRequested <= 0)
@@ -183,9 +200,11 @@ namespace StopGuessing.Controllers
                 return 0;
             }
 
-            double creditRetrieved = 0;
+            DateTime timeOfRequestOrNowUtc = timeOfRequestUtc ?? DateTime.Now;
 
-            using (var context = new DbUserAccountContext())
+            double creditRetrieved = 0;
+            
+            using (var context = new DbUserAccountContext(DbOptions))
             {
                 using (var dbContextTransaction = await context.Database.BeginTransactionAsync(cancellationToken))
                 {
@@ -206,20 +225,20 @@ namespace StopGuessing.Controllers
                                     new DbUserAccountCreditBalance()
                                     {
                                         DbUserAccountId = userAccount.DbUserAccountId,
-                                        ConsumedCreditsLastUpdatedUtc = timeOfRequestUtc,
+                                        ConsumedCreditsLastUpdatedUtc = timeOfRequestOrNowUtc,
                                         ConsumedCreditsLastValue = amountRemaining
                                     });
                             }
                             else
                             {
-                                double amountAvailable = Math.Min(0, userAccount.CreditLimit -
+                                double amountAvailable = Math.Max(0, userAccount.CreditLimit -
                                     DecayingDouble.Decay(balance.ConsumedCreditsLastValue, userAccount.CreditHalfLife,
-                                    balance.ConsumedCreditsLastUpdatedUtc, timeOfRequestUtc));
+                                    balance.ConsumedCreditsLastUpdatedUtc, timeOfRequestOrNowUtc));
                                 if (amountAvailable > 0)
                                     creditRetrieved = Math.Min(amountRequested, amountAvailable);
                                 double amountRemaining = amountAvailable - creditRetrieved;
                                 balance.ConsumedCreditsLastValue = amountRemaining;
-                                balance.ConsumedCreditsLastUpdatedUtc = timeOfRequestUtc;
+                                balance.ConsumedCreditsLastUpdatedUtc = timeOfRequestOrNowUtc;
                             }
 
                             await context.SaveChangesAsync(cancellationToken);

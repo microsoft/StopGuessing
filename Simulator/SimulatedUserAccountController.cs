@@ -148,13 +148,14 @@ namespace Simulator
 #pragma warning disable 1998
         public async Task<double> TryGetCreditAsync(SimulatedUserAccount account,
             double amountRequested,
-            DateTime timeOfRequestUtc,
+            DateTime? timeOfRequestUtc = null,
             CancellationToken cancellationToken = default(CancellationToken))
 #pragma warning restore 1998
         {
-            double amountAvailable = Math.Min(0, account.CreditLimit - account.ConsumedCredits.GetValue(account.CreditHalfLife, timeOfRequestUtc));
+            DateTime timeOfRequestOrNowUtc = timeOfRequestUtc ?? DateTime.UtcNow;
+            double amountAvailable = Math.Max(0, account.CreditLimit - account.ConsumedCredits.GetValue(account.CreditHalfLife, timeOfRequestOrNowUtc));
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            account.ConsumedCredits.SubtractInPlace(account.CreditHalfLife, amountConsumed, timeOfRequestUtc);
+            account.ConsumedCredits.SubtractInPlace(account.CreditHalfLife, amountConsumed, timeOfRequestOrNowUtc);
             return amountConsumed;
         }
     }

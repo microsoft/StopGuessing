@@ -11,8 +11,9 @@ namespace StopGuessing.Models
 {
     public interface IRepository<TKey,T> : IDisposable
     {
-        Task<T> LoadAsync(TKey key, CancellationToken? cancellationToken);
-        Task SaveChangesAsync(CancellationToken? cancellationToken);
+        Task<T> LoadAsync(TKey key, CancellationToken cancellationToken = default(CancellationToken));
+        Task AddAsync(T itemToAdd, CancellationToken cancellationToken = default(CancellationToken));
+        Task SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken));
         
     }
 

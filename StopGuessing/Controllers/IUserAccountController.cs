@@ -81,7 +81,7 @@ namespace StopGuessing.Controllers
         Task<double> TryGetCreditAsync(
             TAccount account,
             double amountRequested,
-            DateTime timeOfRequestUtc,
+            DateTime? timeOfRequestUtc = null,
             CancellationToken cancellationToken = default(CancellationToken));
 
     }

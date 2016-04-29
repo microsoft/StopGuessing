@@ -23,20 +23,27 @@ namespace StopGuessing
         }
 
 #pragma warning disable 1998
-        public async Task<MemoryUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken? cancellationToken)
+        public async Task<MemoryUserAccount> LoadAsync(string usernameOrAccountId, CancellationToken cancellationToken = default(CancellationToken))
 #pragma warning restore 1998
         {
-            cancellationToken?.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             MemoryUserAccount result;
             _store.TryGetValue(usernameOrAccountId, out result);
             return result;
         }
 
 #pragma warning disable 1998
-        public async Task SaveChangesAsync(CancellationToken? cancellationToken)
+        public async Task AddAsync(MemoryUserAccount itemToAdd, CancellationToken cancellationToken = default(CancellationToken))
+#pragma warning restore 1998
+        {
+            _store.TryAdd(itemToAdd.UsernameOrAccountId, itemToAdd);
+        }
+
+#pragma warning disable 1998
+        public async Task SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken))
 #pragma warning disable 1998
         {
-            cancellationToken?.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             return;
         }
 
