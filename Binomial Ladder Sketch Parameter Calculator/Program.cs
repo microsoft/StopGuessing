@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Deployment.Internal;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 // ReSharper disable InconsistentNaming
 
@@ -11,10 +8,7 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
 {
     class BinomialLadderParameters
     {
-        //private StreamWriter writer;
-
         public uint H;
-        public uint threshold;
         public uint n;
         public uint[] heights;
         public double[] r,d;
@@ -31,10 +25,9 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
         }
 
         public BinomialLadderParameters(//StreamWriter writer, 
-            uint H, uint threshold, double? f_c = null, double? f_u = null, double? f_d = null, uint? n = null)
+            uint H, double? f_c = null, double? f_u = null, double? f_d = null, uint? n = null)
         {
             this.H = H;            
-            this.threshold = threshold;
 
             heights = Enumerable.Range(0, (int) H + 1).Select(i => (uint) i).ToArray();
 
@@ -48,7 +41,7 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
                 {
                     f_d = Math.Exp((Math.Log(f_c.Value) + Math.Log(f_u.Value))/2d);
                 }
-                this.n = (uint) (((double) (2*(threshold - 2)))/f_d.Value);
+                this.n = (uint) (((double) (2*(H - 2)))/f_d.Value);
                 this.n = 1u << (int) Math.Round(Math.Log((double) this.n, 2d));
             }
             double half_n = ((double) this.n)/2d;
@@ -56,154 +49,192 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
             // Calculate probabilities of rise/fall assuming step is taken for a different key 
             r = heights.Select(h => ((double) H - h)/half_n).ToArray();
             d = heights.Select(h => ((double)h) / half_n).ToArray();
-
-            // Calculate movement probabilities for key at undesirable frequency
-            //double f = f_u;
-            //double[] rise = heights.Select(h => f + (1 - f) * (r[h]) * (1 - d[h])).ToArray();
-            //double[] fall = heights.Select(h => (1 - f) * (1-r[h]) * d[h]).ToArray();
-            //double[] stay = heights.Select(h => (1 - f) * ( ((1-r[h]) * (1-d[h])) + (r[h] * d[h]) )).ToArray();
-            //Write("rise_h", rise);
-            //Write("fall_h", fall);
-            //Write("stay_h", stay);
-            //writer.WriteLine();
-
-
-            // Calculate theta relationships between probabilties
-            //theta = new double[H];
-            //theta[H - 1] = (1d - stay[H])/rise[H - 1];
-            //for (int h = ((int) H) - 2; h > 0; h--)
-            //    theta[h] = (1d - ((fall[h + 2]/theta[h + 1]) + stay[h + 1]))/rise[h];
-            //Write("theta_h", theta);
-
-            //// Calculate equilibrium probabilities in poisson model (random arrival with probability f)
-            //// First, ignore scale by calculating all probabilities as multiple of x_rel[H]
-            //double[] p_rel = new double[H+1];
-            //p_rel[H] = 1d;
-            //for (int h = ((int) H) - 1; h > 0; h--)
-            //    p_rel[h] = theta[h]*p_rel[h+1];
-            //Write("p_poisson_rel_h", p_rel);
-            //// Scale down so that the collective probabilities add to 1
-            //double p_poisson_k = 1d/p_rel.Sum();
-            //p_poisson = p_rel.Select(x_rel_h => x_rel_h * p_poisson_k).ToArray();
-            //Write("p_poisson_h", p_poisson);
-            //writer.WriteLine();
-
-
         }
-        public void WriteDetectionProbabilitiesForStochasticArrivals(string path, double f, bool stickyMode)
+
+
+        public void SimulateStochastic(string path, double f, uint steps_to_track, bool stickyMode)
         {
-            using (StreamWriter detectDataWriter = new StreamWriter(path + "_" + H + "_" + threshold + ".csv"))
+            using (StreamWriter detectDataWriter = new StreamWriter(path + ".csv"))
             {
-                detectDataWriter.WriteLine("Total Steps,P(detection)");
-                double[] fp_rise = heights.Select(h => f + ( (1-f) * (r[h]) * (1 - d[h]) ) ).ToArray();
-                double[] fp_fall = heights.Select(h => (1-f) * (1 - r[h]) * d[h] ).ToArray();
-                double[] fp_stay = heights.Select(h => 1 - (fp_rise[h] + fp_fall[h])).ToArray();
-
+                detectDataWriter.WriteLine("Total Steps,P(detection),P(detection at frequency)");
+                double p_stepup = f;
+                int num_heights = stickyMode ? heights.Length + 1 : heights.Length;
+                int max_height_via_collision = heights.Length - 1;
+                int max_height_via_step = stickyMode ? num_heights - 1 : max_height_via_collision;
+                double[] p_collisionup = heights.Select(h => ((1 - f)*(r[h])*(1 - d[h]))).ToArray();
+                double[] p_collisiondown = heights.Select(h => (1 - f)*(1 - r[h])*d[h]).ToArray();
+                
                 // Initialize to the binomial distribution
-                double[] p = heights.Select(h => binomChoose(H, h) * Math.Pow(0.5d, H)).ToArray();
-                double[] pNext = new double[p.Length];
-                double detected = 0;
+                double[,] p = new double[steps_to_track + 2, num_heights];
+                double[,] pNext = new double[steps_to_track + 2, num_heights];
+                for (uint i = 0; i < heights.Length; i++)
+                    pNext[0, i] = p[0, i] = binomChoose(H, i)*Math.Pow(0.5d, H);
 
-                for (ulong i = 0; i <= (100ul * 1000ul * 1000ul * 1000ul); i++)
+                uint iterations_per_expected_step = (uint) Math.Ceiling(1/f);
+
+                if (stickyMode)
                 {
-                    for (int h = 0; h <= H; h++)
-                    {
-                        pNext[h] = ((h > 0) ? (fp_rise[h - 1] * p[h - 1]) : 0) +
-                                    ((h < H) ? (fp_fall[h + 1] * p[h + 1]) : 0) +
-                                    (fp_stay[h] * p[h]);
-                    }
-
-                    if (!stickyMode)
-                    {
-                        detected = 0;
-                    }
-                    for (uint h = threshold; h <= H; h++)
-                    {
-                        detected += pNext[h];
-                        if (stickyMode)
-                        {
-                            pNext[h] = 0;
-                        }
-                    }
-
-                    if (i%1000000 == 0)
-                    {
-                        detectDataWriter.WriteLine("{0},{1}", i, detected.ToString("E12"));
-                        detectDataWriter.Flush();
-                    }
-
-                    // Swap p and pNext
-                    double[] temp = pNext;
-                    pNext = p;
-                    p = temp;
+                    detectDataWriter.WriteLine("{0},{1}", "Step", "p(detected)");
                 }
-            }
-        }
-
-        public void WriteDetectionProbabilitiesForEquidistantArrivals(string path, double f, bool stickyMode)
-        {
-            using (StreamWriter detectDataWriter = new StreamWriter(path + "_" + H + "_" + threshold + ".csv"))
-            {
-                detectDataWriter.WriteLine("Observations,Total Steps,P(detection)");
-                double[] fp_rise = heights.Select(h => (r[h])*(1 - d[h])).ToArray();
-                double[] fp_fall = heights.Select(h => (1 - r[h])*d[h]).ToArray();
-                double[] fp_stay = heights.Select(h => 1 - (fp_rise[h] + fp_fall[h])).ToArray();
-
-                // Initialize to the binomial distribution
-                uint observations = 0;
-                double[] p = heights.Select(h => binomChoose(H,h)*Math.Pow(0.5d,H))
-                    .Concat(new double[] { 0 }) // For the stuck at H (H+1) element
-                    .ToArray();
-                double[] pNext = new double[p.Length];
-                ulong f_inverse = (ulong) (1/f);
-                double detected = 0;
-
-
-                for (ulong i = 0; i <= (100ul*1000ul*1000ul*1000ul); i++)
+                else
                 {
-                    if ((i%f_inverse) != 0)
+                    detectDataWriter.WriteLine("{0},{1},{2}", "Step",
+                        string.Join(",", heights.Select(height => "p(h=" + height + ")")),
+                        string.Join(",", heights.Select(height => "p(h>=" + height + ")")));
+                }
+
+                for (uint expected_steps_completed = 0;
+                    expected_steps_completed < steps_to_track;
+                    expected_steps_completed++)
+                {
+                    for (uint iteration = 0; iteration < iterations_per_expected_step; iteration++)
                     {
-                        for (int h = 0; h <= H; h++)
+                        // Copy pNext to P
+                        for (int step = 0; step <= steps_to_track + 1; step++)
                         {
-                            pNext[h] = ((h > 0) ? (fp_rise[h - 1]*p[h - 1]) : 0) +
-                                       ((h < H) ? (fp_fall[h + 1]*p[h + 1]) : 0) +
-                                       (fp_stay[h]*p[h]);
+                            for (int height = 0; height < num_heights; height++)
+                            {
+                                p[step, height] = pNext[step, height];
+                            }
                         }
+
+                        for (int height = 0; height <= max_height_via_step; height++)
+                        {
+                            int new_height_if_taking_step = Math.Min(height+1, max_height_via_step);
+                            double p_collision_up = height < p_collisionup.Length ? p_collisionup[height] : 0;
+                            double p_collision_down = height < p_collisionup.Length ? p_collisiondown[height] : 0;
+                            for (int step = 0; step <= steps_to_track; step++)
+                            {
+                                double startingAmount = p[step, height];
+                                double totalAmountMoved = 0;
+
+                                if (step <= steps_to_track)
+                                {
+                                    // Account for steps for the element of interest causing a move up
+                                    double amountMovedForStep = startingAmount*p_stepup;
+                                    pNext[step + 1, new_height_if_taking_step] += amountMovedForStep;
+                                    totalAmountMoved += amountMovedForStep;
+                                }
+
+                                if (height < max_height_via_collision)
+                                {
+                                    // Account for collisions up
+                                    double amountMovedForCollisionUp = startingAmount*p_collision_up;
+                                    pNext[step, height + 1] += amountMovedForCollisionUp;
+                                    totalAmountMoved += amountMovedForCollisionUp;
+                                }
+
+                                // Account for collisions down
+                                if (height > 0)
+                                {
+                                    double amountMovedForCollisionDown = startingAmount*p_collision_down;
+                                    pNext[step, height - 1] += amountMovedForCollisionDown;
+                                    totalAmountMoved += amountMovedForCollisionDown;
+                                }
+
+                                pNext[step, height] -= totalAmountMoved;
+                            }
+                        }
+                    }
+
+                    double[] at_height = new double[num_heights];
+                    for (int height = 0; height < num_heights; height++)
+                    {
+                        at_height[height] = p[expected_steps_completed, height];
+                    }
+                    double adjustment = 1d / at_height.Sum();
+                    double[] at_height_adjusted = at_height.Select(x => x * adjustment).ToArray();
+                    if (stickyMode)
+                    {
+                        // Those detected are the ones already detected (height one above the ladder to indicate stuck-at position)
+                        // and the one at the top of the ladder when the sep occurred (height at top of the ladder)
+                        double amount_detected = at_height_adjusted.Reverse().Take(2).Sum();
+                        detectDataWriter.WriteLine("{0},{1}", expected_steps_completed+1, amount_detected);
                     }
                     else
                     {
-                        observations++;
-
-                        if (!stickyMode)
+                        double sum = 0;
+                        double[] at_or_above = new double[at_height_adjusted.Length];
+                        for (int height = heights.Length - 1; height >= 0; height--)
                         {
-                            detected = 0;
+                            sum += at_height_adjusted[height];
+                            at_or_above[height] = sum;
                         }
-                        for (uint h = threshold; h <= H; h++)
-                        {
-                            detected += p[h];
-                            if (stickyMode)
-                            {
-                                p[h] = 0;
-                            }
-                        }
-                        pNext[0] = 0;
-                        for (int h = 1; h <= H; h++)
-                            pNext[h] = p[h - 1];
-                        if (!stickyMode)
-                        {
-                            pNext[H] += p[H];
-                        }
-                        detectDataWriter.WriteLine("{0},{1},{2}", observations, i, detected.ToString("E12"));
-                        detectDataWriter.Flush();
+                        detectDataWriter.WriteLine("{0},{1},{2}", expected_steps_completed+1,
+                            string.Join(",", at_height_adjusted.Select( x=> x.ToString("E12"))),
+                            string.Join(",", at_or_above.Select(x => x.ToString("E12")))
+                            );
                     }
-
-                    // Swap p and pNext
-                    double[] temp = pNext;
-                    pNext = p;
-                    p = temp;
+                    detectDataWriter.Flush();
                 }
             }
         }
+
+
+        //public void WriteDetectionProbabilitiesForEquidistantArrivals(string path, double f, bool stickyMode)
+        //{
+        //    using (StreamWriter detectDataWriter = new StreamWriter(path + ".csv"))
+        //    {
+        //        detectDataWriter.WriteLine("Observations,Total Steps,P(detection)");
+        //        double[] fp_rise = heights.Select(h => (r[h])*(1 - d[h])).ToArray();
+        //        double[] fp_fall = heights.Select(h => (1 - r[h])*d[h]).ToArray();
+        //        double[] fp_stay = heights.Select(h => 1 - (fp_rise[h] + fp_fall[h])).ToArray();
+
+        //        // Initialize to the binomial distribution
+        //        uint observations = 0;
+        //        double[] p = heights.Select(h => binomChoose(H,h)*Math.Pow(0.5d,H))
+        //            .Concat(new double[] { 0 }) // For the stuck at H (H+1) element
+        //            .ToArray();
+        //        double[] pNext = new double[p.Length];
+        //        ulong f_inverse = (ulong) (1/f);
+        //        double detected = 0;
+
+
+        //        for (ulong i = 0; i <= (100ul*1000ul*1000ul*1000ul); i++)
+        //        {
+        //            if ((i%f_inverse) != 0)
+        //            {
+        //                for (int h = 0; h <= H; h++)
+        //                {
+        //                    pNext[h] = ((h > 0) ? (fp_rise[h - 1]*p[h - 1]) : 0) +
+        //                               ((h < H) ? (fp_fall[h + 1]*p[h + 1]) : 0) +
+        //                               (fp_stay[h]*p[h]);
+        //                }
+        //            }
+        //            else
+        //            {
+        //                observations++;
+
+        //                if (!stickyMode)
+        //                {
+        //                    detected = 0;
+        //                }
+        //                for (uint h = threshold; h <= H; h++)
+        //                {
+        //                    detected += p[h];
+        //                    if (stickyMode)
+        //                    {
+        //                        p[h] = 0;
+        //                    }
+        //                }
+        //                pNext[0] = 0;
+        //                for (int h = 1; h <= H; h++)
+        //                    pNext[h] = p[h - 1];
+        //                if (!stickyMode)
+        //                {
+        //                    pNext[H] += p[H];
+        //                }
+        //                detectDataWriter.WriteLine("{0},{1},{2}", observations, i, detected.ToString("E12"));
+        //                detectDataWriter.Flush();
+        //            }
+
+        //            // Swap p and pNext
+        //            double[] temp = pNext;
+        //            pNext = p;
+        //            p = temp;
+        //        }
+        //    }
+        //}
 
     }
     class Program
@@ -221,29 +252,44 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
             double f_u = requestFraction / (50d*MillionD);
             string basePath = @"..\..\..\";
            // StreamWriter writer = new StreamWriter(basePath + "params_" + H + "_" + Math.Round(1/f_c) + "=" + Math.Round(1/f_u) + ".csv");
-            BinomialLadderParameters blp4844 =
-                new BinomialLadderParameters(48, 44, n: n);
-            BinomialLadderParameters blp4848 =
-                new BinomialLadderParameters(48, 48, n: n);
+            BinomialLadderParameters blf64 =
+                new BinomialLadderParameters(64, n: n);
+            BinomialLadderParameters blf48 =
+                new BinomialLadderParameters(48, n: n);
+
+            //BinomialLadderParameters blf20 =
+            //    new BinomialLadderParameters(48, n: n);
+            //blf20.SimulateStochastic(basePath + "BLF_20_Detect_Twenty_Sticky", .05, 100, true);
+            //blf20.SimulateStochastic(basePath + "BLF_20_Detect_Twenty_Perpetual", .05, 100, false);
+
+            //blf64.SimulateStochastic(basePath + "BLF_48_DetectStochastic_OneMillion", (1d / MillionD), 60, false);
 
             Task[] tasks = new Task[]
             {
-                Task.Run(() => blp4848.WriteDetectionProbabilitiesForEquidistantArrivals(
-                    basePath + "SingleTriggerOneInOneMillionEq", 1d/MillionD, true)),
-                Task.Run(() => blp4844.WriteDetectionProbabilitiesForEquidistantArrivals(
-                    basePath + "PerpetualOneInOneMillionEq", 1d/MillionD, false)),
-                Task.Run(() => blp4848.WriteDetectionProbabilitiesForEquidistantArrivals(
-                    basePath + "SingleTriggerOneInFiftyMillionEq", 1d/(50d*MillionD), true)),
-                Task.Run(() => blp4844.WriteDetectionProbabilitiesForEquidistantArrivals(
-                    basePath + "PerpetualOneInFiftyMillionEq", 1d/(50d*MillionD), false)),
-                Task.Run(() => blp4848.WriteDetectionProbabilitiesForStochasticArrivals(
-                    basePath + "SingleTriggerOneInOneMillionStoch", 1d/MillionD, true)),
-                Task.Run(() => blp4844.WriteDetectionProbabilitiesForStochasticArrivals(
-                    basePath + "PerpetualOneInOneMillionStoch", 1d/MillionD, false)),
-                Task.Run(() => blp4848.WriteDetectionProbabilitiesForStochasticArrivals(
-                    basePath + "SingleTriggerOneInFiftyMillionStoch", 1d/(50d*MillionD), true)),
-                Task.Run(() => blp4844.WriteDetectionProbabilitiesForStochasticArrivals(
-                    basePath + "PerpetualOneInFiftyMillionStoch", 1d/(50d*MillionD), false))
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Perpetual_Million", (1d / MillionD), 50, false)),
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Sticky_Million", (1d / MillionD), 50, true)),
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Perpetual_FiftyMillion", (1d / (50d*MillionD)), 10, false)),
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Sticky_FiftyMillion", (1d / (50d*MillionD)), 10, true)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Perpetual_Million", (1d / MillionD), 50, false)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Sticky_Million", (1d / MillionD), 50, true)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Perpetual_FiftyMillion", (1d / (50d*MillionD)), 10, false)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Sticky_FiftyMillion", (1d / (50d*MillionD)), 10, true)),
+            //    Task.Run(() => blp4848.WriteDetectionProbabilitiesForEquidistantArrivals(
+            //        basePath + "SingleTriggerOneInOneMillionEq", 1d/MillionD, true)),
+            //    Task.Run(() => blp4844.WriteDetectionProbabilitiesForEquidistantArrivals(
+            //        basePath + "PerpetualOneInOneMillionEq", 1d/MillionD, false)),
+            //    Task.Run(() => blp4848.WriteDetectionProbabilitiesForEquidistantArrivals(
+            //        basePath + "SingleTriggerOneInFiftyMillionEq", 1d/(50d*MillionD), true)),
+            //    Task.Run(() => blp4844.WriteDetectionProbabilitiesForEquidistantArrivals(
+            //        basePath + "PerpetualOneInFiftyMillionEq", 1d/(50d*MillionD), false)),
+            //    Task.Run(() => blp4848.WriteDetectionProbabilitiesForStochasticArrivals(
+            //        basePath + "SingleTriggerOneInOneMillionStoch", 1d/MillionD, true)),
+            //    Task.Run(() => blp4844.WriteDetectionProbabilitiesForStochasticArrivals(
+            //        basePath + "PerpetualOneInOneMillionStoch", 1d/MillionD, false)),
+            //    Task.Run(() => blp4848.WriteDetectionProbabilitiesForStochasticArrivals(
+            //        basePath + "SingleTriggerOneInFiftyMillionStoch", 1d/(50d*MillionD), true)),
+            //    Task.Run(() => blp4844.WriteDetectionProbabilitiesForStochasticArrivals(
+            //        basePath + "PerpetualOneInFiftyMillionStoch", 1d/(50d*MillionD), false))
             };
 
             Task.WaitAll(tasks);
