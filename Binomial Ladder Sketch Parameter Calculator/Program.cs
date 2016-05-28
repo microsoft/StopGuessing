@@ -56,7 +56,6 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
         {
             using (StreamWriter detectDataWriter = new StreamWriter(path + ".csv"))
             {
-                detectDataWriter.WriteLine("Total Steps,P(detection),P(detection at frequency)");
                 double p_stepup = f;
                 int num_heights = stickyMode ? heights.Length + 1 : heights.Length;
                 int max_height_via_collision = heights.Length - 1;
@@ -266,14 +265,14 @@ namespace Binomial_Ladder_Sketch_Parameter_Calculator
 
             Task[] tasks = new Task[]
             {
-                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Perpetual_Million", (1d / MillionD), 50, false)),
-                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Sticky_Million", (1d / MillionD), 50, true)),
-                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Perpetual_FiftyMillion", (1d / (50d*MillionD)), 10, false)),
-                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Sticky_FiftyMillion", (1d / (50d*MillionD)), 10, true)),
-                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Perpetual_Million", (1d / MillionD), 50, false)),
-                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Sticky_Million", (1d / MillionD), 50, true)),
-                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Perpetual_FiftyMillion", (1d / (50d*MillionD)), 10, false)),
-                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Sticky_FiftyMillion", (1d / (50d*MillionD)), 10, true)),
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Perpetual_Million", (1d / MillionD), 120, false)),
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Sticky_Million", (1d / MillionD), 120, true)),
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Perpetual_FiftyMillion", (1d / (50d*MillionD)), 65, false)),
+                Task.Run(() => blf64.SimulateStochastic(basePath + "BLF_64_Sticky_FiftyMillion", (1d / (50d*MillionD)), 65, true)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Perpetual_Million", (1d / MillionD), 100, false)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Sticky_Million", (1d / MillionD), 100, true)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Perpetual_FiftyMillion", (1d / (50d*MillionD)), 65, false)),
+                Task.Run(() => blf48.SimulateStochastic(basePath + "BLF_48_Sticky_FiftyMillion", (1d / (50d*MillionD)), 65, true)),
             //    Task.Run(() => blp4848.WriteDetectionProbabilitiesForEquidistantArrivals(
             //        basePath + "SingleTriggerOneInOneMillionEq", 1d/MillionD, true)),
             //    Task.Run(() => blp4844.WriteDetectionProbabilitiesForEquidistantArrivals(
