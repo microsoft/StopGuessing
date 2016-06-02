@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using StopGuessing.EncryptionPrimitives;
+using StopGuessing.Interfaces;
 using StopGuessing.Utilities;
 
 // For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
@@ -29,7 +30,7 @@ namespace StopGuessing.Controllers
         ILoginAttemptController where TUserAccount : IUserAccount
     {
         private readonly BlockingAlgorithmOptions _options;
-        private readonly IBinomialLadderSketch _binomialLadderSketch;
+        private readonly IBinomialLadderFilter _binomialLadderFilter;
         private readonly IUserAccountRepositoryFactory<TUserAccount> _userAccountRepositoryFactory;
         private readonly IUserAccountControllerFactory<TUserAccount> _userAccountControllerFactory;
         private readonly AgingMembershipSketch _recentIncorrectPasswords;
@@ -39,13 +40,13 @@ namespace StopGuessing.Controllers
         public LoginAttemptController(
             IUserAccountControllerFactory<TUserAccount> userAccountControllerFactory,
             IUserAccountRepositoryFactory<TUserAccount> userAccountRepositoryFactory,
-            IBinomialLadderSketch binomialLadderSketch,
+            IBinomialLadderFilter binomialLadderFilter,
             MemoryUsageLimiter memoryUsageLimiter,
             BlockingAlgorithmOptions blockingOptions
             )
         {
             _options = blockingOptions; //optionsAccessor.Options;
-            _binomialLadderSketch = binomialLadderSketch;
+            _binomialLadderFilter = binomialLadderFilter;
 
             _recentIncorrectPasswords = new AgingMembershipSketch(blockingOptions.AgingMembershipSketchTables, blockingOptions.AgingMembershipSketchTableSize);
             _userAccountRepositoryFactory = userAccountRepositoryFactory;
@@ -97,7 +98,7 @@ namespace StopGuessing.Controllers
         {            
             for (int i = 0; i < numberOfTimesToPrime; i++)
             {
-                await _binomialLadderSketch.StepAsync(passwordToTreatAsFrequent, cancellationToken: cancellationToken);
+                await _binomialLadderFilter.StepAsync(passwordToTreatAsFrequent, cancellationToken: cancellationToken);
             }
         }
         
@@ -248,7 +249,7 @@ namespace StopGuessing.Controllers
 
             // Get a binomial ladder to estimate if the password is common
             Task<int> passwordsHeightOnBinomialLadderTask =
-                _binomialLadderSketch.GetHeightAsync(passwordProvidedByClient, cancellationToken: cancellationToken);
+                _binomialLadderFilter.GetHeightAsync(passwordProvidedByClient, cancellationToken: cancellationToken);
 
 
             //
@@ -472,7 +473,7 @@ namespace StopGuessing.Controllers
             {
                 // Record the invalid password into the binomial ladder sketch that tracks freqeunt-incorrect passwords
                 // Since we don't need to know the result, we'll run it in the background (so that we don't hold up returning the result)
-                TaskHelper.RunInBackground(_binomialLadderSketch.StepAsync(passwordProvidedByClient, cancellationToken: cancellationToken));
+                TaskHelper.RunInBackground(_binomialLadderFilter.StepAsync(passwordProvidedByClient, cancellationToken: cancellationToken));
             }
 
             return loginAttempt;

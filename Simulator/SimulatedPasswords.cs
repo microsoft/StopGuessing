@@ -81,13 +81,13 @@ namespace Simulator
         /// as if the simulator had already observed them (or been configured with them)
         /// </summary>
         /// <returns></returns>
-        public void PrimeWithKnownPasswordsAsync(BinomialLadderSketch sketch, int numberOfTimesToPrime)
+        public void PrimeWithKnownPasswordsAsync(BinomialLadderFilter freqFilter, int numberOfTimesToPrime)
         {
 
             for (int i = 0; i < numberOfTimesToPrime; i++)
             {
                 Parallel.ForEach(_passwordsAlreadyKnownToBePopular,
-                    (password) => sketch.Step(password));
+                    (password) => freqFilter.Step(password));
             }
         }
 

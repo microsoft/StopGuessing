@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity;
 using Microsoft.Data.Entity.Infrastructure;
-//using Microsoft.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.WindowsAzure.Storage;
 using StopGuessing.Azure;
@@ -64,12 +63,12 @@ namespace xUnit_Tests
 
             _UserAccountRepositoryFactory = new DbUserAccountRepositoryFactory(dbOptions);
 
-            BinomialLadderSketch localPasswordBinomialLadderSketch = new BinomialLadderSketch(
-                _options.NumberOfElementsInBinomialLadderSketch_N, _options.HeightOfBinomialLadder_H);
+            BinomialLadderFilter localPasswordBinomialLadderFilter = new BinomialLadderFilter(
+                _options.NumberOfBitsInBinomialLadderFilter_N, _options.HeightOfBinomialLadder_H);
 
             _loginAttemptController = new LoginAttemptController<DbUserAccount>(
                 userAccountControllerFactory, _UserAccountRepositoryFactory,
-                localPasswordBinomialLadderSketch,
+                localPasswordBinomialLadderFilter,
                 new MemoryUsageLimiter(), _options);
 
             //services.AddEntityFramework()

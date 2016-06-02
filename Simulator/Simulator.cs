@@ -24,7 +24,7 @@ namespace Simulator
     {
         //private readonly LoginAttemptController _loginAttemptController;
         //private readonly IUserAccountContextFactory _accountContextFactory;
-        public BinomialLadderSketch _binomialLadderSketch;
+        public BinomialLadderFilter _binomialLadderFilter;
         public AgingMembershipSketch _recentIncorrectPasswords;
         public SelfLoadingCache<IPAddress, SimIpHistory> _ipHistoryCache;
         public readonly ExperimentalConfiguration _experimentalConfiguration;
@@ -138,8 +138,8 @@ namespace Simulator
             BlockingAlgorithmOptions options = _experimentalConfiguration.BlockingOptions;
             
             _logger.WriteStatus("Creating binomial ladder");
-            _binomialLadderSketch =
-                new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
+            _binomialLadderFilter =
+                new BinomialLadderFilter(options.NumberOfBitsInBinomialLadderFilter_N, options.HeightOfBinomialLadder_H);
             _ipHistoryCache = new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
             _userAccountController = new MemoryUserAccountController();
 
@@ -147,21 +147,6 @@ namespace Simulator
             _memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
 
             _recentIncorrectPasswords = new AgingMembershipSketch(16, 128 * 1024);
-
-            //MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
-            //    new MultiperiodFrequencyTracker<string>(
-            //        options.NumberOfPopularityMeasurementPeriods,
-            //        options.LengthOfShortestPopularityMeasurementPeriod,
-            //        options.FactorOfGrowthBetweenPopularityMeasurementPeriods);
-            //_logger.WriteStatus("Finished creating binomial ladder");
-
-
-            //_accountContextFactory = new MemoryOnlyAccountContextFactory();
-
-            //_loginAttemptController = new LoginAttemptController(
-            //    _accountContextFactory, localPasswordBinomialLadderSketch, localPasswordFrequencyTracker,
-            //
-            // memoryUsageLimiter, myExperimentalConfiguration.BlockingOptions, StartTimeUtc);
 
             _logger.WriteStatus("Exiting Simulator constructor");
         }
@@ -176,7 +161,7 @@ namespace Simulator
             _logger.WriteStatus("In RunInBackground");
 
             _logger.WriteStatus("Priming password-tracking with known common passwords");
-            _simPasswords.PrimeWithKnownPasswordsAsync(_binomialLadderSketch, 40);
+            _simPasswords.PrimeWithKnownPasswordsAsync(_binomialLadderFilter, 40);
             _logger.WriteStatus("Finished priming password-tracking with known common passwords");
 
             _logger.WriteStatus("Creating IP Pool");

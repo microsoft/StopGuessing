@@ -144,7 +144,7 @@ namespace StopGuessing.EncryptionPrimitives
             }
         }
 
-
+        
         /// <param name="key">A key that should not be known to those who might try to create collisions, provided as a string.</param>
         /// <param name="randomKeyVectorLengthInBytes">The number of random bytes to generate, which should be equal
         /// to half the maximum allowable length, in bytes, of any value to be hashed.</param>

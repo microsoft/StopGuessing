@@ -33,15 +33,15 @@ namespace StopGuessing.Models
         public int NumberOfRedundantHostsToCachePasswordPopularity = 1;
         public int HeightOfBinomialLadder_H = 48;
         public int BinomialLadderFrequencyThreshdold_T = 44;
-        public int NumberOfElementsInBinomialLadderSketch_N = 1 << 29;
+        public int NumberOfBitsInBinomialLadderFilter_N = 1 << 29;
         public int NumberOfVirtualNodesForDistributedBinomialLadder = 1 << 10;
 
-        public TimeSpan MinimumBinomialLadderSketchCacheFreshness = new TimeSpan(0,5,0); // Five minutes
+        public TimeSpan MinimumBinomialLadderFilterCacheFreshness = new TimeSpan(0,5,0); // Five minutes
 
         public string PrivateConfigurationKey = "ChangeThisToSomethingUniqueForYourEnvironment";
 
-        public int NumberOfElementsPerNodeInBinomialLadderSketch
-            => NumberOfElementsInBinomialLadderSketch_N/NumberOfVirtualNodesForDistributedBinomialLadder;
+        public int NumberOfBitsPerShardInBinomialLadderFilter
+            => NumberOfBitsInBinomialLadderFilter_N/NumberOfVirtualNodesForDistributedBinomialLadder;
 
         public int NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos = 8;
 

@@ -44,8 +44,8 @@ namespace xUnit_Tests
 
             MemoryUsageLimiter memoryUsageLimiter = new MemoryUsageLimiter();
 
-            BinomialLadderSketch localPasswordBinomialLadderSketch =
-            new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
+            BinomialLadderFilter localPasswordBinomialLadderFilter =
+            new BinomialLadderFilter(options.NumberOfBitsInBinomialLadderFilter_N, options.HeightOfBinomialLadder_H);
 
             //MultiperiodFrequencyTracker<string> localPasswordFrequencyTracker =
             //        new MultiperiodFrequencyTracker<string>(
@@ -60,7 +60,7 @@ namespace xUnit_Tests
                 new LoginAttemptController<MemoryUserAccount>(
                 new MemoryUserAccountControllerFactory(),
                 configuration.MyAccountFactory,
-                localPasswordBinomialLadderSketch,
+                localPasswordBinomialLadderFilter,
                 memoryUsageLimiter, configuration.MyBlockingAlgorithmOptions);
 
             configuration.MyLoginAttemptClient = myLoginAttemptController;

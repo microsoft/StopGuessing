@@ -88,7 +88,7 @@ namespace Simulator
                 // Blocking parameters
                 // Make typos almost entirely ignored
                 config.BlockingOptions.HeightOfBinomialLadder_H = 48;
-                config.BlockingOptions.NumberOfElementsInBinomialLadderSketch_N = 1 << 29;
+                config.BlockingOptions.NumberOfBitsInBinomialLadderFilter_N = 1 << 29;
                 config.BlockingOptions.PenaltyMulitiplierForTypo = 0.1d;
                 //config.BlockingOptions.BlockThresholdMultiplierForUnpopularPasswords = 10d;
                 config.BlockingOptions.ExpensiveHashingFunctionIterations = 1;

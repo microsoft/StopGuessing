@@ -4,24 +4,24 @@ using Xunit;
 
 namespace xUnit_Tests
 {
-    public class BinomialSketchTest
+    public class BinomialLadderFilterTest
     {
         [Fact]
         public void TwentyObservations()
         {
-            BinomialLadderSketch sketch = new BinomialLadderSketch(1024*1024*1024, 64);
+            BinomialLadderFilter freqFilter = new BinomialLadderFilter(1024*1024*1024, 64);
             string somethingToObserve = "Gosh.  It's a nice day out, isn't it?";
 
-            int observationCount = sketch.GetHeight(somethingToObserve);
+            int observationCount = freqFilter.GetHeight(somethingToObserve);
 
             for (int i = 0; i < 25; i++)
             {
-                int lastCount = sketch.Step(somethingToObserve);
+                int lastCount = freqFilter.Step(somethingToObserve);
                 Assert.Equal(observationCount, lastCount);
                 observationCount++;
             }
 
-            Assert.Equal(observationCount, sketch.GetHeight(somethingToObserve));
+            Assert.Equal(observationCount, freqFilter.GetHeight(somethingToObserve));
         }
         
 

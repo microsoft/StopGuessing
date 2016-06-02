@@ -64,11 +64,11 @@ namespace Simulator
                 : simulator._userAccountController.AddIncorrectPhaseTwoHashAsync( SimAccount, Password, TimeOfAttemptUtc).Result;
 
             int passwordsHeightOnBinomialLadder = IsPasswordValid
-                ? simulator._binomialLadderSketch.GetHeight(Password)
-                : simulator._binomialLadderSketch.Step(Password);
+                ? simulator._binomialLadderFilter.GetHeight(Password)
+                : simulator._binomialLadderFilter.Step(Password);
 
             IsFrequentlyGuessedPassword = passwordsHeightOnBinomialLadder + 1 >=
-                                          simulator._binomialLadderSketch.MaxHeight;
+                                          simulator._binomialLadderFilter.MaxHeight;
 
 
             if (SimAccount != null)

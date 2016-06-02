@@ -2,6 +2,7 @@
 using System.Linq;
 using Microsoft.AspNet.Builder;
 using Microsoft.AspNet.Hosting;
+using StopGuessing.Interfaces;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
@@ -78,26 +79,26 @@ namespace StopGuessing
 
             if (hosts.Count > 0)
             {
-                DistributedBinomialLadderClient dblClient = new DistributedBinomialLadderClient(
+                DistributedBinomialLadderFilterClient dblfClient = new DistributedBinomialLadderFilterClient(
                     options.NumberOfVirtualNodesForDistributedBinomialLadder,
                     options.HeightOfBinomialLadder_H,
-                    options.MinimumBinomialLadderSketchCacheFreshness,
                     hosts,
-                    options.PrivateConfigurationKey);
+                    options.PrivateConfigurationKey,
+                    options.MinimumBinomialLadderFilterCacheFreshness);
                 // If running as a distributed system
-                services.AddSingleton<IBinomialLadderSketch, DistributedBinomialLadderClient>(x => dblClient);
+                services.AddSingleton<IBinomialLadderFilter, DistributedBinomialLadderFilterClient>(x => dblfClient);
                 
-                DistributedBinomialLadderSketchController sketchController =
-                    new DistributedBinomialLadderSketchController(dblClient, options.HeightOfBinomialLadder_H, options.NumberOfElementsPerNodeInBinomialLadderSketch);
-                services.AddSingleton<DistributedBinomialLadderSketchController>(x => sketchController);
+                DistributedBinomialLadderFilterController filterController =
+                    new DistributedBinomialLadderFilterController(dblfClient, options.HeightOfBinomialLadder_H, options.NumberOfBitsPerShardInBinomialLadderFilter, options.PrivateConfigurationKey);
+                services.AddSingleton<DistributedBinomialLadderFilterController>(x => filterController);
 
                 //services.AddSingleton<IFrequenciesProvider<string>>(x =>
                 //    new IncorrectPasswordFrequencyClient(hosts, options.NumberOfRedundantHostsToCachePasswordPopularity));
             }  else
             {
-                BinomialLadderSketch localPasswordBinomialLadderSketch =
-                    new BinomialLadderSketch(options.NumberOfElementsInBinomialLadderSketch_N, options.HeightOfBinomialLadder_H);
-                services.AddSingleton<IBinomialLadderSketch>(x => localPasswordBinomialLadderSketch);
+                BinomialLadderFilter localPasswordBinomialLadderFilter =
+                    new BinomialLadderFilter(options.NumberOfBitsInBinomialLadderFilter_N, options.HeightOfBinomialLadder_H);
+                services.AddSingleton<IBinomialLadderFilter>(x => localPasswordBinomialLadderFilter);
             }
 
             LoginAttemptClient<DbUserAccount> loginAttemptClient = new LoginAttemptClient<DbUserAccount>(hosts, localHost);
