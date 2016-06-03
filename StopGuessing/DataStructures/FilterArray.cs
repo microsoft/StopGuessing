@@ -6,7 +6,13 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.DataStructures
 {
-
+    /// <summary>
+    /// A FilterArray is a bit array that contains additional methods to support probabilistic data
+    /// structures that map elements (keys) to a set of deterministic, pseudorandom indexes in the bit array.
+    /// These methods support data structures such as bloom filters and binomial ladder filters that
+    /// store information about an element within the bits at the indexes that are pseudorandomly associated
+    /// with the element.
+    /// </summary>
     public class FilterArray
     {
         /// <summary>
@@ -164,7 +170,7 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// Clear a randomly-selected bit of the filter array to zero.
         /// </summary>
-        public void ClearRandomElement()
+        public void ClearRandomBitToZero()
         {
             ClearBitToZero((int)StrongRandomNumberGenerator.Get32Bits((uint)BitArray.Length));
         }
@@ -172,7 +178,7 @@ namespace StopGuessing.DataStructures
         /// <summary>
         /// Set a randomly-selected bit of the filter array to one.
         /// </summary>
-        public void SetRandomElement()
+        public void SetRandomBitToOne()
         {
             SetBitToOne((int)StrongRandomNumberGenerator.Get32Bits((uint)BitArray.Length));
         }
@@ -182,7 +188,7 @@ namespace StopGuessing.DataStructures
         /// </summary>
         /// <param name="value">The value to be assigned.  Passing 0 causes a value 0 (false) to be stored
         /// and passing any other value causes a one (true) to be stored in the randomly-selected bit.</param>
-        public void AssignRandomElement(int value)
+        public void AssignRandomBit(int value)
         {
             AssignBit((int)StrongRandomNumberGenerator.Get32Bits((uint)BitArray.Length), value != 0);
         }

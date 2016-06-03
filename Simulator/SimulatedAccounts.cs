@@ -8,9 +8,9 @@ using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using StopGuessing;
+using StopGuessing.AccountStorage.Memory;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
-using StopGuessing.Memory;
 
 namespace Simulator
 {

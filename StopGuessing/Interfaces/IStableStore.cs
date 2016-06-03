@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using StopGuessing.Memory;
-using StopGuessing.Models;
+using StopGuessing.AccountStorage.Memory;
 
-namespace StopGuessing
+namespace StopGuessing.Interfaces
 {
 
 

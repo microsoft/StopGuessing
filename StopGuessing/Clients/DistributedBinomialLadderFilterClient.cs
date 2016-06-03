@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,21 +10,61 @@ using StopGuessing.Models;
 namespace StopGuessing.Clients
 {
     /// <summary>
-    /// FIXME
+    /// The client side of a distributed binomial ladder frequency filter.
+    /// Binomial ladder filters are used to identify frequently-occuring elements in streams while
+    /// minimizing the data revealed/stored about infrequently-occuring elements.
+    /// 
+    /// This client is utilized both by applications using a distributed binomial ladder filter and
+    /// is also by the servers implementing the server to communicate amongst themselves.
+    /// 
+    /// For more information about the binomial ladder filter, search its name and "Microsoft Research"
+    /// to find detailed publications/tech reports.
     /// </summary>
     public class DistributedBinomialLadderFilterClient : IBinomialLadderFilter
     {
+        /// <summary>
+        /// The rest path for the controller.
+        /// </summary>
         public const string ControllerPath = "/api/DBLS/";
+        /// <summary>
+        /// The path under the controller path for REST requests that set individual bits of the filter array.
+        /// </summary>
         public const string BitsPath = ControllerPath + "Bits/";
+        /// <summary>
+        /// The path under the controller path for REST requests for Height (via rest GET) and STEP (via rest POST)
+        /// </summary>
         public const string ElementsPath = ControllerPath + "Elements/";
 
+        /// <summary>
+        /// The number of shards that the filter array is evenly divided into.
+        /// </summary>
         public readonly int NumberOfShards;
-        public readonly int DefaultHeightOfLadder;
+        /// <summary>
+        /// The maximum (and default) height of elements' ladders.
+        /// </summary>
+        public readonly int MaxLadderHeight;
+
+        /// <summary>
+        /// The maximum amount of time an element should allowed to be treated as at the top of its ladder
+        /// due to caching when it may actually have fallen down the ladder since the value was cached.
+        /// </summary>
         public readonly TimeSpan MinimumCacheFreshnessRequired;
+
+        /// <summary>
+        /// The hash function used to map elements to shards.
+        /// </summary>
         protected UniversalHashFunction ShardHashFunction;
+
+        /// <summary>
+        /// Records for each shard that is (or at one time has been) stored on this server.
+        /// </summary>
         public IDistributedResponsibilitySet<RemoteHost> ShardToHostMapping;
 
-        public FixedSizeLruCache<string, DateTime> CacheOfKeysAtTopOfLadder;
+        /// <summary>
+        /// A LRU cache of elements that are at the top of their ladder, used less to improve performance
+        /// and more to prevent a single node from being overloaded if all requests target a single element.
+        /// </summary>
+        protected FixedSizeLruCache<string, DateTime> CacheOfElementsAtTopOfLadder;
 
         /// <summary>
         /// Create a client for a distributed binomial ladder filter
@@ -45,9 +84,9 @@ namespace StopGuessing.Clients
         public DistributedBinomialLadderFilterClient(int numberOfShards, int defaultHeightOfLadder, IDistributedResponsibilitySet<RemoteHost> shardToHostMapping, string configurationKey, TimeSpan? mininmumCacheFreshnessRequired = null)
         {
             NumberOfShards = numberOfShards;
-            DefaultHeightOfLadder = defaultHeightOfLadder;
+            MaxLadderHeight = defaultHeightOfLadder;
             MinimumCacheFreshnessRequired = mininmumCacheFreshnessRequired ?? new TimeSpan(0,0,1);
-            CacheOfKeysAtTopOfLadder = new FixedSizeLruCache<string, DateTime>(2*NumberOfShards);
+            CacheOfElementsAtTopOfLadder = new FixedSizeLruCache<string, DateTime>(2*NumberOfShards);
             ShardHashFunction = new UniversalHashFunction(configurationKey);
             ShardToHostMapping = shardToHostMapping;
         }
@@ -103,9 +142,9 @@ namespace StopGuessing.Clients
         public async Task<int> StepAsync(string key, int? heightOfLadderInRungs = null, TimeSpan? timeout = null, CancellationToken cancellationToken = new CancellationToken())
         {
             DateTime whenAddedUtc;
-            int topOfLadder = heightOfLadderInRungs ?? DefaultHeightOfLadder;
+            int topOfLadder = heightOfLadderInRungs ?? MaxLadderHeight;
 
-            bool cacheIndicatesTopOfLadder = CacheOfKeysAtTopOfLadder.TryGetValue(key, out whenAddedUtc);
+            bool cacheIndicatesTopOfLadder = CacheOfElementsAtTopOfLadder.TryGetValue(key, out whenAddedUtc);
             if (cacheIndicatesTopOfLadder && DateTime.UtcNow - whenAddedUtc < MinimumCacheFreshnessRequired)
             {
                 // The cache is fresh and indicates that the element is already at the top of the ladder
@@ -138,12 +177,12 @@ namespace StopGuessing.Clients
             {
                 // The cache is no longer accurate as the element is no longer at the top of the ladder,
                 // so remove the element from the cache
-                CacheOfKeysAtTopOfLadder.Remove(key);
+                CacheOfElementsAtTopOfLadder.Remove(key);
             }
             else if (heightBeforeStep == topOfLadder)
             {
                 // Store the current element in the cache indicating with the time of this operation
-                CacheOfKeysAtTopOfLadder[key] = DateTime.UtcNow;
+                CacheOfElementsAtTopOfLadder[key] = DateTime.UtcNow;
             }
 
             // Return the height of the element on the binomial ladder before the Step took place.
@@ -164,9 +203,9 @@ namespace StopGuessing.Clients
         public async Task<int> GetHeightAsync(string element, int? heightOfLadderInRungs = null, TimeSpan? timeout = null, CancellationToken cancellationToken = new CancellationToken())
         {
             DateTime whenAddedUtc;
-            int topOfLadder = heightOfLadderInRungs ?? DefaultHeightOfLadder;
+            int topOfLadder = heightOfLadderInRungs ?? MaxLadderHeight;
 
-            bool cacheIndicatesTopOfLadder = CacheOfKeysAtTopOfLadder.TryGetValue(element, out whenAddedUtc);
+            bool cacheIndicatesTopOfLadder = CacheOfElementsAtTopOfLadder.TryGetValue(element, out whenAddedUtc);
             if (cacheIndicatesTopOfLadder && DateTime.UtcNow - whenAddedUtc < MinimumCacheFreshnessRequired)
             {
                 // The cache is fresh and indicates that the element is already at the top of the ladder
@@ -176,7 +215,7 @@ namespace StopGuessing.Clients
             int shard = GetShardIndex(element);
             RemoteHost host = ShardToHostMapping.FindMemberResponsible(shard.ToString());
             int height = await RestClientHelper.GetAsync<int>(host.Uri, ElementsPath + Uri.EscapeUriString(element), cancellationToken: cancellationToken,
-                uriParameters: (!heightOfLadderInRungs.HasValue) ? null : new KeyValuePair<string, string>[]
+                uriParameters: (!heightOfLadderInRungs.HasValue) ? null : new[]
                         {
                             new KeyValuePair<string, string>("heightOfLadderInRungs", heightOfLadderInRungs.Value.ToString())
                         });
@@ -184,12 +223,12 @@ namespace StopGuessing.Clients
             if (height < topOfLadder && cacheIndicatesTopOfLadder)
             {
                 // The cache is no longer accurate as the element is no longer at the top of the ladder
-                CacheOfKeysAtTopOfLadder.Remove(element);
+                CacheOfElementsAtTopOfLadder.Remove(element);
             }
             else if (height == topOfLadder)
             {
                 // Store the current element in the cache indicating with the time of the last fetch.
-                CacheOfKeysAtTopOfLadder[element] = DateTime.UtcNow;
+                CacheOfElementsAtTopOfLadder[element] = DateTime.UtcNow;
             }
 
             return height;

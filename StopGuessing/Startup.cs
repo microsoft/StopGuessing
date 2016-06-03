@@ -8,13 +8,12 @@ using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
 using Microsoft.Data.Entity;
-using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage;
-using StopGuessing.Azure;
+using StopGuessing.AccountStorage.Sql;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace StopGuessing
@@ -89,7 +88,7 @@ namespace StopGuessing
                 services.AddSingleton<IBinomialLadderFilter, DistributedBinomialLadderFilterClient>(x => dblfClient);
                 
                 DistributedBinomialLadderFilterController filterController =
-                    new DistributedBinomialLadderFilterController(dblfClient, options.HeightOfBinomialLadder_H, options.NumberOfBitsPerShardInBinomialLadderFilter, options.PrivateConfigurationKey);
+                    new DistributedBinomialLadderFilterController(dblfClient, options.NumberOfBitsPerShardInBinomialLadderFilter, options.PrivateConfigurationKey);
                 services.AddSingleton<DistributedBinomialLadderFilterController>(x => filterController);
 
                 //services.AddSingleton<IFrequenciesProvider<string>>(x =>

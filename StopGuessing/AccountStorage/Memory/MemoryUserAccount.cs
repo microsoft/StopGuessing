@@ -1,14 +1,11 @@
 ﻿using System;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
-using StopGuessing.Utilities;
-using System.Threading;
+using StopGuessing.Interfaces;
 using StopGuessing.Models;
 
-namespace StopGuessing.Memory
+namespace StopGuessing.AccountStorage.Memory
 {
     public class MemoryUserAccount : IUserAccount
     {

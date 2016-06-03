@@ -4,10 +4,10 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using StopGuessing;
+using StopGuessing.AccountStorage.Memory;
 using StopGuessing.Controllers;
 using StopGuessing.Models;
 using StopGuessing.EncryptionPrimitives;
-using StopGuessing.Memory;
 
 
 namespace Simulator

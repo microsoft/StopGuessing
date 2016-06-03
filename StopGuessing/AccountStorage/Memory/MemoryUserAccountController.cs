@@ -1,19 +1,11 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Data.Entity;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Table;
-using StopGuessing.Azure;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
-using StopGuessing.Models;
 using StopGuessing.Utilities;
 
-namespace StopGuessing.Memory
+namespace StopGuessing.AccountStorage.Memory
 {
     public class MemoryUserAccountControllerFactory : IUserAccountControllerFactory<MemoryUserAccount>
     {
@@ -24,6 +16,9 @@ namespace StopGuessing.Memory
         }
     }
 
+    /// <summary>
+    /// An in-memory implementation of a user-account store that can be used for testing purposes only.
+    /// </summary>
     public class MemoryUserAccountController : UserAccountController<MemoryUserAccount>
     {
         public MemoryUserAccountController()
@@ -39,9 +34,7 @@ namespace StopGuessing.Memory
             int? maxFailedPhase2HashesToTrack = null,
             DateTime? currentDateTimeUtc = null)
         {
-            MemoryUserAccount account = new MemoryUserAccount();
-            
-            account.UsernameOrAccountId = usernameOrAccountId;
+            MemoryUserAccount account = new MemoryUserAccount {UsernameOrAccountId = usernameOrAccountId};
 
             Initialize(account, password, numberOfIterationsToUseForHash, passwordHashFunctionName);
 
@@ -53,15 +46,15 @@ namespace StopGuessing.Memory
             return account;
         }
 
-        public override Task<bool> AddIncorrectPhaseTwoHashAsync(MemoryUserAccount account, string phase2Hash, DateTime? whenSeenUtc = null,
+        public override Task<bool> AddIncorrectPhaseTwoHashAsync(MemoryUserAccount userAccount, string phase2Hash, DateTime? whenSeenUtc = null,
             CancellationToken cancellationToken = default(CancellationToken)) =>
-            TaskHelper.PretendToBeAsync(account.RecentIncorrectPhase2Hashes.Add(phase2Hash));
+            TaskHelper.PretendToBeAsync(userAccount.RecentIncorrectPhase2Hashes.Add(phase2Hash));
 
         public override Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-            MemoryUserAccount account, 
+            MemoryUserAccount userAccount, 
             string hashOfCookie,
             CancellationToken cancellationToken = default(CancellationToken)) =>
-            TaskHelper.PretendToBeAsync(account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie));
+            TaskHelper.PretendToBeAsync(userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie));
 
 #pragma warning disable 1998
         public override async Task RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(MemoryUserAccount account, string hashOfCookie,
@@ -73,16 +66,16 @@ namespace StopGuessing.Memory
 
 
 #pragma warning disable 1998
-        public override async Task<double> TryGetCreditAsync(MemoryUserAccount account, 
+        public override async Task<double> TryGetCreditAsync(MemoryUserAccount userAccount, 
             double amountRequested,
             DateTime? timeOfRequestUtc = null,
             CancellationToken cancellationToken = default(CancellationToken))
 #pragma warning restore 1998
         {
             DateTime timeOfRequestOrNowUtc = timeOfRequestUtc ?? DateTime.UtcNow;
-            double amountAvailable = Math.Max(0, account.CreditLimit - account.ConsumedCredits.GetValue(account.CreditHalfLife, timeOfRequestOrNowUtc));
+            double amountAvailable = Math.Max(0, userAccount.CreditLimit - userAccount.ConsumedCredits.GetValue(userAccount.CreditHalfLife, timeOfRequestOrNowUtc));
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            account.ConsumedCredits.SubtractInPlace(account.CreditHalfLife, amountConsumed, timeOfRequestOrNowUtc);
+            userAccount.ConsumedCredits.SubtractInPlace(userAccount.CreditHalfLife, amountConsumed, timeOfRequestOrNowUtc);
             return amountConsumed;
         }
     }

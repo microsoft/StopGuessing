@@ -11,11 +11,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using StopGuessing;
+using StopGuessing.AccountStorage.Memory;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
-using StopGuessing.Memory;
 using StopGuessing.Models;
 
 namespace Simulator

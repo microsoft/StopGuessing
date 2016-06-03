@@ -1,15 +1,10 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Runtime.Serialization;
-using System.Security.Cryptography;
-using System.Threading;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
-using StopGuessing.Azure;
-using StopGuessing.DataStructures;
 
-namespace StopGuessing.Models
+namespace StopGuessing.Interfaces
 {
+    /// <summary>
+    /// This interface specifies the records that must be implemented by a UserAccount record.
+    /// </summary>
     public interface IUserAccount
     {
         /// <summary>

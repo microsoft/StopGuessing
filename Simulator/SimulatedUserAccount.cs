@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
-using StopGuessing.Memory;
+using StopGuessing.AccountStorage.Memory;
 
 namespace Simulator
 {

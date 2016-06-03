@@ -6,10 +6,11 @@ using System.Threading.Tasks;
 using Xunit;
 using System.Threading;
 using StopGuessing;
+using StopGuessing.AccountStorage.Memory;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
-using StopGuessing.Memory;
+using StopGuessing.Interfaces;
 
 namespace xUnit_Tests
 {
@@ -18,7 +19,7 @@ namespace xUnit_Tests
         public IDistributedResponsibilitySet<RemoteHost> MyResponsibleHosts;
         //public LoginAttemptClient MyLoginAttemptClient;
         public BlockingAlgorithmOptions MyBlockingAlgorithmOptions;
-        public LimitPerTimePeriod[] CreditLimits;
+        //public LimitPerTimePeriod[] CreditLimits;
         public MemoryUserAccountController MemUserAccountController;
         //public MemoryOnlyStableStore StableStore;
         public MemoryOnlyUserAccountFactory MyAccountFactory;
@@ -113,7 +114,7 @@ namespace xUnit_Tests
                 AddressOfServerThatInitiallyReceivedLoginAttempt = serverAddress,
                 TimeOfAttemptUtc = eventTimeUtc ?? DateTime.UtcNow,
                 Api = api,
-                CookieProvidedByBrowser = cookieProvidedByBrowser
+                CookieProvidedByClient = cookieProvidedByBrowser
             };
 
             return await configuration.MyLoginAttemptClient.PutAsync(attempt, password,

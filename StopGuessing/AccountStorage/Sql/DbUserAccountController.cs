@@ -7,13 +7,12 @@ using Microsoft.Data.Entity;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Table;
-using StopGuessing.Azure;
+using Microsoft.WindowsAzure.Storage.Table.Queryable;
+using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.Utilities;
-using Microsoft.WindowsAzure.Storage.Table.Queryable;
-using StopGuessing.Models;
 
-namespace StopGuessing.Controllers
+namespace StopGuessing.AccountStorage.Sql
 {
     public class DbUserAccountControllerFactory : IUserAccountControllerFactory<DbUserAccount>
     {

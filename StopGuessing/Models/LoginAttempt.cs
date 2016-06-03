@@ -74,7 +74,7 @@ namespace StopGuessing.Models
         /// The hash of a client-identifying cookie provided by the client/browser.  To allow
         /// flexibility in the hash function and save the user of this class from having to choose
         /// a hash function, the hash is automatically performed by using the setter
-        /// CookieProvidedByBrowser.
+        /// CookieProvidedByClient.
         /// </summary>
         [DataMember]
         public string HashOfCookieProvidedByBrowser { get; private set; }
@@ -110,12 +110,12 @@ namespace StopGuessing.Models
         /// A setter used to provide a client-specific cookie.  This cookie should be random value
         /// from a large space assigned to the client the first time it connects and provided on that
         /// and every future login attempt.  If the client does not support cookies (e.g., POP)
-        /// then this can be left blankc. 
+        /// then this can be left blank.
         /// </summary>
         [IgnoreDataMember]
         [JsonIgnore]
         [NotMapped]
-        public string CookieProvidedByBrowser { set { SetCookieProvidedByBrowser(value); } }
+        public string CookieProvidedByClient { set { SetCookieProvidedByClient(value); } }
 
         /// <summary>
         /// A getter that provides a key that should uniquely identify this login attempt.
@@ -125,21 +125,36 @@ namespace StopGuessing.Models
         [NotMapped]
         public string UniqueKey => ToUniqueKey();
 
+        /// <summary>
+        /// Get the hash of a cookie provided by the client software.
+        /// </summary>
+        /// <param name="plaintextCookie">The cookie string.</param>
+        /// <returns>A one-way hash fo the cookie</returns>
         public static string HashCookie(string plaintextCookie)
         {
             return Convert.ToBase64String(ManagedSHA256.Hash(Encoding.UTF8.GetBytes(plaintextCookie)));
         }
 
-        private void SetCookieProvidedByBrowser(string plaintextCookie)
+        /// <summary>
+        /// Set the cookie provided by the client by storing it's hash.
+        /// </summary>
+        /// <param name="plaintextCookie">The cookie provided by the client.</param>
+        private void SetCookieProvidedByClient(string plaintextCookie)
         {
             if (string.IsNullOrEmpty(plaintextCookie))
                 return;
             HashOfCookieProvidedByBrowser = HashCookie(plaintextCookie);
         }
 
+        /// <summary>
+        /// Get a unique identifier for this login attempt.
+        /// </summary>
+        /// <returns></returns>
         private string ToUniqueKey()
         {
-            return UrlEncoder.Default.UrlEncode(UsernameOrAccountId) + "&" + AddressOfServerThatInitiallyReceivedLoginAttempt + "&" + TimeOfAttemptUtc.Ticks.ToString();
+            return UrlEncoder.Default.UrlEncode(UsernameOrAccountId) + "&" + 
+                UrlEncoder.Default.UrlEncode(AddressOfServerThatInitiallyReceivedLoginAttempt.ToString()) + "&" + 
+                TimeOfAttemptUtc.Ticks.ToString();
         }
         
     }

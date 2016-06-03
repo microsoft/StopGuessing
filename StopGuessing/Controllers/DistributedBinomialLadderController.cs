@@ -1,16 +1,23 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNet.Mvc;
 using StopGuessing.Clients;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
-using StopGuessing.Models;
 
 namespace StopGuessing.Controllers
 {
     /// <summary>
-    /// A distributed binomial ladder filter as described in the tech report of the same name.
+    /// The server/controller side of a distributed binomial ladder frequency filter.
+    ///  
+    /// Binomial ladder filters are used to identify frequently-occuring elements in streams while
+    /// minimizing the data revealed/stored about infrequently-occuring elements.
+    /// 
+    /// The server uses a client to communicate with the other servers that together implement
+    /// this distributed data structure.
+    /// 
+    /// For more information about the binomial ladder filter, search its name and "Microsoft Research"
+    /// to find detailed publications/tech reports.
     /// </summary>
     [Route("api/DBLS")]
     public class DistributedBinomialLadderFilterController
@@ -27,11 +34,6 @@ namespace StopGuessing.Controllers
         protected Dictionary<int,FilterArray> ShardsByIndex;
 
         /// <summary>
-        /// The default ladder height (H in the paper).
-        /// </summary>
-        protected int LadderHeight;
-
-        /// <summary>
         /// The number of bits stored in each shard.
         /// </summary>
         protected int NumberOfBitsPerShard;
@@ -42,18 +44,22 @@ namespace StopGuessing.Controllers
         protected string SecretSaltToPreventAlgorithmicComplexityAttacks;
 
         /// <summary>
+        /// The max ladder height (H in the paper).
+        /// </summary>
+        protected int MaxLadderHeight => FilterClient.MaxLadderHeight;
+
+
+        /// <summary>
         /// Construct the controller (server) for requests to this host for its shards of the binomial ladder filter.
         /// </summary>
         /// <param name="distributedBinomialLadderFilterClient">A client used by this server to access the servers hosting other shards of the filter.</param>
-        /// <param name="ladderHeight">The default ladder height (H) for elements on the binomial ladder filter.</param>
         /// <param name="numberOfBitsPerShard">The number of bits that each shard should contain.</param>
         /// <param name="secretSaltToPreventAlgorithmicComplexityAttacks">
         /// A secret used to salt the filter's hash functions so as to prevent attacks that might try to find collisions in the small space we are hashing to.</param>
         public DistributedBinomialLadderFilterController(DistributedBinomialLadderFilterClient distributedBinomialLadderFilterClient,
-            int ladderHeight, int numberOfBitsPerShard, string secretSaltToPreventAlgorithmicComplexityAttacks)
+            int numberOfBitsPerShard, string secretSaltToPreventAlgorithmicComplexityAttacks)
         {
             FilterClient = distributedBinomialLadderFilterClient;
-            LadderHeight = ladderHeight;
             NumberOfBitsPerShard = numberOfBitsPerShard;
             SecretSaltToPreventAlgorithmicComplexityAttacks = secretSaltToPreventAlgorithmicComplexityAttacks;
         }
@@ -68,7 +74,7 @@ namespace StopGuessing.Controllers
             if (!ShardsByIndex.ContainsKey(shardNumber))
             {
                 // If there are not bits for this shard, create one.
-                ShardsByIndex[shardNumber] = new FilterArray(NumberOfBitsPerShard, LadderHeight, true, SecretSaltToPreventAlgorithmicComplexityAttacks);
+                ShardsByIndex[shardNumber] = new FilterArray(NumberOfBitsPerShard, MaxLadderHeight, true, SecretSaltToPreventAlgorithmicComplexityAttacks);
             }
             return ShardsByIndex[shardNumber];
         }
@@ -116,7 +122,7 @@ namespace StopGuessing.Controllers
         {
             FilterArray shard = GetShard(element);
             // Get the set of rungs
-            List<int> rungIndexes = shard.GetIndexesAssociatedWithAnElement(element, heightOfLadderInRungs ?? LadderHeight).ToList();
+            List<int> rungIndexes = shard.GetIndexesAssociatedWithAnElement(element, heightOfLadderInRungs ?? MaxLadderHeight).ToList();
             // Select the subset of rungs that have value zero (that are above the element in the ladder)
             List<int> rungsAbove = rungIndexes.Where(rung => !shard[rung]).ToList();
 
@@ -154,7 +160,7 @@ namespace StopGuessing.Controllers
         public void AssignRandomBit([FromRoute] int shardNumber, [FromRoute] int valueToAssign)
         {
             FilterArray shard = GetShard(shardNumber);
-            shard.AssignRandomElement(valueToAssign);
+            shard.AssignRandomBit(valueToAssign);
         }
 
     }

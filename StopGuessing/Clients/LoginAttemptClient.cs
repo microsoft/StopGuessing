@@ -5,14 +5,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
+using StopGuessing.Interfaces;
 using StopGuessing.Models;
 
 namespace StopGuessing.Clients
 {
     public interface ILoginAttemptClient : ILoginAttemptController
     {
-        
-
     }
 
     /// <summary>

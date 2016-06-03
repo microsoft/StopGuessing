@@ -8,7 +8,8 @@ using System.Threading.Tasks;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
-using StopGuessing.Memory;
+using StopGuessing.AccountStorage.Memory;
+using StopGuessing.Interfaces;
 using StopGuessing.Models;
 using StopGuessing.Utilities;
 
@@ -114,15 +115,15 @@ namespace Simulator
             return null;
         }
 
-        public Task<bool> AddIncorrectPhaseTwoHashAsync(SimulatedUserAccount account, string phase2Hash, DateTime? whenSeenUtc = null,
+        public Task<bool> AddIncorrectPhaseTwoHashAsync(SimulatedUserAccount userAccount, string phase2Hash, DateTime? whenSeenUtc = null,
             CancellationToken cancellationToken = default(CancellationToken)) =>
-            TaskHelper.PretendToBeAsync(account.RecentIncorrectPhase2Hashes.Add(phase2Hash));
+            TaskHelper.PretendToBeAsync(userAccount.RecentIncorrectPhase2Hashes.Add(phase2Hash));
 
         public Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-            SimulatedUserAccount account,
+            SimulatedUserAccount userAccount,
             string hashOfCookie,
             CancellationToken cancellationToken = default(CancellationToken)) =>
-            TaskHelper.PretendToBeAsync(account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie));
+            TaskHelper.PretendToBeAsync(userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie));
 
 #pragma warning disable 1998
         public async Task RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(
@@ -136,26 +137,26 @@ namespace Simulator
         }
 
         public virtual void RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
-    SimulatedUserAccount account,
+    SimulatedUserAccount userAccount,
     string hashOfCookie,
     DateTime? whenSeenUtc = null)
         {
             TaskHelper.RunInBackground(
-                RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(account, hashOfCookie, whenSeenUtc));
+                RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(userAccount, hashOfCookie, whenSeenUtc));
         }
 
 
 #pragma warning disable 1998
-        public async Task<double> TryGetCreditAsync(SimulatedUserAccount account,
+        public async Task<double> TryGetCreditAsync(SimulatedUserAccount userAccount,
             double amountRequested,
             DateTime? timeOfRequestUtc = null,
             CancellationToken cancellationToken = default(CancellationToken))
 #pragma warning restore 1998
         {
             DateTime timeOfRequestOrNowUtc = timeOfRequestUtc ?? DateTime.UtcNow;
-            double amountAvailable = Math.Max(0, account.CreditLimit - account.ConsumedCredits.GetValue(account.CreditHalfLife, timeOfRequestOrNowUtc));
+            double amountAvailable = Math.Max(0, userAccount.CreditLimit - userAccount.ConsumedCredits.GetValue(userAccount.CreditHalfLife, timeOfRequestOrNowUtc));
             double amountConsumed = Math.Min(amountRequested, amountAvailable);
-            account.ConsumedCredits.SubtractInPlace(account.CreditHalfLife, amountConsumed, timeOfRequestOrNowUtc);
+            userAccount.ConsumedCredits.SubtractInPlace(userAccount.CreditHalfLife, amountConsumed, timeOfRequestOrNowUtc);
             return amountConsumed;
         }
     }

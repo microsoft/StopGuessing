@@ -4,8 +4,8 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using StopGuessing.Azure;
 using StopGuessing.EncryptionPrimitives;
+using StopGuessing.Interfaces;
 using StopGuessing.Models;
 using StopGuessing.Utilities;
 
@@ -20,24 +20,30 @@ namespace StopGuessing.Controllers
         public const int DefaultCreditHalfLifeInHours = 12;
         public const double DefaultCreditLimit = 50;
 
-
-        public void Initialize(TAccount account,
+        /// <summary>
+        /// Set up the password hasing defaults for an account and set the password.
+        /// </summary>
+        /// <param name="userAccount">The user's account record.</param>
+        /// <param name="password">The password to set</param>
+        /// <param name="numberOfIterationsToUseForHash">Optional number of iterations for hash function.</param>
+        /// <param name="passwordHashFunctionName">Optional name of hash function to use.</param>
+        public void Initialize(TAccount userAccount,
             string password = null,
             int numberOfIterationsToUseForHash = 0,
             string passwordHashFunctionName = null)
         {
             if (numberOfIterationsToUseForHash > 0)
             {
-                account.NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForHash;
+                userAccount.NumberOfIterationsToUseForPhase1Hash = numberOfIterationsToUseForHash;
             }
             if (passwordHashFunctionName != null)
             {
-                account.PasswordHashPhase1FunctionName = passwordHashFunctionName;
+                userAccount.PasswordHashPhase1FunctionName = passwordHashFunctionName;
             }
 
             if (password != null)
             {
-                SetPassword(account, password);
+                SetPassword(userAccount, password);
             }
         }
 
@@ -87,11 +93,11 @@ namespace StopGuessing.Controllers
             }
 
             // Calculate the Phase1 hash, which is a computationally-heavy hash of the password
-            // We will use this for encrypting the EC account log symmetricKey.
+            // We will use this for encrypting the EC userAccount log symmetricKey.
             byte[] newPasswordHashPhase1 = ComputePhase1Hash(userAccount, newPassword);
 
             // Calculate the Phase2 hash by hasing the phase 1 hash with SHA256.
-            // We can store this without revealing the phase 1 hash used to encrypt the EC account log symmetricKey.
+            // We can store this without revealing the phase 1 hash used to encrypt the EC userAccount log symmetricKey.
             // We can use it to verify whether a provided password is correct
             userAccount.PasswordHashPhase2 = ComputePhase2HashFromPhase1Hash(userAccount, newPasswordHashPhase1);
 
@@ -131,13 +137,6 @@ namespace StopGuessing.Controllers
         }
 
 
-        /// <summary>
-        /// Set the EC account log key
-        /// </summary>
-        /// <param name="userAccount"></param>
-        /// <param name="ecAccountLogKey"></param>
-        /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
-        /// <returns></returns>
         public virtual void SetAccountLogKey(
             TAccount userAccount,
             ECDiffieHellmanCng ecAccountLogKey,
@@ -152,7 +151,7 @@ namespace StopGuessing.Controllers
         }
 
         /// <summary>
-        /// Derive the EC private account log key from the phase 1 hash of the correct password.
+        /// Derive the EC private userAccount log key from the phase 1 hash of the correct password.
         /// </summary>
         /// <param name="userAccount"></param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
@@ -165,15 +164,15 @@ namespace StopGuessing.Controllers
         }
 
         public virtual void RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
-            TAccount account,
+            TAccount userAccount,
             string hashOfCookie,
             DateTime? whenSeenUtc = null)
         {
             TaskHelper.RunInBackground(
-                RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(account, hashOfCookie, whenSeenUtc));
+                RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(userAccount, hashOfCookie, whenSeenUtc));
         }
         public abstract Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-            TAccount account,
+            TAccount userAccount,
             string hashOfCookie,
             CancellationToken cancellationToken = new CancellationToken());
 
@@ -183,13 +182,13 @@ namespace StopGuessing.Controllers
             DateTime? whenSeenUtc = null, CancellationToken cancellationToken = new CancellationToken());
 
         public abstract Task<bool> AddIncorrectPhaseTwoHashAsync(
-            TAccount account,
+            TAccount userAccount,
             string phase2Hash,
             DateTime? whenSeenUtc = null,
             CancellationToken cancellationToken = new CancellationToken());
 
         public abstract Task<double> TryGetCreditAsync(
-            TAccount account,
+            TAccount userAccount,
             double amountRequested,
             DateTime? timeOfRequestUtc = null,
             CancellationToken cancellationToken = new CancellationToken());

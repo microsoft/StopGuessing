@@ -8,11 +8,22 @@ using StopGuessing.EncryptionPrimitives;
 
 namespace StopGuessing.Models
 {
-    public class LoginAttemptSummaryForTypoAnalysis
+    /// <summary>
+    /// A record of a recent failed login attempt with just enough information to determine whether
+    /// that attempt failed due to an incorrectly typed password.
+    /// </summary>
+    public struct LoginAttemptSummaryForTypoAnalysis
     {
-        public DecayingDouble Penalty { get; set; }
+        /// <summary>
+        /// The unique identifier of the account that was being logged into.
+        /// </summary>
+        public string UsernameOrAccountId { get; set; }
 
-        public string UsernameOrAccountId { get; set;  }
+        /// <summary>
+        /// The penalty applied to the blockign score when this login attempt registered as having
+        /// an invalid password
+        /// </summary>
+        public DecayingDouble Penalty { get; set; }
 
         /// <summary>
         /// When a login attempt is sent with an incorrect password, that incorrect password is encrypted

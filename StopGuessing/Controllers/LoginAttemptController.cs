@@ -23,20 +23,53 @@ namespace StopGuessing.Controllers
             CancellationToken cancellationToken = default(CancellationToken));
     }
     
-
+    /// <summary>
+    /// This controller serves requests to authenticate users, which are issued via PUT requests.
+    /// (See PutAsync).
+    /// </summary>
+    /// <typeparam name="TUserAccount"></typeparam>
     [Route("api/[controller]")]
     public class LoginAttemptController<TUserAccount> :
         Controller, 
         ILoginAttemptController where TUserAccount : IUserAccount
     {
+        /// <summary>
+        /// Configuration options.
+        /// </summary>
         private readonly BlockingAlgorithmOptions _options;
+        /// <summary>
+        /// A binomial ladder filter used to identify frequently-guessed passwords.
+        /// </summary>
         private readonly IBinomialLadderFilter _binomialLadderFilter;
+        /// <summary>
+        /// An interface for creating clients to the repository in which user's account records are stored.
+        /// </summary>
         private readonly IUserAccountRepositoryFactory<TUserAccount> _userAccountRepositoryFactory;
+        /// <summary>
+        /// An interface for creating controllers that can modify user's account records.
+        /// </summary>
         private readonly IUserAccountControllerFactory<TUserAccount> _userAccountControllerFactory;
+        /// <summary>
+        /// A sketch used to identify when the same username/password pair is submitted, for
+        /// usernames that are not valid.  (For usernames that are valid, the user's account
+        /// keeps track of recent invalid passwords.)
+        /// </summary>
         private readonly AgingMembershipSketch _recentIncorrectPasswords;
 
+        /// <summary>
+        /// A cache of records for IP addresses tracked by this controller.
+        /// </summary>
         private readonly SelfLoadingCache<IPAddress, IpHistory> _ipHistoryCache;
 
+        /// <summary>
+        /// Construct the controller. 
+        /// </summary>
+        /// <param name="userAccountControllerFactory">A factory for creating IUserAccountController interfaces for managing user account records.</param>
+        /// <param name="userAccountRepositoryFactory">A factory for creating IAccountRepository interfaces for obtaining user account records.</param>
+        /// <param name="binomialLadderFilter">A binomial ladder frequency that the controller should use to track frequently-guessed passwords.</param>
+        /// <param name="memoryUsageLimiter">A memory usage limiter that the controller should register into so that when memory is tight,
+        /// the controller can do its part to free up cached items it may not need anymore.</param>
+        /// <param name="blockingOptions">Configuration options.</param>
         public LoginAttemptController(
             IUserAccountControllerFactory<TUserAccount> userAccountControllerFactory,
             IUserAccountRepositoryFactory<TUserAccount> userAccountRepositoryFactory,
@@ -45,21 +78,36 @@ namespace StopGuessing.Controllers
             BlockingAlgorithmOptions blockingOptions
             )
         {
-            _options = blockingOptions; //optionsAccessor.Options;
+            // Copy parameters into the controller.
+            _options = blockingOptions;
             _binomialLadderFilter = binomialLadderFilter;
-
-            _recentIncorrectPasswords = new AgingMembershipSketch(blockingOptions.AgingMembershipSketchTables, blockingOptions.AgingMembershipSketchTableSize);
             _userAccountRepositoryFactory = userAccountRepositoryFactory;
             _userAccountControllerFactory = userAccountControllerFactory;
+
+            // Create a membership sketch to track username/password pairs that have failed.
+            _recentIncorrectPasswords = new AgingMembershipSketch(blockingOptions.AgingMembershipSketchTables, blockingOptions.AgingMembershipSketchTableSize);
+
+            // Create a cache of records storing information about the behavior of IPs that have issued login attempts.
             _ipHistoryCache = new SelfLoadingCache<IPAddress, IpHistory>(address => new IpHistory(address, _options));
 
+            // When memory is low, the memeory usage limiter should call the ReduceMemoryUsage method of this controller.
             memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
         }
 
-
+        /// <summary>
+        /// When a user attempts to login, a REST PUT will record the login attempt and provide and return the outcome. 
+        /// </summary>
+        /// <param name="id">The unique ID of the login attempt.  Must match loginAttempt.UniqueID.</param>
+        /// <param name="loginAttempt">A record of all the details known about the login attempt.</param>
+        /// <param name="passwordProvidedByClient">The plaintext password provided by the client trying to login.</param>
+        /// <param name="cancellationToken">An optional cancellation token to support asynchrony.</param>
+        /// <returns>An ObjectResult that, if the request is successfully processed, encapsulates the LoginAttempt
+        /// record as modified by this process.  Successfully returning the LoginAttempt does not mean the request
+        /// to login should be granted.  Rather, the login should only succeed if the Outcome field is set to
+        /// CredentialsValid.</returns>
         // PUT api/LoginAttempt/clientsIpHistory-address-datetime
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutAsync(string id,
+        public async Task<IActionResult> PutAsync([FromRoute] string id,
             [FromBody] LoginAttempt loginAttempt,
             [FromBody] string passwordProvidedByClient = null,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -74,6 +122,14 @@ namespace StopGuessing.Controllers
                 cancellationToken: cancellationToken));
         }
 
+        /// <summary>
+        /// When a user attempts to login, record the login attempt and provide and return the outcome. 
+        /// </summary>
+        /// <param name="loginAttempt">A record of all the details known about the login attempt.</param>
+        /// <param name="passwordProvidedByClient">The plaintext password provided by the client trying to login.</param>
+        /// <param name="cancellationToken">An optional cancellation token to support asynchrony.</param>
+        /// <returns>The modified loginAttempt with the Outcome field set to indicate whether the 
+        /// the client should be allowed to login to the account.</returns>
         public async Task<LoginAttempt> PutAsync(
             LoginAttempt loginAttempt,
             string passwordProvidedByClient = null,
@@ -89,14 +145,14 @@ namespace StopGuessing.Controllers
         /// Ensure that a known-common password is treated as frequent
         /// </summary>
         /// <param name="passwordToTreatAsFrequent">The password to treat as frequent</param>
-        /// <param name="numberOfTimesToPrime">The number of consecutive occurrences to simulate</param>
+        /// <param name="numberOfSteps">The number of consecutive occurrences to simulate</param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         public async Task PrimeCommonPasswordAsync(string passwordToTreatAsFrequent,
-            int numberOfTimesToPrime,
+            int numberOfSteps,
             CancellationToken cancellationToken = default(CancellationToken))
-        {            
-            for (int i = 0; i < numberOfTimesToPrime; i++)
+        {   
+            for (int i = 0; i < numberOfSteps; i++)
             {
                 await _binomialLadderFilter.StepAsync(passwordToTreatAsFrequent, cancellationToken: cancellationToken);
             }
@@ -137,65 +193,70 @@ namespace StopGuessing.Controllers
 
             if (clientsIpHistory == null)
                 return;
-
+        
             LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = clientsIpHistory.RecentPotentialTypos.MostRecentFirst.ToArray();
             ECDiffieHellmanCng ecPrivateAccountLogKey = null;
             try
             {
                 foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
                 {
-                    if (potentialTypo.UsernameOrAccountId != account.UsernameOrAccountId)
-                        continue;
+                    bool usernameCorrect = potentialTypo.UsernameOrAccountId == account.UsernameOrAccountId;
+                    //bool usernameHadTypo = !usernameCorrect &&
+                    //    EditDistance.Calculate(potentialTypo.UsernameOrAccountId, account.UsernameOrAccountId) <=
+                    //_options.MaxEditDistanceConsideredATypo;
 
-                    string incorrectPasswordFromPreviousAttempt = null;
-
-                    if (account.GetType().Name == "SimulatedUserAccount")
+                    if (usernameCorrect) // || usernameHadTypo
                     {
-                        incorrectPasswordFromPreviousAttempt = potentialTypo.EncryptedIncorrectPassword.Ciphertext;
-                    }
-                    else
-                    {
-                        if (ecPrivateAccountLogKey == null)
+                        // Get the plaintext password from the previous login attempt
+                        string passwordSubmittedInFailedAttempt = null;
+                        if (account.GetType().Name == "SimulatedUserAccount")
                         {
-                            // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                            passwordSubmittedInFailedAttempt = potentialTypo.EncryptedIncorrectPassword.Ciphertext;
+                        }
+                        else
+                        {
+                            if (ecPrivateAccountLogKey == null)
+                            {
+                                // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
+                                try
+                                {
+                                    ecPrivateAccountLogKey = accountController.DecryptPrivateAccountLogKey(account,
+                                        phase1HashOfCorrectPassword);
+                                }
+                                catch (Exception)
+                                {
+                                    // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
+                                    return;
+                                }
+                            }
+                            // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
                             try
                             {
-                                ecPrivateAccountLogKey = accountController.DecryptPrivateAccountLogKey(account,
-                                    phase1HashOfCorrectPassword);
+                                // Attempt to decrypt the password.
+                                passwordSubmittedInFailedAttempt =
+                                    potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
                             }
                             catch (Exception)
                             {
-                                // There's a problem with the key that prevents us from decrypting it.  We won't be able to do this analysis.                            
-                                return;
+                                // An exception is likely due to an incorrect key (perhaps outdated).
+                                // Since we simply can't do anything with a record we can't Decrypt, we carry on
+                                // as if nothing ever happened.  No.  Really.  Nothing to see here.
                             }
                         }
-                        // Now try to decrypt the incorrect password from the previous attempt and perform the typo analysis
-                        try
-                        {
-                            // Attempt to decrypt the password.
-                            incorrectPasswordFromPreviousAttempt =
-                                potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
-                        }
-                        catch (Exception)
-                        {
-                            // An exception is likely due to an incorrect key (perhaps outdated).
-                            // Since we simply can't do anything with a record we can't Decrypt, we carry on
-                            // as if nothing ever happened.  No.  Really.  Nothing to see here.
-                        }
-                    }
 
-                    if (incorrectPasswordFromPreviousAttempt != null)
-                    {
-                        // Use an edit distance calculation to determine if it was a likely typo
-                        bool likelyTypo =
-                            EditDistance.Calculate(incorrectPasswordFromPreviousAttempt, correctPassword) <=
-                            _options.MaxEditDistanceConsideredATypo;
-
-                        // Add this to the list of changed attempts
-                        if (likelyTypo)
+                        if (passwordSubmittedInFailedAttempt != null)
                         {
-                            credit += potentialTypo.Penalty.GetValue(_options.AccountCreditLimitHalfLife, whenUtc)*
-                                      (1d - _options.PenaltyMulitiplierForTypo);
+                            //bool passwordCorrect = passwordSubmittedInFailedAttempt == correctPassword;
+                            bool passwordHadTypo = // !passwordCorrect && 
+                                EditDistance.Calculate(passwordSubmittedInFailedAttempt, correctPassword) <=
+                                _options.MaxEditDistanceConsideredATypo;
+
+                            // Get credit for this nearly-correct attempt to counter penalty
+                            if (passwordHadTypo)
+                            {
+                                credit += potentialTypo.Penalty.GetValue(_options.AccountCreditLimitHalfLife, whenUtc)*
+                                          (1d - _options.PenaltyMulitiplierForTypo);
+                            }
                         }
                     }
 
@@ -354,7 +415,7 @@ namespace StopGuessing.Controllers
                                     double credit = await userAccountController.TryGetCreditAsync(
                                         account,
                                         _options.RewardForCorrectPasswordPerAccount_Sigma,
-                                        loginAttempt.TimeOfAttemptUtc);
+                                        loginAttempt.TimeOfAttemptUtc, cancellationToken);
                                     ip.CurrentBlockScore.SubtractInPlace(_options.AccountCreditLimitHalfLife, credit,
                                         loginAttempt.TimeOfAttemptUtc);
                                 }, cancellationToken));

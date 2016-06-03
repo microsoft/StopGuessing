@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace StopGuessing.DataStructures
+namespace StopGuessing.Interfaces
 {
 
     /// <summary>

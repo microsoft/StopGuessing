@@ -1,26 +1,15 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Runtime.Serialization;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Azure;
-using Microsoft.Data.Entity;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Table;
-using Microsoft.WindowsAzure.Storage.Table.Queryable;
-using Newtonsoft.Json;
 using StopGuessing.Controllers;
-using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
+using StopGuessing.Interfaces;
 using StopGuessing.Models;
-using StopGuessing.Utilities;
 
-namespace StopGuessing.Azure
+namespace StopGuessing.AccountStorage.Sql
 {
-
+    /// <summary>
+    /// An implementation of IUserAccount that stores account information in an SQL database.
+    /// </summary>
     public class DbUserAccount : IUserAccount
     {
         public string DbUserAccountId { get; set; }
