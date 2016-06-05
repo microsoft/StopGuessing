@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "xUnit Tests", "xUnit Tests\xUnit Tests.xproj", "{650A5A85-5956-491E-9312-5E25A27D1108}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -14,18 +14,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		Performance1.psess = Performance1.psess
 		Performance2.psess = Performance2.psess
+		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "Simulator", "Simulator\Simulator.xproj", "{13E79588-59C0-47F5-B757-DCD8766EDBA0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PostSimulationAnalysisOldRuntime", "PostSimulationAnalysisOldRuntime\PostSimulationAnalysisOldRuntime.csproj", "{0E1898E6-417D-463D-A0C7-7D4A53452538}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Binomial Ladder Sketch Parameter Calculator", "Binomial Ladder Sketch Parameter Calculator\Binomial Ladder Sketch Parameter Calculator.csproj", "{A5CE9C56-5AD2-486C-87DD-782D6178A799}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Binomial Ladder Filter Parameter Calculator", "Binomial Ladder Sketch Parameter Calculator\Binomial Ladder Filter Parameter Calculator.csproj", "{A5CE9C56-5AD2-486C-87DD-782D6178A799}"
 EndProject
 Global
-	GlobalSection(Performance) = preSolution
-		HasPerformanceSessions = true
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
