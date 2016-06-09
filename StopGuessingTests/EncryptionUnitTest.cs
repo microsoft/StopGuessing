@@ -1,9 +1,9 @@
 ﻿using System;
+using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
 using Xunit;
-using StopGuessing.EncryptionPrimitives;
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     public class EncryptionUnitTest
     {
@@ -11,7 +11,7 @@ namespace xUnit_Tests
         public void AesEncryptionWithIvProvided()
         {
             string plaintextstring = "testestcorrect";
-            byte[] plaintext = System.Text.Encoding.Default.GetBytes(plaintextstring);
+            byte[] plaintext = System.Text.Encoding.UTF8.GetBytes(plaintextstring);
             byte[] salt = new byte[] { 3, 21, 3, 4, 2, 2, 3, 1 };
             byte[] iv = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
             string password = "testpwd1234";
@@ -21,7 +21,7 @@ namespace xUnit_Tests
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, iv, false);
             byte[] decryptedtext = Encryption.DecryptAesCbc(cipertext, keyfrompwd, iv, false);
-            string decryptedstring = System.Text.Encoding.Default.GetString(decryptedtext);
+            string decryptedstring = System.Text.Encoding.UTF8.GetString(decryptedtext);
             Assert.Equal(plaintextstring, decryptedstring);
         }
 
@@ -29,7 +29,7 @@ namespace xUnit_Tests
         public void AesEncryptionWithoutIvp()
         {
             string plaintextstring = "testestcorrect";
-            byte[] plaintext = System.Text.Encoding.Default.GetBytes(plaintextstring);
+            byte[] plaintext = System.Text.Encoding.UTF8.GetBytes(plaintextstring);
             byte[] salt = new byte[] { 3, 21, 3, 4, 2, 2, 3, 1 };
             string password = "testpwd1234";
             byte[] keyfrompwd = Encryption.KeyGenFromPwd(password, salt);
@@ -38,7 +38,7 @@ namespace xUnit_Tests
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, addHmac: false);
             byte[] decryptedtext = Encryption.DecryptAesCbc(cipertext, keyfrompwd, checkAndRemoveHmac: false);
-            string decryptedstring = System.Text.Encoding.Default.GetString(decryptedtext);
+            string decryptedstring = System.Text.Encoding.UTF8.GetString(decryptedtext);
             Assert.Equal(plaintextstring, decryptedstring);
         }
 
@@ -46,7 +46,7 @@ namespace xUnit_Tests
         public void AesEncryptionWithoutIvpWithMac()
         {
             string plaintextstring = "testestcorrect";
-            byte[] plaintext = System.Text.Encoding.Default.GetBytes(plaintextstring);
+            byte[] plaintext = System.Text.Encoding.UTF8.GetBytes(plaintextstring);
             byte[] salt = new byte[] { 3, 21, 3, 4, 2, 2, 3, 1 };
             string password = "testpwd1234";
             byte[] keyfrompwd = Encryption.KeyGenFromPwd(password, salt);
@@ -55,7 +55,7 @@ namespace xUnit_Tests
             //          StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256 ecen = new StopGuessing.ECEncryptedMessage_AES_CBC_HMACSHA256(key, plaintext);
             byte[] cipertext = Encryption.EncryptAesCbc(plaintext, keyfrompwd, addHmac: true);
             byte[] decryptedtext = Encryption.DecryptAesCbc(cipertext, keyfrompwd, checkAndRemoveHmac: true);
-            string decryptedstring = System.Text.Encoding.Default.GetString(decryptedtext);
+            string decryptedstring = System.Text.Encoding.UTF8.GetString(decryptedtext);
             Assert.Equal(plaintextstring, decryptedstring);
         }
 
@@ -73,121 +73,6 @@ namespace xUnit_Tests
             DateTimeOffset deserializedTimeOfAttempt = deserialized.TimeOfAttemptUtc;
             Assert.Equal(utcNow, deserializedTimeOfAttempt);
         }
-
-
-        //      public UserAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType> CreateTestAccountAsync<UserAccountIdentifier, LoginAPIType, PasswordPolicyType>(UserAccountIdentifier UsernameOrAccountID, string password) where UserAccountIdentifier : IComparable
-        //      {
-        //          StopGuessing.UserAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType> Account1 = new StopGuessing.UserAccount<UserAccountIdentifier, LoginAPIType, PasswordPolicyType>();
-        //          //Account1.UsernameOrAccountID = "user1";
-        //         // string password = "testabcd1234";
-        //          Account1.SaltUniqueToThisAccount = new byte[] { 0, 21, 3, 4, 2, 2, 3, 1 };
-        //          byte[] KeyFromPWD = StopGuessing.Encryption.KeyGenFromPWD(password, Account1.SaltUniqueToThisAccount);
-        //          ECDiffieHellmanCng ecdha = new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null, new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport }));
-        //          ECDiffieHellmanCng ecdhb = new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null, new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport }));
-        //          byte[] aprivateKey = ecdha.Key.Export(CngKeyBlobFormat.EccPrivateBlob);
-        //          byte[] apublicKey = ecdha.Key.Export(CngKeyBlobFormat.EccPublicBlob);
-        //          byte[] bprivateKey = ecdha.Key.Export(CngKeyBlobFormat.EccPrivateBlob);
-        //          byte[] bpublicKey = ecdha.Key.Export(CngKeyBlobFormat.EccPublicBlob);
-        //          //Account1.ECPublicAccountLogKey = ECDiffieHellmanCngPublicKey.FromByteArray(apublicKey, CngKeyBlobFormat.EccPublicBlob);
-        //          ECDiffieHellmanCng ecdhacng = new ECDiffieHellmanCng();
-        //          Account1.ECPublicAccountLogKey = ecdhacng.PublicKey;
-        //          AccountsPasswordVerificationFailure AccoutFailure = new AccountsPasswordVerificationFailure();
-        //          Account1.PasswordVerificationFailures =
-        //              new SequenceTest<EncryptedAccountPasswordVerificationFailure>(100);
-        //          //    new SequenceTest<EncryptedAccountPasswordVerificationFailure>(Account1.ECPublicAccountLogKey, AccoutFailure);
-        //          /*
-        //          EncryptedAccountPasswordVerificationFailure failure = new EncryptedAccountPasswordVerificationFailure(
-        //                  ECPublicAccountLogKey,
-        //                  new AccountsPasswordVerificationFailure() { ClientIPAddress = ClientsIP, PasswordProvidedByClient = PasswordProvidedByClient }
-        //                  );
-        //          PasswordVerificationFailures.Add(failure);
-        //*/
-
-        //          byte[] iv = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        //          Account1.ECPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = StopGuessing.Encryption.EncryptAesCbc(aprivateKey, KeyFromPWD, iv, false);
-
-        //          byte[] hash = SHA256.Create().ComputeHash(KeyFromPWD);
-        //          Account1.PasswordHashPhase2 = hash;
-        //          Account1.PublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(apublicKey, CngKeyBlobFormat.EccPublicBlob);
-        //          return Account1;
-        //      }
-
-        //[Fact]
-        //public void LoginTestTryCorrectPassword()
-        //{
-
-        //    //InitializeData();
-        //    string usernameOrAccountId = "user1";
-        //    string password = "testabcd1234";
-        //    //UserAccount<byte[], byte[]> Account1 = CreateTestAccountAsync<string, byte[], byte[]>(UsernameOrAccountID,password);
-        //    //StopGuessing.BruteDetection<string, byte[], byte[]> BruteDetectionObject = new StopGuessing.BruteDetection<string, byte[], byte[]>();
-        //    UserAccountTracker<byte[], byte[]> userAccountTracker =
-        //        new UserAccountTracker<byte[], byte[]>();
-        //    UserAccount<byte[], byte[]> account1 = new UserAccount<byte[], byte[]>(usernameOrAccountId, password: password);
-        //    userAccountTracker.Add(usernameOrAccountId, account1);
-        //    string passwordProvidedByClient = "testabcd1234";
-        //    System.Net.IPAddress clientsIp = IPAddress.Parse("192.168.1.1");
-        //    //StopGuessing.PasswordPopularityTracker PasswordTracker = new StopGuessing.PasswordPopularityTracker();
-        //    //PasswordTracker.ApproximateOccurrencesOfFailedPassword = new StopGuessing.Sketch(100,100,100);
-        //    //PasswordTracker.PreciseOccurrencesOfFailedUnsaltedHashedPassword = new Dictionary<byte[], int>();
-        //    //PasswordTracker.PreciseOccurrencesOfFailedUnsaltedHashedPassword.Add(System.Text.Encoding.Default.GetBytes(password), 0);
-        //    //PasswordTracker.MapOfHighlyPopularUnsaltedHashedPasswordsToPlaintextPasswords = new Dictionary<byte[], string>();
-
-
-        //    byte[] api = null;
-        //    string browserCookie = null;
-
-        //    //StopGuessing.IPTracker<byte[]> IPTracking = new StopGuessing.IPTracker<byte[]>();
-        //    //IPTracking.IPBehaviors = new Dictionary<System.Net.IPAddress, IPBehaviorHistory<string, byte[]>> ();
-        //    //IPBehaviorHistory<string, byte[]> IPBehavior = new IPBehaviorHistory<string,byte[]>();
-        //    //IPBehavior.IsIPAKnownAggregatorThatWeCannotBlock = false;
-        //    //IPTracking.IPBehaviors.Add(ClientsIP, IPBehavior);
-        //    //  Account1.VerifyPassword(PasswordProvidedByClient, ClientsIP, API, BrowserCookie,
-        //    // null, null);
-        //    //  Account1.SetPassword("newpwd","testabcd1234");
-        //    PasswordPopularityTracker passwordTracker = new PasswordPopularityTracker();
-        //    IpTracker<byte[], byte[]> ipTracking = new IpTracker<byte[], byte[]>();
-        //    AuthenticationOutcome result = account1.AuthenticateClient(passwordProvidedByClient, clientsIp, api, browserCookie, passwordTracker, userAccountTracker, ipTracking);
-        //    Assert.Equal(AuthenticationOutcome.CredentialsValid, result, "False positive for password verification");
-        //}
-
-        //StopGuessing.PasswordPopularityTracker PasswordTracker = new StopGuessing.PasswordPopularityTracker();
-        //StopGuessing.IPTracker<byte[], byte[]> IPTracking = new StopGuessing.IPTracker<byte[], byte[]>();
-        /*
-        public void InitializeData()
-        {
-            PasswordTracker.ApproximateOccurrencesOfFailedPassword = new StopGuessing.Sketch(100, 100, 100);
-            PasswordTracker.PreciseOccurrencesOfFailedUnsaltedHashedPassword = new Dictionary<byte[], int>();
-            PasswordTracker.MapOfHighlyPopularUnsaltedHashedPasswordsToPlaintextPasswords = new Dictionary<byte[], string>();
-            IPTracking.IPBehaviors = new Dictionary<System.Net.IPAddress, IPBehaviorHistory<string, byte[]>>();
-            IPBehaviorHistory<string, byte[]> IPBehavior = new IPBehaviorHistory<string, byte[]>(10);    
-        
-        }
-
-        */
-
-        //[Fact]
-        //public void LoginTestTrywrongPassword()
-        //{
-        //    //InitializeData();
-        //    string usernameOrAccountId = "user1";
-        //    string password = "testabcd1234";
-        //    //UserAccount<byte[], byte[]> Account1 = CreateTestAccountAsync<string, byte[], byte[]>(UsernameOrAccountID, password);
-        //    UserAccountTracker<byte[], byte[]> userAccountTracker =
-        //       new UserAccountTracker<byte[], byte[]>();
-        //    UserAccount<byte[], byte[]> account1 = new UserAccount<byte[], byte[]>(usernameOrAccountId, password: password);
-        //    userAccountTracker.Add(usernameOrAccountId, account1);
-        //    string passwordProvidedByClient = "abcd1234";
-        //    System.Net.IPAddress clientsIp = IPAddress.Parse("192.168.1.1");
-
-        //    byte[] api = null;
-        //    string browserCookie = null;
-
-        //    PasswordPopularityTracker passwordTracker = new PasswordPopularityTracker();
-        //    IpTracker<byte[], byte[]> ipTracking = new IpTracker<byte[], byte[]>();
-        //    AuthenticationOutcome result = account1.AuthenticateClient(passwordProvidedByClient, clientsIp, api, browserCookie, passwordTracker, userAccountTracker, ipTracking);
-        //    Assert.Equal(AuthenticationOutcome.CredentialsInvalidIncorrectPassword, result, "False negative for password verification");
-        //}
 
 
 

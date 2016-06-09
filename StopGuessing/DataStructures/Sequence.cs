@@ -490,7 +490,8 @@ namespace StopGuessing.DataStructures
 
         public override bool CanConvert(Type objectType)
         {
-            bool canConvert = StaticUtilities.IsAssignableToGenericType(objectType, typeof (Sequence<>));
+            bool canConvert = objectType.GetGenericTypeDefinition() == typeof(Sequence<>);
+            //bool canConvert = StaticUtilities.IsAssignableToGenericType(objectType, typeof (Sequence<>));
             return canConvert;
         }
     }

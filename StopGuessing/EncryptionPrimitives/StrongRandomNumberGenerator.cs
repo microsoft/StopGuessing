@@ -10,7 +10,7 @@ namespace StopGuessing.EncryptionPrimitives
     public static class StrongRandomNumberGenerator
     {
         // Pre-allocate a thread-safe random number generator
-        private static readonly RNGCryptoServiceProvider LocalRandomNumberGenerator = new RNGCryptoServiceProvider();
+        private static readonly System.Security.Cryptography.RandomNumberGenerator LocalRandomNumberGenerator = System.Security.Cryptography.RandomNumberGenerator.Create();
         public static void GetBytes(byte[] bytes)
         {
             LocalRandomNumberGenerator.GetBytes(bytes);

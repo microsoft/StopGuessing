@@ -1,25 +1,24 @@
 {
   "version": "1.0.0-*",
-  "description": "Simulator Console Application",
-  "authors": [ "Stuart" ],
-  "tags": [ "" ],
-  "projectUrl": "",
-  "licenseUrl": "",
-
-  "dependencies": {
-    "EntityFramework.Commands": "7.0.0-rc1-final",
-    "EntityFramework.MicrosoftSqlServer": "7.0.0-rc1-final"
+  "buildOptions": {
+    "emitEntryPoint": true
   },
 
-  "commands": {
-    "Simulator": "Simulator"
+  "dependencies": {
+    "Microsoft.NETCore.App": {
+      "type": "platform",
+      "version": "1.0.0-rc2-3002702"
+    },
+    "StopGuessing": "1.0.0-*"
   },
 
   "frameworks": {
-    "dnx451": {
-      "dependencies": {
-        "StopGuessing": "1.0.0-*"
-      }
+    "netcoreapp1.0": {
+      "imports": [
+        "dotnet5.6",
+        "dnxcore50",
+        "portable-net451+win8"
+      ]
     }
   }
 }

@@ -363,7 +363,7 @@ namespace StopGuessing.DataStructures
             {
                 //if (((ulong)element_indexes.LongLength) != sketchData.Dimensions[0])
                 //    throw new Exception("Incorrect number of indexes into the sketch");
-                for (long i = 0; i < elementIndexes.LongLength; i++)
+                for (long i = 0; i < elementIndexes.Length; i++)
                     Write(i, elementIndexes[i], value);
             }
         }

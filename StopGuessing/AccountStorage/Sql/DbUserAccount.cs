@@ -3,7 +3,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 using StopGuessing.Controllers;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Interfaces;
-using StopGuessing.Models;
 
 namespace StopGuessing.AccountStorage.Sql
 {

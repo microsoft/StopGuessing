@@ -1,10 +1,10 @@
-﻿using System.Linq;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using StopGuessing.DataStructures;
 using Xunit;
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 { 
 
     public class CacheTests

@@ -1,5 +1,4 @@
-﻿using Microsoft.Data.Entity;
-using Microsoft.Data.Entity.Infrastructure;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace StopGuessing.AccountStorage.Sql
 {

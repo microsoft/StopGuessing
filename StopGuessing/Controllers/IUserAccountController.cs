@@ -65,12 +65,12 @@ namespace StopGuessing.Controllers
         /// Set the user's EC crypto key for storing logs of information such as incorrect passwords submitted for this userAccount.
         /// </summary>
         /// <param name="userAccount">The user's account record.</param>
-        /// <param name="ecAccountLogKey">The new EC key to use for the userAccount log.</param>
+        /// <param name="accountLogKey">The new EC key to use for the userAccount log.</param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the user's correct password, which will
         /// be used as a symmetric encryption key with which to protec the secret EC key written to the user's userAccount record.</param>
         void SetAccountLogKey(
             TAccount userAccount,
-            ECDiffieHellmanCng ecAccountLogKey,
+            EncryptionPrimitives.Encryption.IPrivateKey accountLogKey,
             byte[] phase1HashOfCorrectPassword);
 
         /// <summary>
@@ -80,7 +80,7 @@ namespace StopGuessing.Controllers
         /// <param name="userAccount">The user's account record.</param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 (expensive) hash of the user's correct password.</param>
         /// <returns></returns>
-        ECDiffieHellmanCng DecryptPrivateAccountLogKey(
+        EncryptionPrimitives.Encryption.IPrivateKey DecryptPrivateAccountLogKey(
             TAccount userAccount,
             byte[] phase1HashOfCorrectPassword);
 

@@ -111,12 +111,12 @@ namespace StopGuessing.Controllers
                 // with the new password and continue to use it on future logins. 
                 try
                 {
-                    using (ECDiffieHellmanCng ecAccountLogKey =
-                        Encryption.DecryptAesCbcEncryptedEcPrivateKey(
+                    using (Encryption.IPrivateKey accountLogKey =
+                        Encryption.DecryptAesCbcEncryptedPrivateKey(
                             userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
                             oldPasswordHashPhase1))
                     {
-                        SetAccountLogKey(userAccount, ecAccountLogKey, newPasswordHashPhase1);
+                        SetAccountLogKey(userAccount, accountLogKey, newPasswordHashPhase1);
                         return;
                     }
                 }
@@ -128,26 +128,24 @@ namespace StopGuessing.Controllers
 
             // We were unable to use an old EC Account Log Key,
             // so we'll create a new one
-            using (ECDiffieHellmanCng ecAccountLogKey =
-                new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null,
-                    new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport })))
+            using (Encryption.IPrivateKey newPrivateKey = Encryption.GenerateNewPrivateKey())
             {
-                SetAccountLogKey(userAccount, ecAccountLogKey, newPasswordHashPhase1);
+                SetAccountLogKey(userAccount, newPrivateKey, newPasswordHashPhase1);
             }
         }
 
 
         public virtual void SetAccountLogKey(
             TAccount userAccount,
-            ECDiffieHellmanCng ecAccountLogKey,
+            Encryption.IPrivateKey accountLogKey,
             byte[] phase1HashOfCorrectPassword)
         {
-            userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = Encryption.EncryptEcPrivateKeyWithAesCbc(ecAccountLogKey,
-                phase1HashOfCorrectPassword);
-            using (ECDiffieHellmanPublicKey publicKey = ecAccountLogKey.PublicKey)
-            {
-                userAccount.EcPublicAccountLogKey = publicKey.ToByteArray();
-            }
+            //userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 = Encryption.EncryptPrivateKeyWithAesCbc(ecAccountLogKey,
+            //    phase1HashOfCorrectPassword);
+            //using (ECDiffieHellmanPublicKey publicKey = accountLogKey.PublicKey)
+            //{
+            //    userAccount.EcPublicAccountLogKey = publicKey.ToByteArray();
+            //}
         }
 
         /// <summary>
@@ -156,11 +154,11 @@ namespace StopGuessing.Controllers
         /// <param name="userAccount"></param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
         /// <returns></returns>
-        public virtual ECDiffieHellmanCng DecryptPrivateAccountLogKey(
+        public virtual Encryption.IPrivateKey DecryptPrivateAccountLogKey(
             TAccount userAccount,
             byte[] phase1HashOfCorrectPassword)
         {
-            return Encryption.DecryptAesCbcEncryptedEcPrivateKey(userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
+            return Encryption.DecryptAesCbcEncryptedPrivateKey(userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1, phase1HashOfCorrectPassword);
         }
 
         public virtual void RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(

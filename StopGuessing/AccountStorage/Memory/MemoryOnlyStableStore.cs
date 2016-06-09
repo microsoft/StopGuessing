@@ -1,10 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
-using StopGuessing.Models;
-
-namespace StopGuessing
+﻿namespace StopGuessing.AccountStorage.Memory
 {
     //public class MemoryOnlyStableStore : IStableStore
     //{

@@ -2,8 +2,7 @@
 using StopGuessing.DataStructures;
 using Xunit;
 
-
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     public class DecayingDoubleTests
     {

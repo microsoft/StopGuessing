@@ -1,8 +1,6 @@
 ﻿using System;
-using Microsoft.Data.Entity;
-using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using StopGuessing.Interfaces;
-using StopGuessing.Models;
 
 namespace StopGuessing.AccountStorage.Sql
 {

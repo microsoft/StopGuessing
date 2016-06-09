@@ -1,14 +1,28 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Security.Cryptography;
 
 namespace StopGuessing.EncryptionPrimitives
 {
     public class Encryption
     {
+        public interface IPublicKey : IDisposable
+        {
+        }
+
+        public interface IPrivateKey : IDisposable
+        {
+        }
 
         static readonly byte[] NullIv = new byte[16];
 
         const int Sha256HmacLength = 32;
+
+        public static IPublicKey GetPublicKeyFromByteArray(byte[] publicKeyAsByteArray)
+        {
+            return null;
+            //return  ECDiffieHellmanCngPublicKey.FromByteArray(publicKeyAsByteArray, CngKeyBlobFormat.EccPublicBlob);
+        }
  
         /// <summary>
         /// Encrypt a message using AES in CBC (cipher-block chaining) mode.
@@ -21,7 +35,8 @@ namespace StopGuessing.EncryptionPrimitives
         /// <returns>The ciphertext derived by encrypting the orignal message using AES in CBC mode</returns>
         public static byte[] EncryptAesCbc(byte[] plaintext, byte[] key, byte[] iv = null, bool addHmac = false)
         {
-            using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
+            using (Aes aes =Aes.Create())
+//            using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
             {
                 aes.Key = key;
                 if (iv == null)
@@ -69,7 +84,8 @@ namespace StopGuessing.EncryptionPrimitives
         /// <returns>The plaintext resulting from decrypting the ciphertext with the given key.</returns>
         public static byte[] DecryptAesCbc(byte[] ciphertext, byte[] key, byte[] iv = null, bool checkAndRemoveHmac = false)
         {
-            using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
+            using (Aes aes = Aes.Create())
+//            using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
             {
                 aes.Key = key;
                 if (iv == null)
@@ -104,37 +120,48 @@ namespace StopGuessing.EncryptionPrimitives
             return System.Text.Encoding.UTF8.GetString(DecryptAesCbc(ciphertext, key, iv, checkAndRemoveHmac));
         }
 
-
+        public static IPrivateKey GenerateNewPrivateKey()
+        {
+    //        using (ECDiffieHellmanCng ecAccountLogKey =
+    //new ECDiffieHellmanCng(CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, null,
+    //    new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport })))
+    //        {
+    //            SetAccountLogKey(userAccount, ecAccountLogKey, newPasswordHashPhase1);
+    //        }
+            return null;            
+        }
 
         /// <summary>
         /// Encrypt an EC private key with a symmetric key.
         /// </summary>
-        /// <param name="ecPrivateKey">The EC private key to encrypt</param>
+        /// <param name="privateKey">The EC private key to encrypt</param>
         /// <param name="symmetricKey">The symmetric key with which to encrypt the EC key.  Must be at least
         /// 16 bytes.  Any additional bytes will be ignored.</param>
         /// <returns></returns>
-        public static byte[] EncryptEcPrivateKeyWithAesCbc(ECDiffieHellmanCng ecPrivateKey, byte[] symmetricKey)
+        public static byte[] EncryptPrivateKeyWithAesCbc(IPrivateKey privateKey, byte[] symmetricKey) // EcDiffieHelmanCng
         {
-            byte[] ecAccountLogKeyAsBytes = ecPrivateKey.Key.Export(CngKeyBlobFormat.EccPrivateBlob);
-            return EncryptAesCbc(ecAccountLogKeyAsBytes, symmetricKey.Take(16).ToArray(), addHmac: true);
+            //byte[] ecAccountLogKeyAsBytes = privateKey.Key.Export(CngKeyBlobFormat.EccPrivateBlob);
+            //return EncryptAesCbc(ecAccountLogKeyAsBytes, symmetricKey.Take(16).ToArray(), addHmac: true);
+            return new byte[0];
         }
 
         /// <summary>
         /// Decrypt an EC private key that has been stored encrypted with AES CBC using a private key
         /// </summary>
-        /// <param name="ecPrivateKeyEncryptedWithAesCbc">The EC private key encrypted with AES CBC.</param>
+        /// <param name="privateKeyEncryptedWithAesCbc">The assymetric private key encrypted with AES CBC.</param>
         /// <param name="symmetricKey">The symmetric key with which to encrypt the EC key.  Must be at least
         /// 16 bytes.  Any additional bytes will be ignored.</param>
         /// <returns></returns>
-        public static ECDiffieHellmanCng DecryptAesCbcEncryptedEcPrivateKey(
-            byte[] ecPrivateKeyEncryptedWithAesCbc,
+        public static IPrivateKey DecryptAesCbcEncryptedPrivateKey(
+            byte[] privateKeyEncryptedWithAesCbc,
             byte[] symmetricKey)
         {
             byte[] ecPrivateAccountLogKeyAsBytes = DecryptAesCbc(
-                                ecPrivateKeyEncryptedWithAesCbc,
+                                privateKeyEncryptedWithAesCbc,
                                 symmetricKey.Take(16).ToArray(),
                                 checkAndRemoveHmac: true);
-            return new ECDiffieHellmanCng(CngKey.Import(ecPrivateAccountLogKeyAsBytes, CngKeyBlobFormat.EccPrivateBlob));
+            return null;
+            //return new ECDiffieHellmanCng(CngKey.Import(ecPrivateAccountLogKeyAsBytes, CngKeyBlobFormat.EccPrivateBlob));
         }
 
 

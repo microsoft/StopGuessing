@@ -1,24 +1,23 @@
-﻿using Xunit;
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Data.Entity;
-using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.WindowsAzure.Storage;
 using StopGuessing.AccountStorage.Sql;
-using StopGuessing.Interfaces;
 using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
+using StopGuessing.Interfaces;
 using StopGuessing.Models;
+using Xunit;
 
 // Since we're testing a live database, make sure we run in unit tests in serial mode
 [assembly: CollectionBehavior(CollectionBehavior.CollectionPerAssembly)]
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     public class DbUserAccountTests
     {

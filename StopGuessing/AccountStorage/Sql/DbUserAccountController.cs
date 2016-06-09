@@ -3,11 +3,9 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Data.Entity;
-using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Table;
-using Microsoft.WindowsAzure.Storage.Table.Queryable;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.Utilities;
@@ -57,6 +55,22 @@ namespace StopGuessing.AccountStorage.Sql
             DbOptions = dbOptions;
         }
 
+        private TableRequestOptions getTableRequestOptions(int? timeLimitInMilliSeconds = null)
+        {
+            TableRequestOptions tableRequestOptions = new TableRequestOptions();
+            if (timeLimitInMilliSeconds.HasValue)
+            {
+                tableRequestOptions.ServerTimeout = new TimeSpan(TimeSpan.TicksPerMillisecond * timeLimitInMilliSeconds.Value);
+            }
+            return tableRequestOptions;
+        }
+
+        private OperationContext getOperationContext()
+        {
+            OperationContext operationContext = new OperationContext();
+            return operationContext;
+        }
+
         public async Task<CloudTable> GetTableAsync(string tableName,
             CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -69,7 +83,7 @@ namespace StopGuessing.AccountStorage.Sql
             // Create the table if it doesn't exist. // remove to optimize
             if (!TablesKnownToExist.Contains(tableName))
             {
-                await table.CreateIfNotExistsAsync(cancellationToken);
+                await table.CreateIfNotExistsAsync(getTableRequestOptions(), getOperationContext(),  cancellationToken);
                 TablesKnownToExist.Add(tableName);
             }
 
@@ -102,28 +116,13 @@ namespace StopGuessing.AccountStorage.Sql
             // Retrieve a reference to the table.
             CloudTable table = await GetTableAsync(TableName_SuccessfulLoginCookie, cancellationToken);
 
-            //TableQuery<IncorrectPhaseTwoHashEntity> query = new TableQuery<IncorrectPhaseTwoHashEntity>().Where(TableQuery.CombineFilters(
-            //        TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, TableKeyEncoding.Encode(hashOfCookie)),
-            //        TableOperators.And,
-            //        TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.Equal, TableKeyEncoding.Encode(UsernameOrAccountId))));
+            TableOperation retriveOperation =
+                TableOperation.Retrieve<SuccessfulLoginCookieEntity>(TableKeyEncoding.Encode(hashOfCookie),
+                    TableKeyEncoding.Encode(userAccount.UsernameOrAccountId));
 
-            var query =
-                        (from e in table.CreateQuery<SuccessfulLoginCookieEntity>()
-                         where e.PartitionKey == TableKeyEncoding.Encode(hashOfCookie) &&
-                               e.RowKey == TableKeyEncoding.Encode(userAccount.UsernameOrAccountId)
-                         select e).AsTableQuery();
+            TableResult retrievedResult = await table.ExecuteAsync(retriveOperation, getTableRequestOptions(200), getOperationContext(), cancellationToken);
 
-            int count = 0;
-
-            TableContinuationToken continuationToken = null;
-            do
-            {
-                var partialResult = await query.ExecuteSegmentedAsync(continuationToken, cancellationToken);
-                count += partialResult.Results.Count;
-                continuationToken = partialResult.ContinuationToken;
-            } while (continuationToken != null);
-
-            return (count > 0);
+            return retrievedResult.Result != null;
         }
 
         public override async Task RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(
@@ -137,7 +136,7 @@ namespace StopGuessing.AccountStorage.Sql
 
             await table.ExecuteAsync(
                 TableOperation.InsertOrReplace(new SuccessfulLoginCookieEntity(userAccount.UsernameOrAccountId, hashOfCookie,
-                    whenSeenUtc)), cancellationToken);
+                    whenSeenUtc)), getTableRequestOptions(), getOperationContext(), cancellationToken);
         }
 
 
@@ -150,38 +149,20 @@ namespace StopGuessing.AccountStorage.Sql
             // Retrieve a reference to the table.
             CloudTable table = await GetTableAsync(TableName_RecentIncorrectPhase2Hashes, cancellationToken);
 
-            //TableQuery<IncorrectPhaseTwoHashEntity> query = new TableQuery<IncorrectPhaseTwoHashEntity>().Where(TableQuery.CombineFilters(
-            //        TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, TableKeyEncoding.Encode(phase2Hash)),
-            //        TableOperators.And,
-            //        TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.Equal, TableKeyEncoding.Encode(UsernameOrAccountId)) ));
+            TableOperation retriveOperation =
+                TableOperation.Retrieve<IncorrectPhaseTwoHashEntity>(TableKeyEncoding.Encode(phase2Hash),
+                    TableKeyEncoding.Encode(userAccount.UsernameOrAccountId));
 
-            var query =
-            (from e in table.CreateQuery<IncorrectPhaseTwoHashEntity>()
-             where e.PartitionKey == TableKeyEncoding.Encode(phase2Hash) &&
-                   e.RowKey == TableKeyEncoding.Encode(userAccount.UsernameOrAccountId)
-             select e).AsTableQuery();
+            TableResult retrievedResult = await table.ExecuteAsync(retriveOperation, getTableRequestOptions(200), getOperationContext(), cancellationToken);
 
-            int count = 0;
-
-            TableContinuationToken continuationToken = null;
-            do
-            {
-                var partialResult = await query.ExecuteSegmentedAsync(continuationToken, cancellationToken);
-                count += partialResult.Results.Count;
-                continuationToken = partialResult.ContinuationToken;
-            } while (continuationToken != null);
-
-            if (count > 0)
-            {
-                // This phase2 hash already exists.
+            if (retrievedResult.Result != null)
                 return true;
-            }
 
             // Write the hash to azure tables in the background.
             TaskHelper.RunInBackground(
                 table.ExecuteAsync(
                     TableOperation.InsertOrReplace(new IncorrectPhaseTwoHashEntity(userAccount.UsernameOrAccountId, phase2Hash, whenSeenUtc)),
-                    cancellationToken)
+                    getTableRequestOptions(), getOperationContext(), cancellationToken)
             );
 
             return false;

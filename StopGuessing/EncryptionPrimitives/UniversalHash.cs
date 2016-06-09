@@ -112,7 +112,7 @@ namespace StopGuessing.EncryptionPrimitives
             int numberOfRandomBytesToGenerate = SetVectorLengthAndGetNumberOfRandomBytesNeeded(randomKeyVectorLengthInBytes);
 
             // Generate enough random bytes to fill the RandomKeyVector and 4 extra for the InitialRandomKey
-            using (System.Security.Cryptography.AesCryptoServiceProvider aes = new System.Security.Cryptography.AesCryptoServiceProvider())
+            using (System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create())
             {
                 aes.Key = keyOf16Or24Or32Bytes;
                 aes.IV = new byte[16];
