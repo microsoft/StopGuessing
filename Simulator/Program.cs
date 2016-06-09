@@ -5,15 +5,19 @@ using System.IO;
 
 namespace Simulator
 {
-
-
+    
     public class Program
     {
         private const ulong Thousand = 1000;
         private const ulong Million = Thousand * Thousand;
         private const ulong Billion = Thousand * Million;
 
-        public async Task Main(string[] args)
+        public static void Main(string[] args)
+        {
+            MainAsync(args).Wait();
+        }
+
+        public static async Task MainAsync(string[] args)
         {
             await Simulator.RunExperimentalSweep((config) =>
             {

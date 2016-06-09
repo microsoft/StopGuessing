@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -63,7 +64,7 @@ namespace Simulator
         {
             _passwordsAlreadyKnownToBePopular = new List<string>();
             using (System.IO.StreamReader file =
-                new System.IO.StreamReader(pathToPreviouslyKnownPopularPasswordFile))
+                new System.IO.StreamReader(new FileStream(pathToPreviouslyKnownPopularPasswordFile, FileMode.CreateNew, FileAccess.Write)))
             {
 
                 string line;
@@ -102,7 +103,7 @@ namespace Simulator
             _passwordSelector = new WeightedSelector<string>();
             // Created a weighted-random selector for paasswords based on the RockYou database.
             using (System.IO.StreamReader file =
-                new System.IO.StreamReader(pathToWeightedFrequencyFile))
+                new System.IO.StreamReader(new FileStream(pathToWeightedFrequencyFile, FileMode.CreateNew, FileAccess.Write)))
             {
                 string lineWithCountFollowedBySpaceFollowedByPassword;
                 while ((lineWithCountFollowedBySpaceFollowedByPassword = file.ReadLine()) != null)
