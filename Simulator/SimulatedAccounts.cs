@@ -63,6 +63,7 @@ namespace Simulator
                               //IUserAccountContextFactory accountContextFactory,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            SimulatedUserAccountController simUserAccountController = new SimulatedUserAccountController();
             _logger.WriteStatus("Creating {0:N0} benign accounts", experimentalConfiguration.NumberOfBenignAccounts);        
             MemoryUserAccountController userAccountController = new MemoryUserAccountController();;
             ConcurrentBag<SimulatedUserAccount> benignSimulatedAccountBag = new ConcurrentBag<SimulatedUserAccount>();
@@ -72,11 +73,10 @@ namespace Simulator
             {
                 if (index > 0 && index % 10000 == 0)
                     _logger.WriteStatus("Created {0:N0} benign accounts", index);
-                SimulatedUserAccount userAccount = new SimulatedUserAccount()
-                {
-                    UsernameOrAccountId = "user_" + index.ToString(),
-                    Password = _simPasswords.GetPasswordFromWeightedDistribution()
-                };
+                SimulatedUserAccount userAccount = simUserAccountController.Create(
+                    "user_" + index.ToString(),
+                    _simPasswords.GetPasswordFromWeightedDistribution()
+                );
                 userAccount.ClientAddresses.Add(_ipPool.GetNewRandomBenignIp());
                 userAccount.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
 
@@ -111,11 +111,10 @@ namespace Simulator
             // Create accounts in parallel
             Parallel.For(0, (int) experimentalConfiguration.NumberOfAttackerControlledAccounts, (index) =>
             {
-                SimulatedUserAccount userAccount = new SimulatedUserAccount()
-                {
-                    UsernameOrAccountId = "attacker_" + index.ToString(),
-                    Password = _simPasswords.GetPasswordFromWeightedDistribution(),
-                };
+                SimulatedUserAccount userAccount = simUserAccountController.Create(
+                    "attacker_" + index.ToString(),
+                    _simPasswords.GetPasswordFromWeightedDistribution());
+
                 userAccount.ClientAddresses.Add(_ipPool.GetRandomMaliciousIp());
                 maliciousSimulatedAccountBag.Add(userAccount);
             });

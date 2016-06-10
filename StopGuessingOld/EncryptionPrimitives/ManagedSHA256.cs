@@ -8,19 +8,12 @@ namespace StopGuessing.EncryptionPrimitives
 {
     public static class ManagedSHA256
     {
-        [ThreadStatic] static SHA256 Sha256;
-
-
         public static byte[] Hash(byte[] buffer)
         {
-            if (Sha256 == null)
+            using (SHA256Managed hash = new SHA256Managed())
             {
-                Sha256 = SHA256.Create();
+                return hash.ComputeHash(buffer);
             }
-            //using (SHA256 hash = SHA256.Create())
-            //{
-            return Sha256.ComputeHash(buffer);
-            //}
 
         }
 

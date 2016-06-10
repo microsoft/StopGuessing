@@ -10,9 +10,6 @@ namespace Simulator
 
         public ConcurrentBag<string> Cookies = new ConcurrentBag<string>();
         public ConcurrentBag<IPAddress> ClientAddresses = new ConcurrentBag<IPAddress>();
-        //public MemoryUserAccount Account;
-
-        
 
     }
 }

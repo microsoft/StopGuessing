@@ -38,15 +38,19 @@ namespace Simulator
                 sinceLastEvent.TotalSeconds,
                 eventMemoryMB, memDiffMB);
             Console.Out.WriteLine(status, args);
-            writer.WriteLine("Time: {0:00}:{1:00}:{2:00}.{3:000} seconds ({4:0.000}),  Memory: {5}MB (increased by {6}MB)",
-                eventTime.Hours,
-                eventTime.Minutes,
-                eventTime.Seconds,
-                eventTime.Milliseconds,
-                sinceLastEvent.TotalSeconds,
-                eventMemoryMB, memDiffMB);
-            writer.WriteLine(status, args);
-            writer.Flush();
+            lock (writer)
+            {
+                writer.WriteLine(
+                    "Time: {0:00}:{1:00}:{2:00}.{3:000} seconds ({4:0.000}),  Memory: {5}MB (increased by {6}MB)",
+                    eventTime.Hours,
+                    eventTime.Minutes,
+                    eventTime.Seconds,
+                    eventTime.Milliseconds,
+                    sinceLastEvent.TotalSeconds,
+                    eventMemoryMB, memDiffMB);
+                writer.WriteLine(status, args);
+                writer.Flush();
+            }
         }
     }
 }

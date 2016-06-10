@@ -9,6 +9,7 @@ using StopGuessing.AccountStorage.Memory;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
+using StopGuessing.Utilities;
 
 namespace Simulator
 {
@@ -100,14 +101,17 @@ namespace Simulator
                 }
                 catch (Exception e)
                 {
-                    while (e != null)
+                    lock (errorWriter)
                     {
-                        errorWriter.WriteLine(e.Message);
-                        errorWriter.WriteLine(e.StackTrace);
-                        errorWriter.WriteLine(e);
-                        e = e.InnerException;
+                        while (e != null)
+                        {
+                            errorWriter.WriteLine(e.Message);
+                            errorWriter.WriteLine(e.StackTrace);
+                            errorWriter.WriteLine(e);
+                            e = e.InnerException;
+                        }
+                        errorWriter.Flush();
                     }
-                    errorWriter.Flush();
                 }
                 
             }
@@ -128,7 +132,7 @@ namespace Simulator
             _LegitiamteAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized
                 (new StreamWriter(new FileStream(path + "LegitiamteAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
             _OtherAttempts = //System.IO.TextWriter.Synchronized
-                (new StreamWriter(new FileStream(path + path + "OtherAttempts.txt", FileMode.CreateNew, FileAccess.Write)));
+                (new StreamWriter(new FileStream(path + "OtherAttempts.txt", FileMode.CreateNew, FileAccess.Write)));
             _logger.WriteStatus("Entered Simulator constructor");
             _experimentalConfiguration = myExperimentalConfiguration;
             BlockingAlgorithmOptions options = _experimentalConfiguration.BlockingOptions;
@@ -171,20 +175,28 @@ namespace Simulator
             _logger.WriteStatus("Finiished creating login-attempt generator");
 
 
-            foreach (TextWriter writer in new TextWriter[] { _AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts })
-                writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", //,{9}
-                "Password",
-                "UserID",
-                "IP",
-                "IsFrequentlyGuessedPw",
-                "IsPasswordCorrect",
-                "IsFromAttackAttacker",
-                "IsAGuess",
-                "IPInOposingPool",
-                "IsClientAProxyIP",
-                "TypeOfMistake"
-                //string.Join(",")
-                );
+            foreach (
+                TextWriter writer in
+                    new TextWriter[]
+                    {_AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts})
+            {
+                lock (writer)
+                {
+                    writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", //,{9}
+                        "Password",
+                        "UserID",
+                        "IP",
+                        "IsFrequentlyGuessedPw",
+                        "IsPasswordCorrect",
+                        "IsFromAttackAttacker",
+                        "IsAGuess",
+                        "IPInOposingPool",
+                        "IsClientAProxyIP",
+                        "TypeOfMistake"
+                        //string.Join(",")
+                        );
+                }
+            }
 
             TimeSpan testTimeSpan = _experimentalConfiguration.TestTimeSpan;
             double ticksBetweenLogins = ((double)testTimeSpan.Ticks)/(double)_experimentalConfiguration.TotalLoginAttemptsToIssue;
@@ -244,23 +256,41 @@ namespace Simulator
 
                 if (simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
                 {
-                    await _AttackAttemptsWithValidPasswords.WriteLineAsync(outputString);
-                    await _AttackAttemptsWithValidPasswords.FlushAsync();
+                    lock (_AttackAttemptsWithValidPasswords)
+                    {
+                        _AttackAttemptsWithValidPasswords.WriteLine(outputString);
+                        //_AttackAttemptsWithValidPasswords.Flush();
+                    }
                 } else if (!simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
                 {
-                    await _LegitiamteAttemptsWithValidPasswords.WriteLineAsync(outputString);
-                    await _LegitiamteAttemptsWithValidPasswords.FlushAsync();
+                    lock (_LegitiamteAttemptsWithValidPasswords)
+                    {
+                        _LegitiamteAttemptsWithValidPasswords.WriteLine(outputString);
+                        //_LegitiamteAttemptsWithValidPasswords.Flush();
+                    }
                 }
                 else
                 {
-                    await _OtherAttempts.WriteLineAsync(outputString);
-                    await _OtherAttempts.FlushAsync();
+                    lock (_OtherAttempts)
+                    {
+                        _OtherAttempts.WriteLine(outputString);
+                        //_OtherAttempts.Flush();
+                    }
                 }
             },
             //(e) => {
             //},
             cancellationToken: cancellationToken);
+
+            foreach (
+                TextWriter writer in
+                    new TextWriter[]
+                    {_AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts})
+            {
+                writer.Flush();
+            }
             _memoryUsageLimiter.Dispose();
         }
+
     }
 }

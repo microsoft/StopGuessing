@@ -37,15 +37,23 @@ namespace Simulator
             int? maxFailedPhase2HashesToTrack = null,
             DateTime? currentDateTimeUtc = null)
         {
-            SimulatedUserAccount account = new SimulatedUserAccount();
+            SimulatedUserAccount account = new SimulatedUserAccount
+            {
+                UsernameOrAccountId = usernameOrAccountId,
+                Password = password,
+                HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
+                    new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack ??
+                                                            UserAccountController<SimulatedUserAccount>
+                                                                .DefaultMaxNumberOfCookiesToTrack),
+                RecentIncorrectPhase2Hashes =
+                    new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack ??
+                                                            UserAccountController<SimulatedUserAccount>
+                                                                .DefaultMaxFailedPhase2HashesToTrack),
+                ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc),
+                NumberOfIterationsToUseForPhase1Hash = 1
+            };
 
-            account.UsernameOrAccountId = usernameOrAccountId;
-            account.Password = password;
 
-            account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack ?? UserAccountController<SimulatedUserAccount>.DefaultMaxNumberOfCookiesToTrack);
-            account.RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack ?? UserAccountController<SimulatedUserAccount>.DefaultMaxFailedPhase2HashesToTrack);
-            account.ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc);
 
             return account;
         }

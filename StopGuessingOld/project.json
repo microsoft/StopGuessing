@@ -1,0 +1,41 @@
+{
+  "dependencies": {
+    "Microsoft.AspNet.StaticFiles": "1.0.0-rc1-final",
+    "Microsoft.Framework.Configuration.Json": "1.0.0-beta8",
+    "Microsoft.Framework.Logging": "1.0.0-beta8",
+    "Microsoft.Framework.Logging.Console": "1.0.0-beta8",
+    "Microsoft.Framework.Logging.Debug": "1.0.0-beta8",
+    "Microsoft.Framework.Configuration": "1.0.0-*",
+    "Microsoft.Framework.WebEncoders.Core": "1.0.0-*",
+    "Microsoft.AspNet.Cryptography.KeyDerivation": "1.0.0-rc1-final",
+    "Microsoft.AspNet.IISPlatformHandler": "1.0.0-rc1-final",
+    "Microsoft.AspNet.Mvc": "6.0.0-rc1-final",
+    "Microsoft.AspNet.Server.Kestrel": "1.0.0-rc1-final",
+    "EntityFramework.MicrosoftSqlServer": "7.0.0-rc1-final",
+    "EntityFramework.Commands": "7.0.0-rc1-final",
+    "EntityFramework.Core": "7.0.0-rc1-final",
+    "Microsoft.WindowsAzure.ConfigurationManager": "3.2.1",
+    "WindowsAzure.Storage": "7.0.2-preview"
+  },
+  "frameworks": {
+    "net451": {
+      "dependencies": {
+      },
+      "frameworkAssemblies": {
+        "System.Linq": "4.0.0",
+        "System.Net.Http": "4.0.0.0",
+        "System.Net.Http.WebRequest": "4.0.0.0",
+        "System.Runtime.Serialization": "4.0.0.0",
+        "System.Web": "4.0.0.0"
+      }
+    }
+  },
+  "publishOptions": {
+    "excludeFiles": [
+      "node_modules",
+      "bower_components"
+    ]
+  },
+  "version": "1.0.0-*",
+  "webroot": "wwwroot"
+}
