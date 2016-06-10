@@ -43,7 +43,7 @@ namespace Simulator
                 //double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 //double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
-                ulong totalLoginAttempts = 500 * Thousand; // 2.5m // 500 * Thousand; // * Million;
+                ulong totalLoginAttempts = 50 * Thousand; // 2.5m // 500 * Thousand; // * Million;
                 config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 100d;
                 double meanNumberOfLoginsPerAttackerControlledIP = 1000d;

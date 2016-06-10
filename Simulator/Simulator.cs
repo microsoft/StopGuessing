@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc.Formatters;
 using StopGuessing.AccountStorage.Memory;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
@@ -24,9 +25,9 @@ namespace Simulator
         public readonly MemoryUsageLimiter _memoryUsageLimiter;
         public readonly MemoryUserAccountController _userAccountController;
 
-        private readonly TextWriter _AttackAttemptsWithValidPasswords;
-        private readonly TextWriter _LegitiamteAttemptsWithValidPasswords;
-        private readonly TextWriter _OtherAttempts;
+        private readonly ConcurrentStreamWriter _AttackAttemptsWithValidPasswords;
+        private readonly ConcurrentStreamWriter _LegitiamteAttemptsWithValidPasswords;
+        private readonly ConcurrentStreamWriter _OtherAttempts;
         private readonly DebugLogger _logger;
         private readonly SimulatedPasswords _simPasswords;
         private IpPool _ipPool;
@@ -128,11 +129,14 @@ namespace Simulator
             _simPasswords = simPasswords;
             _logger = logger;
             _AttackAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized 
-                (new StreamWriter(new FileStream(path + "AttackAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
+                new ConcurrentStreamWriter(path + "AttackAttemptsWithValidPasswords.txt");
+                //(new StreamWriter(new FileStream(path + "AttackAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
             _LegitiamteAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized
-                (new StreamWriter(new FileStream(path + "LegitiamteAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
+                new ConcurrentStreamWriter(path + "LegitiamteAttemptsWithValidPasswords.txt");
+            //(new StreamWriter(new FileStream(path + "LegitiamteAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
             _OtherAttempts = //System.IO.TextWriter.Synchronized
-                (new StreamWriter(new FileStream(path + "OtherAttempts.txt", FileMode.CreateNew, FileAccess.Write)));
+                new ConcurrentStreamWriter(path + "OtherAttempts.txt");
+                //(new StreamWriter(new FileStream(path + "OtherAttempts.txt", FileMode.CreateNew, FileAccess.Write)));
             _logger.WriteStatus("Entered Simulator constructor");
             _experimentalConfiguration = myExperimentalConfiguration;
             BlockingAlgorithmOptions options = _experimentalConfiguration.BlockingOptions;
@@ -176,13 +180,14 @@ namespace Simulator
 
 
             foreach (
-                TextWriter writer in
-                    new TextWriter[]
+                ConcurrentStreamWriter writer in
+                    new []
                     {_AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts})
             {
                 lock (writer)
                 {
-                    writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", //,{9}
+                    
+                    writer.WriteLine(string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", //,{9}
                         "Password",
                         "UserID",
                         "IP",
@@ -194,7 +199,7 @@ namespace Simulator
                         "IsClientAProxyIP",
                         "TypeOfMistake"
                         //string.Join(",")
-                        );
+                        ));
                 }
             }
 
@@ -283,11 +288,11 @@ namespace Simulator
             cancellationToken: cancellationToken);
 
             foreach (
-                TextWriter writer in
-                    new TextWriter[]
+                ConcurrentStreamWriter writer in
+                    new []
                     {_AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts})
             {
-                writer.Flush();
+                writer.Close();
             }
             _memoryUsageLimiter.Dispose();
         }
