@@ -1,19 +1,11 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Reflection.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using StopGuessing;
 using StopGuessing.AccountStorage.Memory;
-using StopGuessing.Clients;
-using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
@@ -97,7 +89,8 @@ namespace Simulator
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
                 //TextWriter dataWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "data.txt"));
-                TextWriter errorWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "error.txt"));
+                TextWriter errorWriter =  //TextWriter.Synchronized
+                    (new StreamWriter(new FileStream(path + "error.txt", FileMode.CreateNew, FileAccess.Write)));
                 DebugLogger logger = new DebugLogger(errorWriter);
                 try
                 {
@@ -130,9 +123,12 @@ namespace Simulator
             
             _simPasswords = simPasswords;
             _logger = logger;
-            _AttackAttemptsWithValidPasswords = System.IO.TextWriter.Synchronized(new StreamWriter(path + "AttackAttemptsWithValidPasswords.txt"));
-            _LegitiamteAttemptsWithValidPasswords = System.IO.TextWriter.Synchronized(new StreamWriter(path + "LegitiamteAttemptsWithValidPasswords.txt"));
-            _OtherAttempts = System.IO.TextWriter.Synchronized(new StreamWriter(path + "OtherAttempts.txt"));
+            _AttackAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized 
+                (new StreamWriter(new FileStream(path + "AttackAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
+            _LegitiamteAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized
+                (new StreamWriter(new FileStream(path + "LegitiamteAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
+            _OtherAttempts = //System.IO.TextWriter.Synchronized
+                (new StreamWriter(new FileStream(path + path + "OtherAttempts.txt", FileMode.CreateNew, FileAccess.Write)));
             _logger.WriteStatus("Entered Simulator constructor");
             _experimentalConfiguration = myExperimentalConfiguration;
             BlockingAlgorithmOptions options = _experimentalConfiguration.BlockingOptions;

@@ -1,18 +1,16 @@
 ﻿using System;
-using StopGuessing.Models;
-using System.Net;
 using System.Linq;
-using System.Threading.Tasks;
-using Xunit;
+using System.Net;
 using System.Threading;
-using StopGuessing;
+using System.Threading.Tasks;
 using StopGuessing.AccountStorage.Memory;
-using StopGuessing.Clients;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.Interfaces;
+using StopGuessing.Models;
+using Xunit;
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     public class TestConfiguration
     {

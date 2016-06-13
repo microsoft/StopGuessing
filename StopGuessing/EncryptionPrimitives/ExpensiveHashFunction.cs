@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Microsoft.AspNet.Cryptography.KeyDerivation;
 
 namespace StopGuessing.EncryptionPrimitives
 {
@@ -9,18 +8,13 @@ namespace StopGuessing.EncryptionPrimitives
     public static class ExpensiveHashFunctionFactory
     {
 
-        public const string DefaultFunctionName = "PBKDF2_SHA256";
+        public const string DefaultFunctionName = "Rfc2898";
         public const int DefaultNumberOfIterations = 10000;
 
         private static readonly Dictionary<string, ExpensiveHashFunction> ExpensiveHashFunctions = new Dictionary<string, ExpensiveHashFunction>
             {
                 {DefaultFunctionName, (password, salt, iterations) =>
-                KeyDerivation.Pbkdf2(
-                    password: password,
-                    salt: salt,
-                    prf: KeyDerivationPrf.HMACSHA256,
-                    iterationCount: iterations,
-                    numBytesRequested: 16)}
+                new System.Security.Cryptography.Rfc2898DeriveBytes(password, salt, iterations).GetBytes(16)}
             };
 
 

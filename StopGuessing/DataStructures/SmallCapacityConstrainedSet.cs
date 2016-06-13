@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Threading;
-using Microsoft.AspNet.Razor.Chunks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -197,7 +194,8 @@ namespace StopGuessing.DataStructures
 
         public override bool CanConvert(Type objectType)
         {
-            bool canConvert = StaticUtilities.IsAssignableToGenericType(objectType, typeof (SmallCapacityConstrainedSet<>));
+            bool canConvert = objectType.GetGenericTypeDefinition() == typeof(SmallCapacityConstrainedSet<>);
+            //bool canConvert = StaticUtilities.IsAssignableToGenericType(objectType, typeof (SmallCapacityConstrainedSet<>));
             return canConvert;
         }
     }

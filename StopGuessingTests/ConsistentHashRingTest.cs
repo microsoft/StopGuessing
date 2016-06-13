@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using StopGuessing.DataStructures;
 using Xunit;
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     
     public class ConsistentHashRingTests

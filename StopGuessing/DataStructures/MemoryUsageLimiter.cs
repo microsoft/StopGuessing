@@ -30,25 +30,28 @@ namespace StopGuessing.DataStructures
             _fractionToRemoveOnCleanup = fractionToRemoveOnCleanup;
             if (hardMemoryLimit == 0)
             {
-                Task.Run(() => GenerationalReductionLoop(cancellationTokenSource.Token), cancellationTokenSource.Token);
+                hardMemoryLimit = 1024L*1024L*1024L*2L; // FIXME
             }
-            else
-            {
+//            {
+//                Task.Run(() => GenerationalReductionLoop(cancellationTokenSource.Token), cancellationTokenSource.Token);
+//            }
+//            else
+//            {
                 Task.Run(() => ThresholdReductionLoop(hardMemoryLimit, cancellationTokenSource.Token), cancellationTokenSource.Token);
-            }
+//            }
         }
         
 
         public void ReduceMemoryUsage()
         {
-            EventHandler<ReduceMemoryUsageEventParameters> localOnReduceMemoryUsageHandler = OnReduceMemoryUsageEventHandler;
+            EventHandler<MemoryUsageLimiter.ReduceMemoryUsageEventParameters> localOnReduceMemoryUsageHandler = OnReduceMemoryUsageEventHandler;
             if (localOnReduceMemoryUsageHandler != null)
             {
                 Parallel.ForEach(localOnReduceMemoryUsageHandler.GetInvocationList(),
                     d => {
                         try
                         {
-                            d.DynamicInvoke(this, new ReduceMemoryUsageEventParameters(_fractionToRemoveOnCleanup));
+                            d.DynamicInvoke(this, new MemoryUsageLimiter.ReduceMemoryUsageEventParameters(_fractionToRemoveOnCleanup));
                         }
                         catch (Exception)
                         {
@@ -60,26 +63,26 @@ namespace StopGuessing.DataStructures
         }
 
 
-        public void GenerationalReductionLoop(CancellationToken cancellationToken)
-        {
-            GC.RegisterForFullGCNotification(10,10);
+        //public void GenerationalReductionLoop(CancellationToken cancellationToken)
+        //{
+        //    GC.RegisterForFullGCNotification(10,10);
 
-            while (true)
-            {
-                int collectionCount = GC.CollectionCount(2);
-                while (GC.WaitForFullGCApproach(100) == GCNotificationStatus.Timeout)
-                    cancellationToken.ThrowIfCancellationRequested();
+        //    while (true)
+        //    {
+        //        int collectionCount = GC.CollectionCount(2);
+        //        while (GC.WaitForFullGCApproach(100) == GCNotificationStatus.Timeout)
+        //            cancellationToken.ThrowIfCancellationRequested();
                 
-                ReduceMemoryUsage();
+        //        ReduceMemoryUsage();
 
-                if (collectionCount == GC.CollectionCount(2))
-                    GC.Collect();
+        //        if (collectionCount == GC.CollectionCount(2))
+        //            GC.Collect();
 
-                while (GC.WaitForFullGCComplete(100) == GCNotificationStatus.Timeout)
-                    cancellationToken.ThrowIfCancellationRequested();
-            }
-            // ReSharper disable once FunctionNeverReturns
-        }
+        //        while (GC.WaitForFullGCComplete(100) == GCNotificationStatus.Timeout)
+        //            cancellationToken.ThrowIfCancellationRequested();
+        //    }
+        //    // ReSharper disable once FunctionNeverReturns
+        //}
 
 
         public void ThresholdReductionLoop(long hardMemoryLimit, CancellationToken cancellationToken)

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     public class MemoryLimitingTest
     {

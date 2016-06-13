@@ -4,7 +4,7 @@ using System.Linq;
 using StopGuessing.AccountStorage.Sql;
 using Xunit;
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     public class TableKeyEncodingTests
     {

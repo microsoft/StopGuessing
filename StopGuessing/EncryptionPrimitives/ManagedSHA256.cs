@@ -10,7 +10,7 @@ namespace StopGuessing.EncryptionPrimitives
     {
         public static byte[] Hash(byte[] buffer)
         {
-            using (SHA256Managed hash = new SHA256Managed())
+            using (SHA256 hash = SHA256.Create())
             {
                 return hash.ComputeHash(buffer);
             }

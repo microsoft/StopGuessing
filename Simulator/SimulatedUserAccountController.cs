@@ -92,12 +92,12 @@ namespace Simulator
         /// Set the EC account log key
         /// </summary>
         /// <param name="userAccount"></param>
-        /// <param name="ecAccountLogKey"></param>
+        /// <param name="accountLogKey"></param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
         /// <returns></returns>
         public virtual void SetAccountLogKey(
             SimulatedUserAccount userAccount,
-            ECDiffieHellmanCng ecAccountLogKey,
+            Encryption.IPrivateKey accountLogKey,
             byte[] phase1HashOfCorrectPassword)
         {            
         }
@@ -108,7 +108,7 @@ namespace Simulator
         /// <param name="userAccount"></param>
         /// <param name="phase1HashOfCorrectPassword">The phase 1 hash of the correct password</param>
         /// <returns></returns>
-        public ECDiffieHellmanCng DecryptPrivateAccountLogKey(
+        public Encryption.IPrivateKey DecryptPrivateAccountLogKey(
             SimulatedUserAccount userAccount,
             byte[] phase1HashOfCorrectPassword)
         {

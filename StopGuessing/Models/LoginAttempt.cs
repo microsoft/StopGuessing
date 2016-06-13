@@ -1,8 +1,8 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Runtime.Serialization;
-using Microsoft.Framework.WebEncoders;
 using System.Text;
+using System.Text.Encodings.Web;
 using Newtonsoft.Json;
 using StopGuessing.EncryptionPrimitives;
 
@@ -152,8 +152,8 @@ namespace StopGuessing.Models
         /// <returns></returns>
         private string ToUniqueKey()
         {
-            return UrlEncoder.Default.UrlEncode(UsernameOrAccountId) + "&" + 
-                UrlEncoder.Default.UrlEncode(AddressOfServerThatInitiallyReceivedLoginAttempt.ToString()) + "&" + 
+            return UrlEncoder.Default.Encode(UsernameOrAccountId) + "&" + 
+                UrlEncoder.Default.Encode(AddressOfServerThatInitiallyReceivedLoginAttempt.ToString()) + "&" + 
                 TimeOfAttemptUtc.Ticks.ToString();
         }
         

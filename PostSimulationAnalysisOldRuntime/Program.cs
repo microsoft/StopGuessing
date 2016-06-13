@@ -100,7 +100,7 @@ namespace PostSimulationAnalysisOldRuntime
 
         public static void Main()   // string[] args
         {
-            string path = @"E:\Size_7_Strategy_BreadthFirst_Remove_100_Proxies_0_Overlap_0_Run_2_5_12_8\";
+            string path = @"E:\Size_7_Strategy_BreadthFirst_Remove_0_Proxies_0_Overlap_0_Run_2_5_15_30\";
             Trial[] trials = LoadDataParallel(path + "data.txt");
 
             //Trial[] trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToArray();

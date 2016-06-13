@@ -2,10 +2,9 @@
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
-using Microsoft.AspNet.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using StopGuessing.DataStructures;
 using StopGuessing.Models;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using StopGuessing.EncryptionPrimitives;
@@ -164,7 +163,7 @@ namespace StopGuessing.Controllers
         public IActionResult Delete(string id)
         {
             // no-op
-            return new HttpNotFoundResult();
+            return new NotFoundResult();
         }
 
 
@@ -195,7 +194,7 @@ namespace StopGuessing.Controllers
                 return;
         
             LoginAttemptSummaryForTypoAnalysis[] recentPotentialTypos = clientsIpHistory.RecentPotentialTypos.MostRecentFirst.ToArray();
-            ECDiffieHellmanCng ecPrivateAccountLogKey = null;
+            Encryption.IPrivateKey privateAccountLogKey = null;
             try
             {
                 foreach (LoginAttemptSummaryForTypoAnalysis potentialTypo in recentPotentialTypos)
@@ -215,12 +214,12 @@ namespace StopGuessing.Controllers
                         }
                         else
                         {
-                            if (ecPrivateAccountLogKey == null)
+                            if (privateAccountLogKey == null)
                             {
                                 // Get the EC decryption key, which is stored encrypted with the Phase1 password hash
                                 try
                                 {
-                                    ecPrivateAccountLogKey = accountController.DecryptPrivateAccountLogKey(account,
+                                    privateAccountLogKey = accountController.DecryptPrivateAccountLogKey(account,
                                         phase1HashOfCorrectPassword);
                                 }
                                 catch (Exception)
@@ -234,7 +233,7 @@ namespace StopGuessing.Controllers
                             {
                                 // Attempt to decrypt the password.
                                 passwordSubmittedInFailedAttempt =
-                                    potentialTypo.EncryptedIncorrectPassword.Read(ecPrivateAccountLogKey);
+                                    potentialTypo.EncryptedIncorrectPassword.Read(privateAccountLogKey);
                             }
                             catch (Exception)
                             {
@@ -270,7 +269,7 @@ namespace StopGuessing.Controllers
             }
             finally
             {
-                ecPrivateAccountLogKey?.Dispose();
+                privateAccountLogKey?.Dispose();
             }
         }
         

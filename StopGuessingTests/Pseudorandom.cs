@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text;
 
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     class Pseudorandom
     {

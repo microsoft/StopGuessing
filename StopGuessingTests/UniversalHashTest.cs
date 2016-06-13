@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Linq;
-using Xunit;
 using StopGuessing.EncryptionPrimitives;
+using Xunit;
 
-
-namespace xUnit_Tests
+namespace StopGuessingTests
 {
     public class UniversalHashTest
     {
