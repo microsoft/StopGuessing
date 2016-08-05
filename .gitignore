@@ -210,6 +210,9 @@ FakesAssemblies/
 GeneratedArtifacts/
 _Pvt_Extensions/
 ModelManifest.xml
+/Simulator/account_error.txt
+/Simulator/rockyou-withcount.txt
+/Simulator/result_log.txt
 /BLF_Iterations
 /SingleTriggerOneInOneMillionStoch_48_48.csv
 /SingleTriggerOneInOneMillionEq_48_48.csv
