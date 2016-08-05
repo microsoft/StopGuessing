@@ -135,7 +135,7 @@ namespace StopGuessing.DataStructures
                     return true;
                 }, callOnException, maxTasksPerWorker), cancellationToken);
             }
-            await Task.WhenAll(workerTasks);
+            await Task.WhenAll(workerTasks).ConfigureAwait(false);
         }
 
 //        public static async Task ForEach<T>(

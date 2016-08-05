@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using StopGuessing.Controllers;
 using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
@@ -72,7 +73,7 @@ namespace StopGuessing.AccountStorage.Memory
         /// A recency set of the device cookies (hashed via SHA256 and converted to Base64)
         /// that have successfully logged into this account.
         /// </summary>
-        public SmallCapacityConstrainedSet<string> HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
+        public HashSet<string> HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount { get; set; }
 
         ///// <summary>
         ///// A length-limited sequence of records describing failed login attempts (invalid passwords) 

@@ -42,9 +42,7 @@ namespace Simulator
                 UsernameOrAccountId = usernameOrAccountId,
                 Password = password,
                 HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                    new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack ??
-                                                            UserAccountController<SimulatedUserAccount>
-                                                                .DefaultMaxNumberOfCookiesToTrack),
+                    new HashSet<string>(),
                 RecentIncorrectPhase2Hashes =
                     new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack ??
                                                             UserAccountController<SimulatedUserAccount>
@@ -149,8 +147,9 @@ namespace Simulator
     string hashOfCookie,
     DateTime? whenSeenUtc = null)
         {
-            TaskHelper.RunInBackground(
-                RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(userAccount, hashOfCookie, whenSeenUtc));
+            userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
+            //TaskHelper.RunInBackground(
+            //    RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(userAccount, hashOfCookie, whenSeenUtc));
         }
 
 

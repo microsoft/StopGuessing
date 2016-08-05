@@ -23,9 +23,9 @@ namespace Simulator
             {
                 // Scale of test
                 config.AttackersStrategy = ExperimentalConfiguration.AttackStrategy.BreadthFirst;
-                config.PopularPasswordsToRemoveFromDistribution = 10000;
-                config.FractionOfBenignIPsBehindProxies = 0; //0.1d;
-                config.FractionOfMaliciousIPsToOverlapWithBenign = 0; //0.01d; // 0.1;
+                config.PopularPasswordsToRemoveFromDistribution = 100;
+                config.FractionOfBenignIPsBehindProxies = .1; //0.1d;
+                config.FractionOfMaliciousIPsToOverlapWithBenign = .01d; //0.01d; // 0.1;
 
                 //config.BlockingOptions.PopularityBasedPenaltyMultiplier_phi = (keyHeight, ladderHeight, frequency) =>
                 //    frequency.Proportion.Numerator > 0 ? 5 : 1;
@@ -43,7 +43,7 @@ namespace Simulator
                 //double meanNumberOfLoginsPerBenignAccountDuringExperiment = 10d;
                 //double meanNumberOfLoginsPerAttackerControlledIP = 100d;
 
-                ulong totalLoginAttempts = 50 * Thousand; // 2.5m // 500 * Thousand; // * Million;
+                ulong totalLoginAttempts = 5 * Million; // 2.5m // 500 * Thousand; // * Million;
                 config.TestTimeSpan = new TimeSpan(7, 0, 0, 0); // 7 days
                 double meanNumberOfLoginsPerBenignAccountDuringExperiment = 100d;
                 double meanNumberOfLoginsPerAttackerControlledIP = 1000d;

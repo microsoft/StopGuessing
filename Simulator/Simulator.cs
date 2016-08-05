@@ -26,7 +26,7 @@ namespace Simulator
         public readonly MemoryUserAccountController _userAccountController;
 
         private readonly ConcurrentStreamWriter _AttackAttemptsWithValidPasswords;
-        private readonly ConcurrentStreamWriter _LegitiamteAttemptsWithValidPasswords;
+        private readonly ConcurrentStreamWriter _LegitimateAttemptsWithValidPasswords;
         private readonly ConcurrentStreamWriter _OtherAttempts;
         private readonly DebugLogger _logger;
         private readonly SimulatedPasswords _simPasswords;
@@ -98,7 +98,7 @@ namespace Simulator
                 {
                     SimulatedPasswords simPasswords = new SimulatedPasswords(logger, config);
                     Simulator simulator = new Simulator(logger, path, config, simPasswords);
-                    await simulator.Run();
+                    await simulator.Run().ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -131,8 +131,8 @@ namespace Simulator
             _AttackAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized 
                 new ConcurrentStreamWriter(path + "AttackAttemptsWithValidPasswords.txt");
                 //(new StreamWriter(new FileStream(path + "AttackAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
-            _LegitiamteAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized
-                new ConcurrentStreamWriter(path + "LegitiamteAttemptsWithValidPasswords.txt");
+            _LegitimateAttemptsWithValidPasswords = //System.IO.TextWriter.Synchronized
+                new ConcurrentStreamWriter(path + "LegitimateAttemptsWithValidPasswords.txt");
             //(new StreamWriter(new FileStream(path + "LegitiamteAttemptsWithValidPasswords.txt", FileMode.CreateNew, FileAccess.Write)));
             _OtherAttempts = //System.IO.TextWriter.Synchronized
                 new ConcurrentStreamWriter(path + "OtherAttempts.txt");
@@ -172,7 +172,7 @@ namespace Simulator
             _ipPool = new IpPool(_experimentalConfiguration);
             _logger.WriteStatus("Generating simualted account records");
             _simAccounts = new SimulatedAccounts(_ipPool, _simPasswords, _logger);
-            await _simAccounts.GenerateAsync(_experimentalConfiguration, cancellationToken);
+            await _simAccounts.GenerateAsync(_experimentalConfiguration, cancellationToken).ConfigureAwait(false);
 
             _logger.WriteStatus("Creating login-attempt generator");
             _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool, _simPasswords);
@@ -182,23 +182,37 @@ namespace Simulator
             foreach (
                 ConcurrentStreamWriter writer in
                     new []
-                    {_AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts})
+                    {_AttackAttemptsWithValidPasswords, _LegitimateAttemptsWithValidPasswords, _OtherAttempts})
             {
                 lock (writer)
                 {
                     
-                    writer.WriteLine(string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", //,{9}
+                    writer.WriteLine(string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}"+
+                        "\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}\t{18}\t{19}\t{20}\t{21}\t{22}\t{23}", 
                         "Password",
                         "UserID",
                         "IP",
+                        "DeviceCookie",
                         "IsFrequentlyGuessedPw",
                         "IsPasswordCorrect",
                         "IsFromAttackAttacker",
                         "IsAGuess",
                         "IPInOposingPool",
                         "IsClientAProxyIP",
-                        "TypeOfMistake"
-                        //string.Join(",")
+                        "TypeOfMistake",
+                        "DecayedSuccessfulLogins",
+                        "DecayedAccountFailuresInfrequentPassword",
+                        "DecayedAccountFailuresFrequentPassword",
+                        "DecayedRepeatAccountFailuresInfrequentPassword",
+                        "DecayedRepeatAccountFailuresFrequentPassword",
+                        "DecayedPasswordFailuresNoTypoInfrequentPassword",
+                        "DecayedPasswordFailuresNoTypoFrequentPassword",
+                        "DecayedPasswordFailuresTypoInfrequentPassword",
+                        "DecayedPasswordFailuresTypoFrequentPassword",
+                        "DecayedRepeatPasswordFailuresNoTypoInfrequentPassword",
+                        "DecayedRepeatPasswordFailuresNoTypoFrequentPassword",
+                        "DecayedRepeatPasswordFailuresTypoInfrequentPassword",
+                        "DecayedRepeatPasswordFailuresTypoFrequentPassword"
                         ));
                 }
             }
@@ -243,10 +257,11 @@ namespace Simulator
                 simAttempt.UpdateSimulatorState(this, ipHistory);
 
                 var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.AddressOfClientInitiatingRequest);
-                string outputString = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}", 
+                string outputString = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}", 
                     simAttempt.Password, 
                     simAttempt.SimAccount?.UsernameOrAccountId ?? "<null>",
                     simAttempt.AddressOfClientInitiatingRequest,
+                    simAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount ? "HadCookie" : "NoCookie",
                     simAttempt.IsFrequentlyGuessedPassword ? "Frequent" : "Infrequent",
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                     simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
@@ -256,7 +271,7 @@ namespace Simulator
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
  
-                    string.Join(",", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
+                    string.Join("\t", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
                     );
 
                 if (simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
@@ -268,9 +283,9 @@ namespace Simulator
                     }
                 } else if (!simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
                 {
-                    lock (_LegitiamteAttemptsWithValidPasswords)
+                    lock (_LegitimateAttemptsWithValidPasswords)
                     {
-                        _LegitiamteAttemptsWithValidPasswords.WriteLine(outputString);
+                        _LegitimateAttemptsWithValidPasswords.WriteLine(outputString);
                         //_LegitiamteAttemptsWithValidPasswords.Flush();
                     }
                 }
@@ -285,12 +300,12 @@ namespace Simulator
             },
             //(e) => {
             //},
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
             foreach (
                 ConcurrentStreamWriter writer in
                     new []
-                    {_AttackAttemptsWithValidPasswords, _LegitiamteAttemptsWithValidPasswords, _OtherAttempts})
+                    {_AttackAttemptsWithValidPasswords, _LegitimateAttemptsWithValidPasswords, _OtherAttempts})
             {
                 writer.Close();
             }

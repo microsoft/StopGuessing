@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using StopGuessing.Controllers;
@@ -39,7 +40,7 @@ namespace StopGuessing.AccountStorage.Memory
             Initialize(account, password, numberOfIterationsToUseForHash, passwordHashFunctionName);
 
             account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                new SmallCapacityConstrainedSet<string>(maxNumberOfCookiesToTrack ?? DefaultMaxNumberOfCookiesToTrack);
+                new HashSet<string>();
             account.RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack ?? DefaultMaxFailedPhase2HashesToTrack);
             account.ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc);
 

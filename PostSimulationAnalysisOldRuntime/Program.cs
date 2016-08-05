@@ -14,62 +14,62 @@ namespace PostSimulationAnalysisOldRuntime
     public static class Program
     {
 
-        private static Trial[] LoadDataParallel(string path)
-        {
-            BlockingCollection<string> inputLines = new BlockingCollection<string>();
-            ConcurrentBag<Trial> trials = new ConcurrentBag<Trial>();
-            int itemsAdded = 0;
-            int itemsProcessed = 0;
-            const int outputFrequency = 100000;
+        //private static Trial[] LoadDataParallel(string path)
+        //{
+        //    BlockingCollection<string> inputLines = new BlockingCollection<string>();
+        //    ConcurrentBag<Trial> trials = new ConcurrentBag<Trial>();
+        //    int itemsAdded = 0;
+        //    int itemsProcessed = 0;
+        //    const int outputFrequency = 100000;
 
-            List<Task> consumerTasks = new List<Task>();
-            int counter = 0;
-            using (StreamReader file = new StreamReader(path))
-            {
-                // Skip header
-                file.ReadLine();
-                string lineRead;
-                while ((lineRead = file.ReadLine()) != null)
-                {
-                    inputLines.Add(lineRead);
-                    ++itemsAdded;
-                    if (++counter >= outputFrequency)
-                    {
-                        counter = 0;
-                        Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
+        //    List<Task> consumerTasks = new List<Task>();
+        //    int counter = 0;
+        //    using (StreamReader file = new StreamReader(path))
+        //    {
+        //        // Skip header
+        //        file.ReadLine();
+        //        string lineRead;
+        //        while ((lineRead = file.ReadLine()) != null)
+        //        {
+        //            inputLines.Add(lineRead);
+        //            ++itemsAdded;
+        //            if (++counter >= outputFrequency)
+        //            {
+        //                counter = 0;
+        //                Console.Out.WriteLine("Trial lines Read: {0}", itemsAdded);
 
-                        if (inputLines.Count >= outputFrequency * consumerTasks.Count)
-                        {
-                            consumerTasks.Add(Task.Run(() =>
-                            {
-                                string line;
-                                do
-                                {
-                                    while (inputLines.TryTake(out line))
-                                    {
-                                        string[] fields = line.Trim().Split(new char[] { ',' });
-                                        if (fields.Length >= 11)
-                                        {
-                                            Trial trial = new Trial(fields);
-                                            trials.Add(trial);
-                                        }
-                                        int numProcessed = Interlocked.Increment(ref itemsProcessed);
-                                        if (numProcessed % 100000 == 0)
-                                            Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
-                                    }
-                                    Thread.Sleep(100);
-                                } while (!inputLines.IsCompleted);
-                            }));
-                        }
+        //                if (inputLines.Count >= outputFrequency * consumerTasks.Count)
+        //                {
+        //                    consumerTasks.Add(Task.Run(() =>
+        //                    {
+        //                        string line;
+        //                        do
+        //                        {
+        //                            while (inputLines.TryTake(out line))
+        //                            {
+        //                                string[] fields = line.Trim().Split(new char[] { ',' });
+        //                                if (fields.Length >= 11)
+        //                                {
+        //                                    Trial trial = new Trial(inputLines.Count, inputLfields);
+        //                                    trials.Add(trial);
+        //                                }
+        //                                int numProcessed = Interlocked.Increment(ref itemsProcessed);
+        //                                if (numProcessed % 100000 == 0)
+        //                                    Console.Out.WriteLine("Trial lines processed: {0}", numProcessed);
+        //                            }
+        //                            Thread.Sleep(100);
+        //                        } while (!inputLines.IsCompleted);
+        //                    }));
+        //                }
 
-                    }
-                }
-                inputLines.CompleteAdding();
-            }
+        //            }
+        //        }
+        //        inputLines.CompleteAdding();
+        //    }
 
-            Task.WaitAll(consumerTasks.ToArray());
-            return trials.ToArray();
-        }
+        //    Task.WaitAll(consumerTasks.ToArray());
+        //    return trials.ToArray();
+        //}
 
         private static Trial[] LoadData(string path)
         {
@@ -83,9 +83,9 @@ namespace PostSimulationAnalysisOldRuntime
                 string line;
                 while ((line = file.ReadLine()) != null)
                 {
-                    string[] fields = line.Trim().Split(new char[] { ',' });
-                    if (fields.Length >= 11)
-                        trials.Add(new Trial(fields));
+                    string[] fields = line.Trim().Split(new char[] { '\t' });
+                    if (fields.Length >= 23)
+                        trials.Add(new Trial((uint) (trials.Count + 1), fields));
                     if (++counter >= 10000)
                     {
                         counter = 0;
@@ -100,22 +100,27 @@ namespace PostSimulationAnalysisOldRuntime
 
         public static void Main()   // string[] args
         {
-            string path = @"E:\Size_7_Strategy_BreadthFirst_Remove_0_Proxies_0_Overlap_0_Run_2_5_15_30\";
-            Trial[] trials = LoadDataParallel(path + "data.txt");
+            string path = @"E:\Size_6_Strategy_BreadthFirst_Remove_10000_Proxies_0_Overlap_0_Run_8_4_10_35";
+
+            Trial[] trialsUsersCorrectPassword = LoadData(path + "/LegitimateAttemptsWithValidPasswords.txt");
+            Trial[] trialsGuessesCorrectPassword = LoadData(path + "/AttackAttemptsWithValidPasswords.txt");
+
+            int benignWithCookie = trialsUsersCorrectPassword.Count(r => r.DeviceCookieHadPriorSuccessfulLoginForThisAccount);
 
             //Trial[] trialsWithCorrectPassword = trials.Where(t => t.IsPasswordCorrect).ToArray();
-            Trial[] trialsUsersCorrectPassword = trials.Where(t => t.IsPasswordCorrect && !(t.IsFromAttacker && t.IsAGuess)).ToArray();
-            Trial[] trialsGuessesCorrectPassword = trials.Where(t => t.IsPasswordCorrect && (t.IsFromAttacker && t.IsAGuess)).ToArray();
-            int numConditions = 15;
+            //Trial[] trialsUsersCorrectPassword = trials.Where(t => t.IsPasswordCorrect && !(t.IsFromAttacker && t.IsAGuess)).ToArray();
+            //Trial[] trialsGuessesCorrectPassword = trials.Where(t => t.IsPasswordCorrect && (t.IsFromAttacker && t.IsAGuess)).ToArray();
+            //int numConditions = 15;
 
             //long numCorrectBenignFromAttackersIPpool = trialsUsersCorrectPassword.LongCount(t => t.IsIpInAttackersPool);
             //long numCorrectBenignFromProxy = trialsUsersCorrectPassword.LongCount(t => t.IsClientAProxyIP);
             //long numCorrectBenignBoth = trialsUsersCorrectPassword.LongCount(t => t.IsIpInAttackersPool && t.IsClientAProxyIP);
             long numCorrectGuessesFromProxy = trialsGuessesCorrectPassword.LongCount(t => t.IsClientAProxyIP);
             long numCorrectGuessesFromBenignIpPool = trialsGuessesCorrectPassword.LongCount(t => t.IsIpInBenignPool);
-            long numCorrectGuessesFromBoth = trialsGuessesCorrectPassword.LongCount(t => t.IsIpInBenignPool && t.IsClientAProxyIP);
+            long numCorrectGuessesFromBoth = trialsGuessesCorrectPassword.LongCount(t => t.IsIpInBenignPool); // && t.IsClientAProxyIP
             List<Task> tasks = new List<Task>();
-            for (int c = 0; c < numConditions; c++)
+            Condition[] conditions = new Condition[] {new Condition()};
+            foreach (Condition condition in conditions)
             {
                 //List<Trial> originalMalicious = new List<Trial>(trialsGuessesCorrectPassword);
                 //List<Trial> originalBenign = new List<Trial>(trialsUsersCorrectPassword);
@@ -123,26 +128,26 @@ namespace PostSimulationAnalysisOldRuntime
                 //originalBenign.Sort((a, b) => -a.CompareTo(b, conditionNumber));
                 //Queue<Trial> malicious = new Queue<Trial>(originalMalicious);
                 //Queue<Trial> benign = new Queue<Trial>(originalBenign);
-                if (c > 0 && c < 7)
-                    continue;
 
-                int conditionNumber = c;
-                tasks.Add( Task.Run(() =>
+                //tasks.Add( Task.Run(() =>
                 {
-                    Console.Out.WriteLine("Starting work on Condition: {0}", conditionNumber);
+                    Console.Out.WriteLine("Starting work on Condition: {0}", condition.Name);
                     List<ROCPoint> rocPoints = new List<ROCPoint>();
 
                     {
                         Queue<Trial> malicious =
-                        new Queue<Trial>(
-                            trialsGuessesCorrectPassword.AsParallel().OrderByDescending((x) => x.GetScoreForCondition(conditionNumber)));
-                        Console.Out.WriteLine("Sort 1 completed for Condition {0}", conditionNumber);
+                            new Queue<Trial>(
+                                trialsGuessesCorrectPassword.AsParallel()
+                                    .OrderByDescending((x) => x.GetScoreForCondition(condition)));
+                        Console.Out.WriteLine("Sort 1 completed for Condition {0}", condition.Name);
                         Queue<Trial> benign =
                             new Queue<Trial>(
-                                trialsUsersCorrectPassword.AsParallel().OrderByDescending((x) => x.GetScoreForCondition(conditionNumber)));
-                        Console.Out.WriteLine("Sort 2 completed for Condition {0}", conditionNumber);
+                                trialsUsersCorrectPassword.AsParallel()
+                                    .OrderByDescending((x) => x.GetScoreForCondition(condition)));
+                        Console.Out.WriteLine("Sort 2 completed for Condition {0}", condition.Name);
                         int originalMaliciousCount = malicious.Count;
                         int originalBenignCount = benign.Count;
+
 
                         int falsePositives = 0;
                         int falsePositivesWithProxy = 0;
@@ -156,7 +161,7 @@ namespace PostSimulationAnalysisOldRuntime
                         //int falseNegativeFromDefendersIpPool;
 
 
-                        double blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
+                        double blockThreshold = malicious.Peek().GetScoreForCondition(condition);
                         rocPoints.Add(
                             new ROCPoint(0, 0, 0, 0, originalMaliciousCount, originalBenignCount,
                                 falsePositivesWithAttackerIp, falsePositivesWithProxy,
@@ -168,7 +173,7 @@ namespace PostSimulationAnalysisOldRuntime
                         {
                             // Remove all malicious requests above this new threshold
                             while (malicious.Count > 0 &&
-                                   malicious.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
+                                   malicious.Peek().GetScoreForCondition(condition) >= blockThreshold)
                             {
                                 Trial t = malicious.Dequeue();
                                 if (t.IsClientAProxyIP)
@@ -181,7 +186,7 @@ namespace PostSimulationAnalysisOldRuntime
 
                             // Remove all benign requests above this new threshold
                             while (benign.Count > 0 &&
-                                   benign.Peek().GetScoreForCondition(conditionNumber) >= blockThreshold)
+                                   benign.Peek().GetScoreForCondition(condition) >= blockThreshold)
                             {
                                 Trial t = benign.Dequeue();
                                 falsePositives++;
@@ -210,11 +215,11 @@ namespace PostSimulationAnalysisOldRuntime
 
                             // Identify next threshold
                             if (malicious.Count > 0)
-                                blockThreshold = malicious.Peek().GetScoreForCondition(conditionNumber);
+                                blockThreshold = malicious.Peek().GetScoreForCondition(condition);
                         }
                     }
 
-                    Console.Out.WriteLine("ROC Points identified for Condition {0}", conditionNumber);
+                    Console.Out.WriteLine("ROC Points identified for Condition {0}", condition.Name);
 
                     List<ROCPoint> finalROCPoints = new List<ROCPoint>();
                     Queue<ROCPoint> rocPointQueue = new Queue<ROCPoint>(rocPoints);
@@ -226,7 +231,7 @@ namespace PostSimulationAnalysisOldRuntime
                     }
 
                     using (
-                        StreamWriter writer = new StreamWriter(path + "PointsFor_" + conditionNumber.ToString() + ".csv")
+                        StreamWriter writer = new StreamWriter(path + "/PointsFor_" + condition.Name + ".csv")
                         )
                     {
                         writer.WriteLine("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}",
@@ -268,10 +273,11 @@ namespace PostSimulationAnalysisOldRuntime
 
 
                     }
-                    Console.Out.WriteLine("Finished with Condition {0}", conditionNumber);
-                }));
+                    Console.Out.WriteLine("Finished with Condition {0}", condition.Name);
+                    //}));
+                }
             }
-            Task.WaitAll(tasks.ToArray());
+            //Task.WaitAll(tasks.ToArray());
         }
     }
 }
