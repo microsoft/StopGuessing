@@ -55,9 +55,7 @@ namespace Simulator
             foreach (ExperimentalConfiguration config in configurations)
             {
                 DateTime now = DateTime.Now;
-                string dirName = config.OutputPath + config.OutputDirectoryName + "_Run_" + now.Month + "_" + now.Day +
-                                 "_" + now.Hour + "_" + now.Minute;
-                Directory.CreateDirectory(dirName);
+                string dirName = config.OutputPath + config.OutputDirectoryName;
                 Directory.CreateDirectory(dirName);
                 string path = dirName + @"\";
 

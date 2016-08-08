@@ -25,18 +25,6 @@ namespace PostSimulationAnalysisOldRuntime
         public double RepeatPasswordFailuresTypoFrequentPassword;
     }
 
-    public class Condition
-    {
-        public string Name = "Cormacs";
-        public double alpha = 5.39d;
-        public double beta_notypo = 1.0d;
-        public double beta_typo = 0.0518;
-        public double repeat = 0; // FIXME Stuart
-        public double phi_frequent = 12.2;
-        public double phi_infrequent = 1.0;
-        public double gamma = 0;
-        public double T = 1; // FIXME Cormac
-    }
 
     public class Trial : IPState
     {
