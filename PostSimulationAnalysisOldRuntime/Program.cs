@@ -100,7 +100,7 @@ namespace PostSimulationAnalysisOldRuntime
 
         public static void Main()   // string[] args
         {
-            string path = @"E:\Size_7_Strategy_BreadthFirst_Remove_100_Proxies_100_Overlap_10_Run_8_5_16_27";
+            string path = @"E:\Size_7_Strategy_BreadthFirst_Remove_100_Proxies_100_Overlap_10_Run_8_7_20_32";
 
             Trial[] trialsUsersCorrectPassword = LoadData(path + "/LegitimateAttemptsWithValidPasswords.txt");
             Trial[] trialsGuessesCorrectPassword = LoadData(path + "/AttackAttemptsWithValidPasswords.txt");

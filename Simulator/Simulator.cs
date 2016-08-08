@@ -25,7 +25,7 @@ namespace Simulator
         //public SelfLoadingCache<IPAddress, SimIpHistory> _ipHistoryCache;
         public ConcurrentDictionary<IPAddress, SimIpHistory> _ipHistoryCache;
         public readonly ExperimentalConfiguration _experimentalConfiguration;
-        public readonly MemoryUsageLimiter _memoryUsageLimiter;
+        //public readonly MemoryUsageLimiter _memoryUsageLimiter;
         public readonly MemoryUserAccountController _userAccountController;
 
         private readonly ConcurrentStreamWriter _AttackAttemptsWithValidPasswords;
@@ -50,58 +50,27 @@ namespace Simulator
         }
 
 
-        public static async Task RunExperimentalSweep(
-            ExperimentalConfigurationFunction configurationDelegate,
-            IParameterSweeper[] parameterSweeps = null,
-            int startingTest = 0)
+        public static void RunExperimentalSweep(ExperimentalConfiguration[] configurations)
         {
-            int totalTests = parameterSweeps == null ? 1 :
-                // Get the legnths of each dimension of the multi-dimensional parameter sweep
-                parameterSweeps.Select(ps => ps.GetParameterCount())
-                    // Calculates the product of the number of parameters in each dimension
-                    .Aggregate((runningProduct, nextFactor) => runningProduct*nextFactor);
-             
-            ExperimentalConfiguration baseConfig = new ExperimentalConfiguration();
-            configurationDelegate(baseConfig);
-
-
-            DateTime now = DateTime.Now;
-            string dirName = baseConfig.OutputPath + baseConfig.OutputDirectoryName + "_Run_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
-            if (parameterSweeps != null)
-                Directory.CreateDirectory(dirName);
-            for (int testIndex = startingTest; testIndex < totalTests; testIndex++)
+            foreach (ExperimentalConfiguration config in configurations)
             {
-                // Start with the default configuration from the provided configuration factory
-                ExperimentalConfiguration config = new ExperimentalConfiguration();
-                configurationDelegate(config);
-
-                // Next set the parameters for this test in the swwep
-                string path = dirName +  (parameterSweeps == null ? "" : ("\\Expermient" + testIndex.ToString()) );
-                Directory.CreateDirectory(path);
-                path += @"\";
-                int parameterIndexer = testIndex;
-                if (parameterSweeps != null)
-                {
-                    for (int dimension = parameterSweeps.Length - 1; dimension >= 0; dimension--)
-                    {
-                        IParameterSweeper sweep = parameterSweeps[dimension];
-                        int parameterIndex = parameterIndexer%sweep.GetParameterCount();
-                        parameterIndexer /= sweep.GetParameterCount();
-                        sweep.SetParameter(config, parameterIndex);
-                        path += "_" + sweep.GetParameterString(parameterIndex).Replace(".", "_");
-                    }
-                }
+                DateTime now = DateTime.Now;
+                string dirName = config.OutputPath + config.OutputDirectoryName + "_Run_" + now.Month + "_" + now.Day +
+                                 "_" + now.Hour + "_" + now.Minute;
+                Directory.CreateDirectory(dirName);
+                Directory.CreateDirectory(dirName);
+                string path = dirName + @"\";
 
                 // Now that all of the parameters of the sweep have been set, run the simulation
                 //TextWriter dataWriter = System.IO.TextWriter.Synchronized(new StreamWriter(path + "data.txt"));
-                TextWriter errorWriter =  //TextWriter.Synchronized
+                TextWriter errorWriter = //TextWriter.Synchronized
                     (new StreamWriter(new FileStream(path + "error.txt", FileMode.CreateNew, FileAccess.Write)));
                 DebugLogger logger = new DebugLogger(errorWriter);
                 try
                 {
                     SimulatedPasswords simPasswords = new SimulatedPasswords(logger, config);
                     Simulator simulator = new Simulator(logger, path, config, simPasswords);
-                    await simulator.Run().ConfigureAwait(false);
+                    simulator.Run();
                 }
                 catch (Exception e)
                 {
@@ -117,14 +86,13 @@ namespace Simulator
                         errorWriter.Flush();
                     }
                 }
-                
             }
         }
 
-        public void ReduceMemoryUsage(object sender, MemoryUsageLimiter.ReduceMemoryUsageEventParameters parameters)
-        {
+        //public void ReduceMemoryUsage(object sender, MemoryUsageLimiter.ReduceMemoryUsageEventParameters parameters)
+        //{
             //_ipHistoryCache.RecoverSpace(parameters.FractionOfMemoryToTryToRemove);
-        }
+        //}
 
         public Simulator(DebugLogger logger, string path, ExperimentalConfiguration myExperimentalConfiguration, SimulatedPasswords simPasswords)
         {
@@ -150,8 +118,8 @@ namespace Simulator
             _ipHistoryCache = new ConcurrentDictionary<IPAddress, SimIpHistory>(); // new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
             _userAccountController = new MemoryUserAccountController();
 
-            _memoryUsageLimiter = new MemoryUsageLimiter();
-            _memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
+            //_memoryUsageLimiter = new MemoryUsageLimiter();
+            //_memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
 
             _recentIncorrectPasswords = new AgingMembershipSketch(16, 128 * 1024);
 
@@ -163,7 +131,7 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public async Task Run(CancellationToken cancellationToken = default(CancellationToken))
+        public void Run(CancellationToken cancellationToken = default(CancellationToken))
         {
             _logger.WriteStatus("In RunInBackground");
 
@@ -175,7 +143,7 @@ namespace Simulator
             _ipPool = new IpPool(_experimentalConfiguration);
             _logger.WriteStatus("Generating simualted account records");
             _simAccounts = new SimulatedAccounts(_ipPool, _simPasswords, _logger);
-            await _simAccounts.GenerateAsync(_experimentalConfiguration, cancellationToken).ConfigureAwait(false);
+            _simAccounts.Generate(_experimentalConfiguration, cancellationToken);
 
             _logger.WriteStatus("Creating login-attempt generator");
             _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool,
@@ -326,7 +294,7 @@ namespace Simulator
             {
                 writer.Close();
             }
-            _memoryUsageLimiter.Dispose();
+            //_memoryUsageLimiter.Dispose();
         }
 
     }
