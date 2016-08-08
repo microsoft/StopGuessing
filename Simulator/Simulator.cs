@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -11,6 +12,7 @@ using StopGuessing.DataStructures;
 using StopGuessing.EncryptionPrimitives;
 using StopGuessing.Models;
 using StopGuessing.Utilities;
+using System.Collections.Concurrent;
 
 namespace Simulator
 {
@@ -20,7 +22,8 @@ namespace Simulator
         //private readonly IUserAccountContextFactory _accountContextFactory;
         public BinomialLadderFilter _binomialLadderFilter;
         public AgingMembershipSketch _recentIncorrectPasswords;
-        public SelfLoadingCache<IPAddress, SimIpHistory> _ipHistoryCache;
+        //public SelfLoadingCache<IPAddress, SimIpHistory> _ipHistoryCache;
+        public ConcurrentDictionary<IPAddress, SimIpHistory> _ipHistoryCache;
         public readonly ExperimentalConfiguration _experimentalConfiguration;
         public readonly MemoryUsageLimiter _memoryUsageLimiter;
         public readonly MemoryUserAccountController _userAccountController;
@@ -120,7 +123,7 @@ namespace Simulator
 
         public void ReduceMemoryUsage(object sender, MemoryUsageLimiter.ReduceMemoryUsageEventParameters parameters)
         {
-            _ipHistoryCache.RecoverSpace(parameters.FractionOfMemoryToTryToRemove);
+            //_ipHistoryCache.RecoverSpace(parameters.FractionOfMemoryToTryToRemove);
         }
 
         public Simulator(DebugLogger logger, string path, ExperimentalConfiguration myExperimentalConfiguration, SimulatedPasswords simPasswords)
@@ -144,7 +147,7 @@ namespace Simulator
             _logger.WriteStatus("Creating binomial ladder");
             _binomialLadderFilter =
                 new BinomialLadderFilter(options.NumberOfBitsInBinomialLadderFilter_N, options.HeightOfBinomialLadder_H);
-            _ipHistoryCache = new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
+            _ipHistoryCache = new ConcurrentDictionary<IPAddress, SimIpHistory>(); // new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
             _userAccountController = new MemoryUserAccountController();
 
             _memoryUsageLimiter = new MemoryUsageLimiter();
@@ -175,20 +178,21 @@ namespace Simulator
             await _simAccounts.GenerateAsync(_experimentalConfiguration, cancellationToken).ConfigureAwait(false);
 
             _logger.WriteStatus("Creating login-attempt generator");
-            _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool, _simPasswords);
+            _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool,
+                _simPasswords);
             _logger.WriteStatus("Finiished creating login-attempt generator");
 
 
             foreach (
                 ConcurrentStreamWriter writer in
-                    new []
+                    new[]
                     {_AttackAttemptsWithValidPasswords, _LegitimateAttemptsWithValidPasswords, _OtherAttempts})
             {
                 lock (writer)
                 {
-                    
-                    writer.WriteLine(string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}"+
-                        "\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}\t{18}\t{19}\t{20}\t{21}\t{22}\t{23}", 
+
+                    writer.WriteLine(string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}" +
+                                                   "\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}\t{18}\t{19}\t{20}\t{21}\t{22}\t{23}",
                         "Password",
                         "UserID",
                         "IP",
@@ -218,25 +222,32 @@ namespace Simulator
             }
 
             TimeSpan testTimeSpan = _experimentalConfiguration.TestTimeSpan;
-            double ticksBetweenLogins = ((double)testTimeSpan.Ticks)/(double)_experimentalConfiguration.TotalLoginAttemptsToIssue;
-            
-            await TaskParalllel.RepeatWithWorkers(_experimentalConfiguration.TotalLoginAttemptsToIssue, async (count, cancelToken) =>
+            double ticksBetweenLogins = ((double) testTimeSpan.Ticks)/
+                                        (double) _experimentalConfiguration.TotalLoginAttemptsToIssue;
+            int interlockedCount = 0;
+
+            Parallel.For(0L, (long) _experimentalConfiguration.TotalLoginAttemptsToIssue, (count, pls) =>
+                //) TaskParalllel.RepeatWithWorkers(_experimentalConfiguration.TotalLoginAttemptsToIssue, 
+                //async (count, cancelToken) =>
+                // (count) => 
             {
-                if (count % 10000 == 0)
-                    _logger.WriteStatus("Login Attempt {0:N0}", count);
-                DateTime eventTimeUtc = StartTimeUtc.AddTicks((long) (ticksBetweenLogins * count));
+                interlockedCount = Interlocked.Add(ref interlockedCount, 1);
+                if (interlockedCount % 10000 == 0)
+                    _logger.WriteStatus("Login Attempt {0:N0}", interlockedCount);
+                DateTime eventTimeUtc = StartTimeUtc.AddTicks((long) (ticksBetweenLogins* interlockedCount));
                 SimulatedLoginAttempt simAttempt;
                 if (StrongRandomNumberGenerator.GetFraction() <
                     _experimentalConfiguration.FractionOfLoginAttemptsFromAttacker)
                 {
                     switch (_experimentalConfiguration.AttackersStrategy)
                     {
-                        case ExperimentalConfiguration.AttackStrategy.UseUntilLikelyPopular:                        
-                            simAttempt = _attemptGenerator.MaliciousLoginAttemptBreadthFirstAvoidMakingPopular(eventTimeUtc);
-                        break;
-                        case ExperimentalConfiguration.AttackStrategy.Weighted:                         
+                        case ExperimentalConfiguration.AttackStrategy.UseUntilLikelyPopular:
+                            simAttempt =
+                                _attemptGenerator.MaliciousLoginAttemptBreadthFirstAvoidMakingPopular(eventTimeUtc);
+                            break;
+                        case ExperimentalConfiguration.AttackStrategy.Weighted:
                             simAttempt = _attemptGenerator.MaliciousLoginAttemptWeighted(eventTimeUtc);
-                        break;
+                            break;
                         case ExperimentalConfiguration.AttackStrategy.BreadthFirst:
                         default:
                             simAttempt = _attemptGenerator.MaliciousLoginAttemptBreadthFirst(eventTimeUtc);
@@ -245,11 +256,15 @@ namespace Simulator
                 }
                 else
                 {
-                    simAttempt = _attemptGenerator.BenignLoginAttempt(eventTimeUtc);                    
+                    simAttempt = _attemptGenerator.BenignLoginAttempt(eventTimeUtc);
                 }
 
                 // Get information about the client's IP
-                SimIpHistory ipHistory = await _ipHistoryCache.GetAsync(simAttempt.AddressOfClientInitiatingRequest, cancelToken);
+                SimIpHistory ipHistory = _ipHistoryCache.GetOrAdd(simAttempt.AddressOfClientInitiatingRequest,
+                    (ip) => new SimIpHistory(
+                            _experimentalConfiguration.BlockingOptions
+                                .NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos) );
+                //SimIpHistory ipHistory = await _ipHistoryCache.GetAsync(simAttempt.AddressOfClientInitiatingRequest, cancelToken);
 
                 double[] scores = ipHistory.GetAllScores(_experimentalConfiguration.BlockingOptions.BlockScoreHalfLife,
                     simAttempt.TimeOfAttemptUtc);
@@ -257,8 +272,8 @@ namespace Simulator
                 simAttempt.UpdateSimulatorState(this, ipHistory);
 
                 var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.AddressOfClientInitiatingRequest);
-                string outputString = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}", 
-                    simAttempt.Password, 
+                string outputString = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}",
+                    simAttempt.Password,
                     simAttempt.SimAccount?.UsernameOrAccountId ?? "<null>",
                     simAttempt.AddressOfClientInitiatingRequest,
                     simAttempt.DeviceCookieHadPriorSuccessfulLoginForThisAccount ? "HadCookie" : "NoCookie",
@@ -266,11 +281,12 @@ namespace Simulator
                     simAttempt.IsPasswordValid ? "Correct" : "Incorrect",
                     simAttempt.IsFromAttacker ? "FromAttacker" : "FromUser",
                     simAttempt.IsGuess ? "IsGuess" : "NotGuess",
-                    simAttempt.IsFromAttacker ? (ipInfo.UsedByBenignUsers ? "IsInBenignPool" : "NotUsedByBenign") : 
-                                                (ipInfo.UsedByAttackers ? "IsInAttackersIpPool" : "NotUsedByAttacker"),
+                    simAttempt.IsFromAttacker
+                        ? (ipInfo.UsedByBenignUsers ? "IsInBenignPool" : "NotUsedByBenign")
+                        : (ipInfo.UsedByAttackers ? "IsInAttackersIpPool" : "NotUsedByAttacker"),
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
- 
+
                     string.Join("\t", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
                     );
 
@@ -281,7 +297,8 @@ namespace Simulator
                         _AttackAttemptsWithValidPasswords.WriteLine(outputString);
                         //_AttackAttemptsWithValidPasswords.Flush();
                     }
-                } else if (!simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
+                }
+                else if (!simAttempt.IsFromAttacker && simAttempt.IsPasswordValid)
                 {
                     lock (_LegitimateAttemptsWithValidPasswords)
                     {
@@ -297,10 +314,10 @@ namespace Simulator
                         //_OtherAttempts.Flush();
                     }
                 }
-            },
+            });
             //(e) => {
             //},
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            //cancellationToken: cancellationToken).ConfigureAwait(false);
 
             foreach (
                 ConcurrentStreamWriter writer in
