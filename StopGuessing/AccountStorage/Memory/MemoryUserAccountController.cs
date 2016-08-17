@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,7 +41,7 @@ namespace StopGuessing.AccountStorage.Memory
             Initialize(account, password, numberOfIterationsToUseForHash, passwordHashFunctionName);
 
             account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                new HashSet<string>();
+                new ConcurrentDictionary<string,bool>();
             account.RecentIncorrectPhase2Hashes = new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack ?? DefaultMaxFailedPhase2HashesToTrack);
             account.ConsumedCredits = new DecayingDouble(0, currentDateTimeUtc);
 
@@ -63,7 +64,7 @@ namespace StopGuessing.AccountStorage.Memory
             string hashOfCookie,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie);
+            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.ContainsKey(hashOfCookie);
         }
 
 #pragma warning disable 1998
@@ -71,7 +72,7 @@ namespace StopGuessing.AccountStorage.Memory
 #pragma warning restore 1998
             DateTime? whenSeenUtc = null, CancellationToken cancellationToken = new CancellationToken())
         {
-            account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
+            account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount[hashOfCookie] = true;
         }
 
 

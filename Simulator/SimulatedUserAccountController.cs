@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -42,7 +43,7 @@ namespace Simulator
                 UsernameOrAccountId = usernameOrAccountId,
                 Password = password,
                 HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount =
-                    new HashSet<string>(),
+                    new ConcurrentDictionary<string,bool>(),
                 RecentIncorrectPhase2Hashes =
                     new SmallCapacityConstrainedSet<string>(maxFailedPhase2HashesToTrack ??
                                                             UserAccountController<SimulatedUserAccount>
@@ -144,14 +145,14 @@ namespace Simulator
             string hashOfCookie,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie);
+            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.ContainsKey(hashOfCookie);
         }
 
         public bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(
             SimulatedUserAccount userAccount,
             string hashOfCookie)
         {
-            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie);
+            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.ContainsKey(hashOfCookie);
         }
 
 #pragma warning disable 1998
@@ -162,7 +163,7 @@ namespace Simulator
             DateTime? whenSeenUtc = null,
             CancellationToken cancellationToken = new CancellationToken())
         {
-            account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
+            account.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount[hashOfCookie] = true;
         }
 
         public virtual void RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
@@ -170,7 +171,7 @@ namespace Simulator
     string hashOfCookie,
     DateTime? whenSeenUtc = null)
         {
-            userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Add(hashOfCookie);
+            userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount[hashOfCookie] = true;
             //TaskHelper.RunInBackground(
             //    RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(userAccount, hashOfCookie, whenSeenUtc));
         }
