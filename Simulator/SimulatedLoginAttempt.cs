@@ -61,7 +61,7 @@ namespace Simulator
 
             IsRepeatFailure = (SimAccount == null)
                 ? simulator._recentIncorrectPasswords.AddMember(UserNameOrAccountId + "\n" + Password)
-                : simulator._userAccountController.AddIncorrectPhaseTwoHashAsync( SimAccount, Password, TimeOfAttemptUtc).Result;
+                : simulator._userAccountController.AddIncorrectPhaseTwoHash( SimAccount, Password, TimeOfAttemptUtc);
 
             int passwordsHeightOnBinomialLadder = IsPasswordValid
                 ? simulator._binomialLadderFilter.GetHeight(Password)
@@ -74,8 +74,8 @@ namespace Simulator
             if (SimAccount != null)
             {
                 DeviceCookieHadPriorSuccessfulLoginForThisAccount =
-                    simulator._userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
-                        SimAccount, CookieProvidedByBrowser).Result;
+                    simulator._userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(
+                        SimAccount, CookieProvidedByBrowser);
             }
 
             if (IsPasswordValid)

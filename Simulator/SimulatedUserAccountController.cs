@@ -121,15 +121,38 @@ namespace Simulator
             return null;
         }
 
-        public Task<bool> AddIncorrectPhaseTwoHashAsync(SimulatedUserAccount userAccount, string phase2Hash, DateTime? whenSeenUtc = null,
-            CancellationToken cancellationToken = default(CancellationToken)) =>
-            TaskHelper.PretendToBeAsync(userAccount.RecentIncorrectPhase2Hashes.Add(phase2Hash));
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+        public async Task<bool> AddIncorrectPhaseTwoHashAsync(SimulatedUserAccount userAccount, string phase2Hash,
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+            DateTime? whenSeenUtc = null,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return userAccount.RecentIncorrectPhase2Hashes.Add(phase2Hash);
+            //return await TaskHelper.PretendToBeAsync(userAccount.RecentIncorrectPhase2Hashes.Add(phase2Hash));
+        }
 
-        public Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
+        public bool AddIncorrectPhaseTwoHash(SimulatedUserAccount userAccount, string phase2Hash,
+            DateTime? whenSeenUtc = null)
+        {
+            return userAccount.RecentIncorrectPhase2Hashes.Add(phase2Hash);
+        }
+
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+        public async Task<bool> HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
             SimulatedUserAccount userAccount,
             string hashOfCookie,
-            CancellationToken cancellationToken = default(CancellationToken)) =>
-            TaskHelper.PretendToBeAsync(userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie));
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie);
+        }
+
+        public bool HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(
+            SimulatedUserAccount userAccount,
+            string hashOfCookie)
+        {
+            return userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount.Contains(hashOfCookie);
+        }
 
 #pragma warning disable 1998
         public async Task RecordHashOfDeviceCookieUsedDuringSuccessfulLoginAsync(

@@ -117,6 +117,7 @@ namespace StopGuessing.Controllers
             DateTime? whenSeenUtc = null,
             CancellationToken cancellationToken = default(CancellationToken));
 
+
         /// <summary>
         /// Test to see if a client has logged into this account successfully in the past,
         /// using the hash of a secret unique cookie as the client identifier. 
@@ -129,6 +130,7 @@ namespace StopGuessing.Controllers
             TAccount userAccount,
             string hashOfCookie,
             CancellationToken cancellationToken = default(CancellationToken));
+
 
         /// <summary>
         /// Record the phase 2 hash of an incorrect password submitted in a failed login attempt so that we
@@ -144,6 +146,7 @@ namespace StopGuessing.Controllers
             string phase2Hash,
             DateTime? whenSeenUtc = null,
             CancellationToken cancellationToken = default(CancellationToken));
+
 
         /// <summary>
         /// Try to get credit to be used for improving the reputation of a client IP address, which is given when an IP

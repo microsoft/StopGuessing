@@ -26,7 +26,7 @@ namespace Simulator
         public ConcurrentDictionary<IPAddress, SimIpHistory> _ipHistoryCache;
         public readonly ExperimentalConfiguration _experimentalConfiguration;
         //public readonly MemoryUsageLimiter _memoryUsageLimiter;
-        public readonly MemoryUserAccountController _userAccountController;
+        public readonly SimulatedUserAccountController _userAccountController;
 
         private readonly ConcurrentStreamWriter _AttackAttemptsWithValidPasswords;
         private readonly ConcurrentStreamWriter _LegitimateAttemptsWithValidPasswords;
@@ -114,7 +114,7 @@ namespace Simulator
             _binomialLadderFilter =
                 new BinomialLadderFilter(options.NumberOfBitsInBinomialLadderFilter_N, options.HeightOfBinomialLadder_H);
             _ipHistoryCache = new ConcurrentDictionary<IPAddress, SimIpHistory>(); // new SelfLoadingCache<IPAddress, SimIpHistory>(address => new SimIpHistory(options.NumberOfFailuresToTrackForGoingBackInTimeToIdentifyTypos));
-            _userAccountController = new MemoryUserAccountController();
+            _userAccountController = new SimulatedUserAccountController();
 
             //_memoryUsageLimiter = new MemoryUsageLimiter();
             //_memoryUsageLimiter.OnReduceMemoryUsageEventHandler += ReduceMemoryUsage;
