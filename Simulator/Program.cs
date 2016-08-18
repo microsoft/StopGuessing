@@ -55,13 +55,13 @@ namespace Simulator
             double meanNumberOfLoginsPerAttackerControlledIP = 1000d;
 
             DateTime now = DateTime.Now;
-            string dirName = BasePath + "Run_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
+            string dirName = BasePath + "Run_" + totalLoginAttempts + "_" + now.Month + "_" + now.Day + "_" + now.Hour + "_" + now.Minute;
             Directory.CreateDirectory(dirName);
             config.OutputPath = dirName + @"\";
 
-            config.OutputDirectoryName = string.Format("{0}Size_{1}_Strategy_{2}_Remove_{3}_Proxies_{4}_Overlap_{5}",
+            config.OutputDirectoryName = string.Format("{0}_Strategy_{1}_Remove_{2}_Proxies_{3}_Overlap_{4}",
                 addToName == null ? "" : addToName + "_",
-                (int)Math.Log10(totalLoginAttempts),
+                //(int)Math.Log10(totalLoginAttempts),
                 config.AttackersStrategy == ExperimentalConfiguration.AttackStrategy.BreadthFirst
                     ? "BreadthFirst"
                     : config.AttackersStrategy == ExperimentalConfiguration.AttackStrategy.Weighted
