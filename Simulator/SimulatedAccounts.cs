@@ -57,13 +57,10 @@ namespace Simulator
         /// <summary>
         /// Create accounts, generating passwords, primary IP
         /// </summary>
-        public void Generate(ExperimentalConfiguration experimentalConfiguration,
-                              //IUserAccountContextFactory accountContextFactory,
-            CancellationToken cancellationToken = default(CancellationToken))
+        public void Generate(ExperimentalConfiguration experimentalConfiguration)
         {
             SimulatedUserAccountController simUserAccountController = new SimulatedUserAccountController();
             _logger.WriteStatus("Creating {0:N0} benign accounts", experimentalConfiguration.NumberOfBenignAccounts);        
-            MemoryUserAccountController userAccountController = new MemoryUserAccountController();;
             ConcurrentBag<SimulatedUserAccount> benignSimulatedAccountBag = new ConcurrentBag<SimulatedUserAccount>();
             //
             // Create benign accounts in parallel
@@ -131,10 +128,9 @@ namespace Simulator
                     simAccount.CreditLimit = experimentalConfiguration.BlockingOptions.AccountCreditLimit;
 
                     foreach (string cookie in simAccount.Cookies)
-                        userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBeforeAsync(
+                        simUserAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(
                             simAccount,
-                            LoginAttempt.HashCookie(cookie),
-                            cancellationToken);
+                            LoginAttempt.HashCookie(cookie));
                 });
             _logger.WriteStatus("Finished creating user accounts for each simluated account record");
         }

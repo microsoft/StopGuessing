@@ -85,8 +85,21 @@ namespace Simulator
                 ipHistory.AdjustBlockingScoreForPastTyposTreatedAsFullFailures(simulator, SimAccount, TimeOfAttemptUtc,
                     Password);
                 if (SimAccount != null)
+                {
                     simulator._userAccountController.RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
                         SimAccount, CookieProvidedByBrowser, TimeOfAttemptUtc);
+                    SimAccount.ConsecutiveIncorrectAttempts.SetValue(0, this.TimeOfAttemptUtc);
+                }
+            }
+            else
+            {
+                if (SimAccount != null && !IsRepeatFailure)
+                {
+                    SimAccount.ConsecutiveIncorrectAttempts.AddInPlace(simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife, 1d, this.TimeOfAttemptUtc);
+                    if (SimAccount.ConsecutiveIncorrectAttempts.GetValue(simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife)
+                        > SimAccount.MaxConsecutiveIncorrectAttempts.GetValue(simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife) ) 
+                        SimAccount.MaxConsecutiveIncorrectAttempts.SetValue(SimAccount.ConsecutiveIncorrectAttempts);
+                }
             }
 
             if (!IsPasswordValid && !IsRepeatFailure && SimAccount != null)

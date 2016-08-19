@@ -68,6 +68,12 @@ namespace StopGuessing.DataStructures
             ValueAtTimeOfLastUpdate = newValue;
         }
 
+        public void SetValue(DecayingDouble source)
+        {
+            LastUpdatedUtc = source.LastUpdatedUtc;
+            ValueAtTimeOfLastUpdate = source.ValueAtTimeOfLastUpdate;
+        }
+
         /// <summary>
         /// A double that decays with time
         /// </summary>

@@ -39,6 +39,9 @@ namespace Simulator
 
         protected readonly DateTime StartTimeUtc = new DateTime(2016, 01, 01, 0, 0, 0, DateTimeKind.Utc);
 
+        ConcurrentDictionary<string, DecayingDouble> _incorrectPasswordCounts = new ConcurrentDictionary<string, DecayingDouble>();
+
+
         public delegate void ExperimentalConfigurationFunction(ExperimentalConfiguration config);
 
         private static string Fraction(ulong numerator, ulong denominmator)
@@ -129,7 +132,7 @@ namespace Simulator
         /// Evaluate the accuracy of our stopguessing service by sending user logins and malicious traffic
         /// </summary>
         /// <returns></returns>
-        public void Run(CancellationToken cancellationToken = default(CancellationToken))
+        public void Run()
         {
             _logger.WriteStatus("In RunInBackground");
 
@@ -141,7 +144,7 @@ namespace Simulator
             _ipPool = new IpPool(_experimentalConfiguration);
             _logger.WriteStatus("Generating simualted account records");
             _simAccounts = new SimulatedAccounts(_ipPool, _simPasswords, _logger);
-            _simAccounts.Generate(_experimentalConfiguration, cancellationToken);
+            _simAccounts.Generate(_experimentalConfiguration);
 
             _logger.WriteStatus("Creating login-attempt generator");
             _attemptGenerator = new SimulatedLoginAttemptGenerator(_experimentalConfiguration, _simAccounts, _ipPool,
@@ -158,7 +161,7 @@ namespace Simulator
                 {
 
                     writer.WriteLine(string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}" +
-                                                   "\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}\t{18}\t{19}\t{20}\t{21}\t{22}\t{23}",
+                                                   "\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}\t{18}\t{19}\t{20}\t{21}\t{22}\t{23}\t{24}\t{25}",
                         "Password",
                         "UserID",
                         "IP",
@@ -170,6 +173,8 @@ namespace Simulator
                         "IPInOposingPool",
                         "IsClientAProxyIP",
                         "TypeOfMistake",
+                        "DecayedInvalidAttemptsPerPassword",
+                        "DecayedMaxConsecutiveIncorrectAttemptsPerAccount",
                         "DecayedSuccessfulLogins",
                         "DecayedAccountFailuresInfrequentPassword",
                         "DecayedAccountFailuresFrequentPassword",
@@ -225,6 +230,7 @@ namespace Simulator
                     simAttempt = _attemptGenerator.BenignLoginAttempt(eventTimeUtc);
                 }
 
+
                 // Get information about the client's IP
                 SimIpHistory ipHistory = _ipHistoryCache.GetOrAdd(simAttempt.AddressOfClientInitiatingRequest,
                     (ip) => new SimIpHistory(
@@ -237,8 +243,23 @@ namespace Simulator
 
                 simAttempt.UpdateSimulatorState(this, ipHistory);
 
+                double decayingInvalidPasswordAttempts = 0d;
+                if (simAttempt.IsPasswordValid)
+                {
+                    DecayingDouble incorrectPasswordAttempts;
+                    if (_incorrectPasswordCounts.TryGetValue(simAttempt.Password, out incorrectPasswordAttempts))
+                        decayingInvalidPasswordAttempts = incorrectPasswordAttempts.GetValue(_experimentalConfiguration.BlockingOptions.BlockScoreHalfLife, simAttempt.TimeOfAttemptUtc);
+                } else
+                {
+                    decayingInvalidPasswordAttempts = 1d;
+                    DecayingDouble incorrectPasswordAttempts;
+                    if (_incorrectPasswordCounts.TryGetValue(simAttempt.Password, out incorrectPasswordAttempts))
+                        decayingInvalidPasswordAttempts += incorrectPasswordAttempts.GetValue(_experimentalConfiguration.BlockingOptions.BlockScoreHalfLife, simAttempt.TimeOfAttemptUtc);
+                    _incorrectPasswordCounts[simAttempt.Password] = new DecayingDouble(decayingInvalidPasswordAttempts, simAttempt.TimeOfAttemptUtc);
+                }
+
                 var ipInfo = _ipPool.GetIpAddressDebugInfo(simAttempt.AddressOfClientInitiatingRequest);
-                string outputString = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}",
+                string outputString = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\t{13}",
                     simAttempt.Password,
                     simAttempt.SimAccount?.UsernameOrAccountId ?? "<null>",
                     simAttempt.AddressOfClientInitiatingRequest,
@@ -252,7 +273,8 @@ namespace Simulator
                         : (ipInfo.UsedByAttackers ? "IsInAttackersIpPool" : "NotUsedByAttacker"),
                     ipInfo.IsPartOfProxy ? "ProxyIP" : "NotAProxy",
                     string.IsNullOrEmpty(simAttempt.MistakeType) ? "-" : simAttempt.MistakeType,
-
+                    decayingInvalidPasswordAttempts,
+                    simAttempt.SimAccount?.MaxConsecutiveIncorrectAttempts.GetValue(_experimentalConfiguration.BlockingOptions.BlockScoreHalfLife, simAttempt.TimeOfAttemptUtc) ?? 0d,
                     string.Join("\t", scores.Select(s => s.ToString(CultureInfo.InvariantCulture)).ToArray())
                     );
 

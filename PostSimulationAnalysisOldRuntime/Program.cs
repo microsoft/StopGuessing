@@ -29,10 +29,10 @@ namespace PostSimulationAnalysisOldRuntime
                     string[] fields = line.Trim().Split(new char[] { '\t' });
                     if (fields.Length >= 23)
                         trials.Add(new Trial((uint)(trials.Count + 1), fields));
-                    if (++counter >= 10000)
+                    if (++counter >= 100000)
                     {
                         counter = 0;
-                        Console.Out.WriteLine("Loaded: {0}", trials.Count);
+                        Console.Out.WriteLine("Loaded: {0} thousand", trials.Count / 1000);
                     }
                 }
             }
@@ -48,6 +48,7 @@ namespace PostSimulationAnalysisOldRuntime
             foreach (DirectoryInfo testDir in runDir.EnumerateDirectories())
             {
                 string path = testDir.FullName;
+                Console.Out.WriteLine("Experiment: {0}", path);
 
                 Trial[] trialsUsersCorrectPassword = LoadData(path + @"\LegitimateAttemptsWithValidPasswords.txt");
                 Trial[] trialsGuessesCorrectPassword = LoadData(path + @"\AttackAttemptsWithValidPasswords.txt");

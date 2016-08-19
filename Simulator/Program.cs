@@ -11,7 +11,7 @@ namespace Simulator
         public static string BasePath = @"f:\OneDrive\StopGuessingData\";
         public static void Main(string[] args)
         {
-            ulong sizeInMillions = 1;
+            ulong sizeInMillions = 5;
             Simulator.RunExperimentalSweep(new[]
             {
                 GetConfig(attack: ExperimentalConfiguration.AttackStrategy.BreadthFirst, pwToBan:100, scale: sizeInMillions),
