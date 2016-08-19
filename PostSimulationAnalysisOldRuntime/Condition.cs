@@ -34,7 +34,8 @@ namespace PostSimulationAnalysisOldRuntime
                 new Condition("NoRepeatCorrection") {repeat = 1},
                 new Condition("PhiIgnoresFrequency") {phi_frequent = 1},
                 new Condition("FixedThreshold") {T = 1},
-                new Condition("NoAlpha") {alpha = 1}
+                new Condition("NoAlpha") {alpha = 1},
+                new Condition("CountOnly") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =1, gamma=0}
             };
         }
     }
