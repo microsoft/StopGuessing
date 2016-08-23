@@ -43,12 +43,15 @@ namespace PostSimulationAnalysisOldRuntime
 
         public static void Main()   // string[] args
         {
-            string runDirectoryPath = @"f:\OneDrive\StopGuessingData\Run_8_17_22_25";
+            string runDirectoryPath = @"f:\OneDrive\StopGuessingData\Run_100000000_8_19_23_32";
             DirectoryInfo runDir = new DirectoryInfo(runDirectoryPath);
             foreach (DirectoryInfo testDir in runDir.EnumerateDirectories())
             {
                 string path = testDir.FullName;
                 Console.Out.WriteLine("Experiment: {0}", path);
+
+                if (!File.Exists(path + @"\LegitimateAttemptsWithValidPasswords.txt") || !File.Exists(path + @"\AttackAttemptsWithValidPasswords.txt"))
+                    continue;
 
                 Trial[] trialsUsersCorrectPassword = LoadData(path + @"\LegitimateAttemptsWithValidPasswords.txt");
                 Trial[] trialsGuessesCorrectPassword = LoadData(path + @"\AttackAttemptsWithValidPasswords.txt");

@@ -39,6 +39,47 @@ namespace PostSimulationAnalysisOldRuntime
                 new Condition("ControlNoRepeats") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =0, gamma=0}
             };
         }
+
+        public float GetScore(IPState s, bool IsFrequentlyGuessedPassword, bool DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+        {
+
+            double score =
+                alpha *
+                ((
+                    s.AccountFailuresInfrequentPassword * phi_infrequent +
+                    s.AccountFailuresFrequentPassword * phi_frequent
+                    ) +
+                    repeat *
+                   (
+                    s.RepeatAccountFailuresInfrequentPassword * phi_infrequent +
+                    s.RepeatAccountFailuresFrequentPassword * phi_frequent
+                   )
+                )
+                +
+                beta_notypo * phi_infrequent * (
+                    s.PasswordFailuresNoTypoInfrequentPassword +
+                    s.RepeatPasswordFailuresNoTypoInfrequentPassword * repeat)
+                +
+                beta_notypo * phi_frequent * (
+                    s.PasswordFailuresNoTypoFrequentPassword +
+                    s.RepeatPasswordFailuresNoTypoFrequentPassword * repeat)
+                +
+                beta_typo * phi_infrequent * (
+                    s.PasswordFailuresTypoInfrequentPassword +
+                    s.RepeatPasswordFailuresTypoInfrequentPassword * repeat)
+                +
+                beta_typo * phi_frequent * (
+                    s.PasswordFailuresTypoFrequentPassword +
+                    s.RepeatPasswordFailuresTypoFrequentPassword * repeat)
+                ;
+            score -= gamma * s.SuccessfulLogins;
+            if (!IsFrequentlyGuessedPassword)
+                score /= T;
+            if (DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+                score = 0;
+
+            return (float)score;
+        }
     }
 
 }
