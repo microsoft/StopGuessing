@@ -10,6 +10,8 @@ namespace PostSimulationAnalysisOldRuntime
 {
     public class IPState
     {
+        public double InvalidAttemptsPerPassword;
+        public double DecayedMaxConsecutiveIncorrectAttemptsPerAccount;
         public double SuccessfulLogins;
         public double AccountFailuresInfrequentPassword;
         public double AccountFailuresFrequentPassword;
@@ -98,6 +100,8 @@ namespace PostSimulationAnalysisOldRuntime
 
             field++; // simAttempt.MistakeType
 
+            InvalidAttemptsPerPassword = double.Parse(fields[field++]);
+            DecayedMaxConsecutiveIncorrectAttemptsPerAccount = double.Parse(fields[field++]);
             SuccessfulLogins = double.Parse(fields[field++]);
             AccountFailuresInfrequentPassword = double.Parse(fields[field++]);
             AccountFailuresFrequentPassword = double.Parse(fields[field++]);
@@ -145,51 +149,51 @@ namespace PostSimulationAnalysisOldRuntime
             //    }
         }
 
-        public float GetScoreForCondition(Condition c)
-        {
+        //public float GetScoreForCondition(Condition c)
+        //{
 
-            double score =
-                c.alpha*
-                ( ( 
-                    AccountFailuresInfrequentPassword*c.phi_infrequent +
-                    AccountFailuresFrequentPassword*c.phi_frequent 
-                    ) +
-                    c.repeat * 
-                   (
-                    RepeatAccountFailuresInfrequentPassword*c.phi_infrequent + 
-                    RepeatAccountFailuresFrequentPassword*c.phi_frequent
-                   )
-                )
-                +
-                c.beta_notypo * c.phi_infrequent * (
-                    PasswordFailuresNoTypoInfrequentPassword +
-                    RepeatPasswordFailuresNoTypoInfrequentPassword * c.repeat)
-                +
-                c.beta_notypo * c.phi_frequent * (
-                    PasswordFailuresNoTypoFrequentPassword +
-                    RepeatPasswordFailuresNoTypoFrequentPassword * c.repeat)
-                +
-                c.beta_typo * c.phi_infrequent * (
-                    PasswordFailuresTypoInfrequentPassword +
-                    RepeatPasswordFailuresTypoInfrequentPassword * c.repeat)
-                +
-                c.beta_typo * c.phi_frequent * (
-                    PasswordFailuresTypoFrequentPassword +
-                    RepeatPasswordFailuresTypoFrequentPassword * c.repeat)
-                ;
-          score -= c.gamma*SuccessfulLogins;
-            if (!IsFrequentlyGuessedPassword)
-                score /= c.T;
-            if (DeviceCookieHadPriorSuccessfulLoginForThisAccount)
-                score = 0;
+        //    double score =
+        //        c.alpha*
+        //        ( ( 
+        //            AccountFailuresInfrequentPassword*c.phi_infrequent +
+        //            AccountFailuresFrequentPassword*c.phi_frequent 
+        //            ) +
+        //            c.repeat * 
+        //           (
+        //            RepeatAccountFailuresInfrequentPassword*c.phi_infrequent + 
+        //            RepeatAccountFailuresFrequentPassword*c.phi_frequent
+        //           )
+        //        )
+        //        +
+        //        c.beta_notypo * c.phi_infrequent * (
+        //            PasswordFailuresNoTypoInfrequentPassword +
+        //            RepeatPasswordFailuresNoTypoInfrequentPassword * c.repeat)
+        //        +
+        //        c.beta_notypo * c.phi_frequent * (
+        //            PasswordFailuresNoTypoFrequentPassword +
+        //            RepeatPasswordFailuresNoTypoFrequentPassword * c.repeat)
+        //        +
+        //        c.beta_typo * c.phi_infrequent * (
+        //            PasswordFailuresTypoInfrequentPassword +
+        //            RepeatPasswordFailuresTypoInfrequentPassword * c.repeat)
+        //        +
+        //        c.beta_typo * c.phi_frequent * (
+        //            PasswordFailuresTypoFrequentPassword +
+        //            RepeatPasswordFailuresTypoFrequentPassword * c.repeat)
+        //        ;
+        //  score -= c.gamma*SuccessfulLogins;
+        //    if (!IsFrequentlyGuessedPassword)
+        //        score /= c.T;
+        //    if (DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+        //        score = 0;
             
-            return (float) score;
-        }
+        //    return (float) score;
+        //}
 
-        public int CompareTo(Trial other, Condition condition)
+        public int CompareTo(Trial other, ICondition condition)
         {
-            float myScore = GetScoreForCondition(condition);
-            float othersScore = other.GetScoreForCondition(condition);
+            float myScore = condition.GetScore(this);
+            float othersScore = condition.GetScore(other);
             if (myScore < othersScore)
                 return -1;
             if (myScore > othersScore)

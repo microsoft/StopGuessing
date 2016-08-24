@@ -8,9 +8,30 @@ using System.Threading.Tasks;
 namespace PostSimulationAnalysisOldRuntime
 {
 
-    public class Condition
+    public interface ICondition
     {
-        public string Name = "";
+        string Name { get; }
+        float GetScore(Trial t);
+    }
+
+    public class PasswordFrequencyOnlyCondition : ICondition
+    {
+        public string Name => "InvalidAttemptsForPassword";
+        public float GetScore(Trial t) => (float) t.InvalidAttemptsPerPassword;
+    }
+
+
+    public class AccountLoginFailuresOnlyCondition : ICondition
+    {
+        public string Name => "ConsecutiveAccountLoginFailures";
+        public float GetScore(Trial t) => (float)t.DecayedMaxConsecutiveIncorrectAttemptsPerAccount;
+    }
+
+
+
+    public class StopGuessingCondition : ICondition
+    {
+        public string Name { get; set; } = "";
         public double alpha = 5.53d;
         public double beta_notypo = 1.0d;
         public double beta_typo = 0.061;
@@ -20,62 +41,62 @@ namespace PostSimulationAnalysisOldRuntime
         public double gamma = 0;
         public double T = 287.62; // FIXME Cormac
 
-        public Condition(string name = "Baseline")
+        public StopGuessingCondition(string name = "Baseline")
         {
             Name = name;
         }
 
-        public static IEnumerable<Condition> GetConditions()
-        {
-            return new Condition[]
-            {
-                new Condition("AllOn"),
-                new Condition("NoTypoDetection") {beta_typo = 0},
-                new Condition("NoRepeatCorrection") {repeat = 1},
-                new Condition("PhiIgnoresFrequency") {phi_frequent = 1},
-                new Condition("FixedThreshold") {T = 1},
-                new Condition("NoAlpha") {alpha = 1},
-                new Condition("Control") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =1, gamma=0},
-                new Condition("ControlNoRepeats") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =0, gamma=0}
-            };
-        }
+        //public static IEnumerable<StopGuessingCondition> GetConditions()
+        //{
+        //    return new StopGuessingCondition[]
+        //    {
+        //        new StopGuessingCondition("AllOn"),
+        //        new StopGuessingCondition("NoTypoDetection") {beta_typo = 0},
+        //        new StopGuessingCondition("NoRepeatCorrection") {repeat = 1},
+        //        new StopGuessingCondition("PhiIgnoresFrequency") {phi_frequent = 1},
+        //        new StopGuessingCondition("FixedThreshold") {T = 1},
+        //        new StopGuessingCondition("NoAlpha") {alpha = 1},
+        //        new StopGuessingCondition("Control") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =1, gamma=0},
+        //        new StopGuessingCondition("ControlNoRepeats") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =0, gamma=0}
+        //    };
+        //}
 
-        public float GetScore(IPState s, bool IsFrequentlyGuessedPassword, bool DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+        public float GetScore(Trial t)
         {
 
             double score =
                 alpha *
                 ((
-                    s.AccountFailuresInfrequentPassword * phi_infrequent +
-                    s.AccountFailuresFrequentPassword * phi_frequent
+                    t.AccountFailuresInfrequentPassword * phi_infrequent +
+                    t.AccountFailuresFrequentPassword * phi_frequent
                     ) +
                     repeat *
                    (
-                    s.RepeatAccountFailuresInfrequentPassword * phi_infrequent +
-                    s.RepeatAccountFailuresFrequentPassword * phi_frequent
+                    t.RepeatAccountFailuresInfrequentPassword * phi_infrequent +
+                    t.RepeatAccountFailuresFrequentPassword * phi_frequent
                    )
                 )
                 +
                 beta_notypo * phi_infrequent * (
-                    s.PasswordFailuresNoTypoInfrequentPassword +
-                    s.RepeatPasswordFailuresNoTypoInfrequentPassword * repeat)
+                    t.PasswordFailuresNoTypoInfrequentPassword +
+                    t.RepeatPasswordFailuresNoTypoInfrequentPassword * repeat)
                 +
                 beta_notypo * phi_frequent * (
-                    s.PasswordFailuresNoTypoFrequentPassword +
-                    s.RepeatPasswordFailuresNoTypoFrequentPassword * repeat)
+                    t.PasswordFailuresNoTypoFrequentPassword +
+                    t.RepeatPasswordFailuresNoTypoFrequentPassword * repeat)
                 +
                 beta_typo * phi_infrequent * (
-                    s.PasswordFailuresTypoInfrequentPassword +
-                    s.RepeatPasswordFailuresTypoInfrequentPassword * repeat)
+                    t.PasswordFailuresTypoInfrequentPassword +
+                    t.RepeatPasswordFailuresTypoInfrequentPassword * repeat)
                 +
                 beta_typo * phi_frequent * (
-                    s.PasswordFailuresTypoFrequentPassword +
-                    s.RepeatPasswordFailuresTypoFrequentPassword * repeat)
+                    t.PasswordFailuresTypoFrequentPassword +
+                    t.RepeatPasswordFailuresTypoFrequentPassword * repeat)
                 ;
-            score -= gamma * s.SuccessfulLogins;
-            if (!IsFrequentlyGuessedPassword)
+            score -= gamma * t.SuccessfulLogins;
+            if (!t.IsFrequentlyGuessedPassword)
                 score /= T;
-            if (DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+            if (t.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
                 score = 0;
 
             return (float)score;

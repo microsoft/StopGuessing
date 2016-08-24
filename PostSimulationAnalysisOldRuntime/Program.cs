@@ -70,7 +70,22 @@ namespace PostSimulationAnalysisOldRuntime
                 long numCorrectGuessesFromBenignIpPool = trialsGuessesCorrectPassword.LongCount(t => t.IsIpInBenignPool);
                 long numCorrectGuessesFromBoth = trialsGuessesCorrectPassword.LongCount(t => t.IsIpInBenignPool); // && t.IsClientAProxyIP
                 List<Task> tasks = new List<Task>();
-                foreach (Condition condition in Condition.GetConditions())
+
+                ICondition[] conditions =  new ICondition[]
+                {
+                    new StopGuessingCondition("AllOn"),
+                    new StopGuessingCondition("NoTypoDetection") {beta_typo = 0},
+                    new StopGuessingCondition("NoRepeatCorrection") {repeat = 1},
+                    new StopGuessingCondition("PhiIgnoresFrequency") {phi_frequent = 1},
+                    new StopGuessingCondition("FixedThreshold") {T = 1},
+                    new StopGuessingCondition("NoAlpha") {alpha = 1},
+                    new StopGuessingCondition("Control") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =1, gamma=0},
+                    new StopGuessingCondition("ControlNoRepeats") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =0, gamma=0},
+                    new PasswordFrequencyOnlyCondition(),
+                    new AccountLoginFailuresOnlyCondition()
+                };
+
+                foreach (ICondition condition in conditions)
                 {
                     Console.Out.WriteLine("Starting work on Condition: {0}", condition.Name);
                     List<ROCPoint> rocPoints = new List<ROCPoint>();
@@ -79,12 +94,12 @@ namespace PostSimulationAnalysisOldRuntime
                         Queue<Trial> malicious =
                             new Queue<Trial>(
                                 trialsGuessesCorrectPassword.AsParallel()
-                                    .OrderByDescending((x) => x.GetScoreForCondition(condition)));
+                                    .OrderByDescending((x) => condition.GetScore(x)));
                         Console.Out.WriteLine("Sort 1 completed for Condition {0}", condition.Name);
                         Queue<Trial> benign =
                             new Queue<Trial>(
                                 trialsUsersCorrectPassword.AsParallel()
-                                    .OrderByDescending((x) => x.GetScoreForCondition(condition)));
+                                    .OrderByDescending((x) => condition.GetScore(x)));
                         Console.Out.WriteLine("Sort 2 completed for Condition {0}", condition.Name);
                         int originalMaliciousCount = malicious.Count;
                         int originalBenignCount = benign.Count;
@@ -102,7 +117,7 @@ namespace PostSimulationAnalysisOldRuntime
                         //int falseNegativeFromDefendersIpPool;
 
 
-                        double blockThreshold = malicious.Count == 0 ? 0 : malicious.Peek().GetScoreForCondition(condition);
+                        double blockThreshold = malicious.Count == 0 ? 0 : condition.GetScore(malicious.Peek());
                         rocPoints.Add(
                             new ROCPoint(0, 0, 0, 0, originalMaliciousCount, originalBenignCount,
                                 falsePositivesWithAttackerIp, falsePositivesWithProxy,
@@ -114,7 +129,7 @@ namespace PostSimulationAnalysisOldRuntime
                         {
                             // Remove all malicious requests above this new threshold
                             while (malicious.Count > 0 &&
-                                   malicious.Peek().GetScoreForCondition(condition) >= blockThreshold)
+                                   condition.GetScore(malicious.Peek()) >= blockThreshold)
                             {
                                 Trial t = malicious.Dequeue();
                                 if (t.IsClientAProxyIP)
@@ -127,7 +142,7 @@ namespace PostSimulationAnalysisOldRuntime
 
                             // Remove all benign requests above this new threshold
                             while (benign.Count > 0 &&
-                                   benign.Peek().GetScoreForCondition(condition) >= blockThreshold)
+                                   condition.GetScore(benign.Peek()) >= blockThreshold)
                             {
                                 Trial t = benign.Dequeue();
                                 falsePositives++;
@@ -156,7 +171,7 @@ namespace PostSimulationAnalysisOldRuntime
 
                             // Identify next threshold
                             if (malicious.Count > 0)
-                                blockThreshold = malicious.Peek().GetScoreForCondition(condition);
+                                blockThreshold = condition.GetScore(malicious.Peek());
                         }
                     }
 
