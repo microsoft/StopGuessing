@@ -40,6 +40,7 @@ namespace PostSimulationAnalysisOldRuntime
         public double phi_infrequent = 1.0;
         public double gamma = 0;
         public double T = 287.62; // FIXME Cormac
+        public bool cookies_off = false;
 
         public StopGuessingCondition(string name = "Baseline")
         {
@@ -96,7 +97,7 @@ namespace PostSimulationAnalysisOldRuntime
             score -= gamma * t.SuccessfulLogins;
             if (!t.IsFrequentlyGuessedPassword)
                 score /= T;
-            if (t.DeviceCookieHadPriorSuccessfulLoginForThisAccount)
+            if (t.DeviceCookieHadPriorSuccessfulLoginForThisAccount && !cookies_off)
                 score = 0;
 
             return (float)score;
