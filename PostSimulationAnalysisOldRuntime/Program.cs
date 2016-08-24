@@ -74,7 +74,7 @@ namespace PostSimulationAnalysisOldRuntime
                 ICondition[] conditions =  new ICondition[]
                 {
                     new StopGuessingCondition("AllOn"),
-                    new StopGuessingCondition("NoTypoDetection") {beta_typo = 0},
+                    new StopGuessingCondition("NoTypoDetection") {beta_typo = 1},
                     new StopGuessingCondition("NoRepeatCorrection") {repeat = 1},
                     new StopGuessingCondition("PhiIgnoresFrequency") {phi_frequent = 1},
                     new StopGuessingCondition("FixedThreshold") {T = 1},
