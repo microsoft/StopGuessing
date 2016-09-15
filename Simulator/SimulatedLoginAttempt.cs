@@ -27,7 +27,7 @@ namespace Simulator
         public string CookieProvidedByBrowser { get; set; }
         public bool DeviceCookieHadPriorSuccessfulLoginForThisAccount { get; set; }
         public bool IsFrequentlyGuessedPassword = false;
-        public bool IsRepeatFailure;
+        public bool IsRepeatFailure = false;
         public string Password;
         public bool IsPasswordValid;
         public bool IsFromAttacker;
@@ -58,52 +58,51 @@ namespace Simulator
 
         public void UpdateSimulatorState(Simulator simulator, SimIpHistory ipHistory)
         {
+            IsRepeatFailure = !IsPasswordValid && (
+                (SimAccount == null)
+                    ? simulator._recentIncorrectPasswords.AddMember(UserNameOrAccountId + "\n" + Password)
+                    : simulator._userAccountController.AddIncorrectPhaseTwoHash(SimAccount, Password, TimeOfAttemptUtc)
+            );
 
-            IsRepeatFailure = (SimAccount == null)
-                ? simulator._recentIncorrectPasswords.AddMember(UserNameOrAccountId + "\n" + Password)
-                : simulator._userAccountController.AddIncorrectPhaseTwoHash( SimAccount, Password, TimeOfAttemptUtc);
-
-            int passwordsHeightOnBinomialLadder = IsPasswordValid
+            int passwordsHeightOnBinomialLadder = (IsPasswordValid || IsRepeatFailure)
                 ? simulator._binomialLadderFilter.GetHeight(Password)
                 : simulator._binomialLadderFilter.Step(Password);
 
-            IsFrequentlyGuessedPassword = passwordsHeightOnBinomialLadder + 1 >=
-                                          simulator._binomialLadderFilter.MaxHeight;
+            IsFrequentlyGuessedPassword = passwordsHeightOnBinomialLadder >=
+                                          simulator._experimentalConfiguration.BlockingOptions.BinomialLadderFrequencyThreshdold_T;
 
+            DeviceCookieHadPriorSuccessfulLoginForThisAccount = SimAccount != null &&
+                simulator._userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(SimAccount, CookieProvidedByBrowser);
 
-            if (SimAccount != null)
-            {
-                DeviceCookieHadPriorSuccessfulLoginForThisAccount =
-                    simulator._userAccountController.HasClientWithThisHashedCookieSuccessfullyLoggedInBefore(
-                        SimAccount, CookieProvidedByBrowser);
-            }
-
-            if (IsPasswordValid)
+            if (SimAccount != null && IsPasswordValid)
             {
                 // Determine if any of the outcomes for login attempts from the client IP for this request were the result of typos,
                 // as this might impact our decision about whether or not to block this client IP in response to its past behaviors.
                 ipHistory.AdjustBlockingScoreForPastTyposTreatedAsFullFailures(simulator, SimAccount, TimeOfAttemptUtc,
                     Password);
-                if (SimAccount != null)
-                {
-                    simulator._userAccountController.RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
-                        SimAccount, CookieProvidedByBrowser, TimeOfAttemptUtc);
-                    SimAccount.ConsecutiveIncorrectAttempts.SetValue(0, this.TimeOfAttemptUtc);
-                }
+                simulator._userAccountController.RecordHashOfDeviceCookieUsedDuringSuccessfulLoginBackground(
+                    SimAccount, CookieProvidedByBrowser, TimeOfAttemptUtc);
+                // Clear the count of consecutive failures
+                SimAccount.ConsecutiveIncorrectAttempts.SetValue(0, this.TimeOfAttemptUtc);
             }
-            else
+            else if (SimAccount != null && !IsRepeatFailure)
             {
-                if (SimAccount != null && !IsRepeatFailure)
-                {
-                    SimAccount.ConsecutiveIncorrectAttempts.AddInPlace(simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife, 1d, this.TimeOfAttemptUtc);
-                    if (SimAccount.ConsecutiveIncorrectAttempts.GetValue(simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife)
-                        > SimAccount.MaxConsecutiveIncorrectAttempts.GetValue(simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife) ) 
-                        SimAccount.MaxConsecutiveIncorrectAttempts.SetValue(SimAccount.ConsecutiveIncorrectAttempts);
-                }
+                // Add the the account's consecutive failure count
+                SimAccount.ConsecutiveIncorrectAttempts.AddInPlace(
+                    simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife, 1d,
+                    this.TimeOfAttemptUtc);
+                // Increase the max consecutive faiulre count if the current consecutive failure count exceeds it
+                if (SimAccount.ConsecutiveIncorrectAttempts.GetValue(
+                        simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife)
+                    >
+                    SimAccount.MaxConsecutiveIncorrectAttempts.GetValue(
+                        simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife))
+                    SimAccount.MaxConsecutiveIncorrectAttempts.SetValue(SimAccount.ConsecutiveIncorrectAttempts);
             }
 
             if (!IsPasswordValid && !IsRepeatFailure && SimAccount != null)
             {
+                // This attempt is a non-repeat failure and could be a typo.  Store it in the ste of potential typos.
                 ipHistory.RecentPotentialTypos.Add(new SimLoginAttemptSummaryForTypoAnalysis()
                 {
                     WhenUtc = TimeOfAttemptUtc,
@@ -112,6 +111,7 @@ namespace Simulator
                     WasPasswordFrequent = IsFrequentlyGuessedPassword
                 });
             }
+
 
             DecayingDouble decayingOneFromThisInstant = new DecayingDouble(1, TimeOfAttemptUtc);
             TimeSpan halfLife = simulator._experimentalConfiguration.BlockingOptions.BlockScoreHalfLife;

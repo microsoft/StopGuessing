@@ -64,7 +64,7 @@ namespace Simulator
         public ulong NumberOfAttackerControlledAccounts = 1*Thousand;
         
         public uint NumberOfIpAddressesControlledByAttacker = 100;// * (uint)Thousand;
-        public double FractionOfMaliciousIPsToOverlapWithBenign = 0.1;
+        public double FractionOfMaliciousIPsToOverlapWithBenign = 0.01;
 
         public ulong MaxAttackerGuessesPerPassword = 25;
 

@@ -36,7 +36,7 @@ namespace Simulator
             ExperimentalConfiguration.AttackStrategy attack = ExperimentalConfiguration.AttackStrategy.BreadthFirst,
             int pwToBan = 100,
             double fractionOfBenignIPsBehindProxies = 0.1,
-            double fractionOfMaliciousIPsToOverlapWithBenign = .01d,
+            double fractionOfMaliciousIPsToOverlapWithBenign = .1d,
             double fractionOfLoginAttemptsFromAttacker = 0.5d,
             double extraTypoFactor = 1d,
             ulong scale = 1,
