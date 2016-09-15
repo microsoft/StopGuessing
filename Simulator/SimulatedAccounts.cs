@@ -73,7 +73,9 @@ namespace Simulator
                     _simPasswords.GetPasswordFromWeightedDistribution()
                 );
                 userAccount.ClientAddresses.Add(_ipPool.GetNewRandomBenignIp());
-                userAccount.Cookies.Add(StrongRandomNumberGenerator.Get64Bits().ToString());
+                string initialCookie = StrongRandomNumberGenerator.Get64Bits().ToString();
+                userAccount.Cookies.Add(initialCookie);
+                userAccount.HashesOfCookiesOfClientsThatHaveSuccessfullyLoggedIntoThisAccount[initialCookie] = true;
 
                 benignSimulatedAccountBag.Add(userAccount);
 

@@ -111,13 +111,19 @@ namespace StopGuessing.Controllers
                 // with the new password and continue to use it on future logins. 
                 try
                 {
-                    using (Encryption.IPrivateKey accountLogKey =
-                        Encryption.DecryptAesCbcEncryptedPrivateKey(
-                            userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
-                            oldPasswordHashPhase1))
+                    if (userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1 == null)
                     {
-                        SetAccountLogKey(userAccount, accountLogKey, newPasswordHashPhase1);
-                        return;
+                        using (Encryption.IPrivateKey accountLogKey =
+                            Encryption.DecryptAesCbcEncryptedPrivateKey(
+                                userAccount.EcPrivateAccountLogKeyEncryptedWithPasswordHashPhase1,
+                                oldPasswordHashPhase1))
+                        {
+                            if (accountLogKey != null)
+                            {
+                                SetAccountLogKey(userAccount, accountLogKey, newPasswordHashPhase1);
+                            }
+                            return;
+                        }
                     }
                 }
                 catch (Exception)

@@ -27,7 +27,7 @@ namespace PostSimulationAnalysisOldRuntime
                 while ((line = file.ReadLine()) != null)
                 {
                     string[] fields = line.Trim().Split(new char[] { '\t' });
-                    if (fields.Length >= 23)
+                    if (fields.Length >= 26)
                         trials.Add(new Trial((uint)(trials.Count + 1), fields));
                     if (++counter >= 100000)
                     {
@@ -43,7 +43,7 @@ namespace PostSimulationAnalysisOldRuntime
 
         public static void Main()   // string[] args
         {
-            string runDirectoryPath = @"f:\OneDrive\StopGuessingData\Run_100000000_8_19_23_32";
+            string runDirectoryPath = @"F:\OneDrive\StopGuessingData\Run_5000000_9_15_14_17";
             DirectoryInfo runDir = new DirectoryInfo(runDirectoryPath);
             foreach (DirectoryInfo testDir in runDir.EnumerateDirectories())
             {
