@@ -83,6 +83,7 @@ namespace PostSimulationAnalysisOldRuntime
                     new StopGuessingCondition("Control") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =1, gamma=0},
                     new StopGuessingCondition("ControlNoRepeats") {alpha = 1, beta_typo =1, beta_notypo=1, phi_frequent = 1, phi_infrequent = 1, T=1, repeat =0, gamma=0},
                     new PasswordFrequencyOnlyCondition(),
+                    new PasswordFrequencyOnlyLadderBinaryCondition(), 
                     new AccountLoginFailuresOnlyCondition()
                 };
 

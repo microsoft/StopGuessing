@@ -20,6 +20,13 @@ namespace PostSimulationAnalysisOldRuntime
         public float GetScore(Trial t) => (float) t.InvalidAttemptsPerPassword;
     }
 
+    public class PasswordFrequencyOnlyLadderBinaryCondition : ICondition
+    {
+        public string Name => "FilterOfInvalidAttemptsForPassword";
+        public float GetScore(Trial t) => t.IsFrequentlyGuessedPassword ? 1f : 0f;
+    }
+
+
 
     public class AccountLoginFailuresOnlyCondition : ICondition
     {
