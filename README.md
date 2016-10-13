@@ -34,5 +34,5 @@ You might want to help the system use additional IP reputation information, or i
 You might want to make it easier to use StopGuessing on other platforms.
 You might want to port part or all of the code to be native to other languages.
 You might want to build support for the binomial ladder filter into memory databases.
-If you'd like to contribute, the best way to get started is to reach out to us at stopguessing@micorosft.com.
+If you'd like to contribute, the best way to get started is to reach out to us at stopguessing@microsoft.com.
 
